@@ -3353,12 +3353,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-dom@npm:17.0.16":
-  version: 17.0.16
-  resolution: "@types/react-dom@npm:17.0.16"
+"@types/react-dom@npm:17.0.18":
+  version: 17.0.18
+  resolution: "@types/react-dom@npm:17.0.18"
   dependencies:
     "@types/react": ^17
-  checksum: 2f41a45ef955c8f68a7bcd22343715f15e1560a5e5ba941568b3c970d9151f78fe0975ecf4df7f691339af546555e0f23fa423a0a5bcd7ea4dd4f9c245509936
+  checksum: b74525b1a13a0e27fe20859ff7a7e8f7e4581fb9d45ed1b6447ad1534d86f813818353c39d0df2e28f9d2b9be2e3af1908c244b2214a979393d19f217665e614
   languageName: node
   linkType: hard
 
@@ -12035,7 +12035,7 @@ __metadata:
     "@types/jest": 27.5.0
     "@types/node": 17.0.31
     "@types/react": 17.0.45
-    "@types/react-dom": 17.0.16
+    "@types/react-dom": 17.0.18
     "@types/react-relay": 13.0.2
     "@types/react-router-dom": 5.3.3
     apexcharts: 3.35.3
