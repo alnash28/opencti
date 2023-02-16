@@ -1,5 +1,6 @@
+import { expect, it, describe } from 'vitest';
 import gql from 'graphql-tag';
-import { ADMIN_USER, queryAsAdmin } from '../../utils/testQuery';
+import { ADMIN_USER, testContext, queryAsAdmin } from '../../utils/testQuery';
 import { elLoadById } from '../../../src/database/engine';
 
 const LIST_QUERY = gql`
@@ -96,7 +97,7 @@ describe('City resolver standard behavior', () => {
     expect(queryResult.data.city.id).toEqual(cityInternalId);
   });
   it('should city country to be accurate', async () => {
-    const city = await elLoadById(ADMIN_USER, 'location--c3794ffd-0e71-4670-aa4d-978b4cbdc72c');
+    const city = await elLoadById(testContext, ADMIN_USER, 'location--c3794ffd-0e71-4670-aa4d-978b4cbdc72c');
     const queryResult = await queryAsAdmin({
       query: READ_QUERY,
       variables: { id: city.internal_id },
@@ -194,7 +195,7 @@ describe('City resolver standard behavior', () => {
   });
   it('should delete relation in city', async () => {
     const RELATION_DELETE_QUERY = gql`
-      mutation CityEdit($id: ID!, $toId: String!, $relationship_type: String!) {
+      mutation CityEdit($id: ID!, $toId: StixRef!, $relationship_type: String!) {
         cityEdit(id: $id) {
           relationDelete(toId: $toId, relationship_type: $relationship_type) {
             id

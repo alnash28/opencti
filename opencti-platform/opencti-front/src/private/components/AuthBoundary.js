@@ -20,13 +20,19 @@ class AuthBoundaryComponent extends React.Component {
       const retroErrors = this.state.error.data?.res?.errors ?? [];
       const types = map((e) => e.name, [...baseErrors, ...retroErrors]);
       // If access is forbidden, just redirect to home page
-      if (includes('ForbiddenAccess', types)) window.location.href = '/';
+      if (includes('ForbiddenAccess', types)) {
+        return <RootPublic type="LOGIN" />;
+        // window.location.href = '/';
+      }
       // If user not authenticated, redirect to login with encoded path
       if (includes('AuthRequired', types)) {
         return <RootPublic type="LOGIN" />;
       }
+      if (includes('OtpRequiredActivation', types)) {
+        return <RootPublic type="2FA_ACTIVATION" />;
+      }
       if (includes('OtpRequired', types)) {
-        return <RootPublic type="2FA" />;
+        return <RootPublic type="2FA_VALIDATION" />;
       }
     }
     return this.props.children;

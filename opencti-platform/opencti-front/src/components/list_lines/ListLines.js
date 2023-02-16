@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
-import { compose, last, map, toPairs } from 'ramda';
+import { compose, toPairs } from 'ramda';
 import withStyles from '@mui/styles/withStyles';
 import List from '@mui/material/List';
 import Tooltip from '@mui/material/Tooltip';
@@ -11,25 +11,33 @@ import ListItemSecondaryAction from '@mui/material/ListItemSecondaryAction';
 import {
   ArrowDropDown,
   ArrowDropUp,
-  ViewListOutlined,
-  ViewModuleOutlined,
   FileDownloadOutlined,
   LibraryBooksOutlined,
+  PreviewOutlined,
+  SourceOutlined,
+  ViewListOutlined,
+  ViewModuleOutlined,
 } from '@mui/icons-material';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import Chip from '@mui/material/Chip';
 import Checkbox from '@mui/material/Checkbox';
 import Alert from '@mui/material/Alert';
-import { GraphOutline, FormatListGroup } from 'mdi-material-ui';
+import {
+  FormatListGroup,
+  GraphOutline,
+  RelationManyToMany,
+  VectorPolygon,
+} from 'mdi-material-ui';
 import SearchInput from '../SearchInput';
 import inject18n from '../i18n';
 import StixDomainObjectsExports from '../../private/components/common/stix_domain_objects/StixDomainObjectsExports';
-import Security, { KNOWLEDGE_KNGETEXPORT } from '../../utils/Security';
+import Security from '../../utils/Security';
+import { KNOWLEDGE_KNGETEXPORT } from '../../utils/hooks/useGranted';
 import Filters from '../../private/components/common/lists/Filters';
 import StixCyberObservablesExports from '../../private/components/observations/stix_cyber_observables/StixCyberObservablesExports';
-import { truncate } from '../../utils/String';
 import StixCoreRelationshipsExports from '../../private/components/common/stix_core_relationships/StixCoreRelationshipsExports';
+import StixCoreObjectsExports from '../../private/components/common/stix_core_objects/StixCoreObjectsExports';
+import FilterIconButton from '../FilterIconButton';
 
 const styles = (theme) => ({
   container: {
@@ -45,14 +53,6 @@ const styles = (theme) => ({
       duration: theme.transitions.duration.leavingScreen,
     }),
     padding: '0 0 0 0',
-  },
-  containerOpenExports: {
-    flexGrow: 1,
-    transition: theme.transitions.create('padding', {
-      easing: theme.transitions.easing.easeOut,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-    padding: '0 310px 50px 0',
   },
   parameters: {
     float: 'left',
@@ -88,18 +88,6 @@ const styles = (theme) => ({
     fontSize: 12,
     fontWeight: '700',
     cursor: 'pointer',
-  },
-  filters: {
-    float: 'left',
-    margin: '5px 0 0 10px',
-  },
-  filter: {
-    marginRight: 10,
-  },
-  operator: {
-    fontFamily: 'Consolas, monaco, monospace',
-    backgroundColor: theme.palette.background.accent,
-    marginRight: 10,
   },
   info: {
     paddingTop: 10,
@@ -158,7 +146,6 @@ class ListLines extends Component {
       selectAll,
       openExports,
       noPadding,
-      noBottomPadding,
       dataColumns,
       secondaryAction,
       paginationOptions,
@@ -179,18 +166,15 @@ class ListLines extends Component {
       enableGraph,
       availableEntityTypes,
       availableRelationshipTypes,
+      availableRelationFilterTypes,
       enableNestedView,
       enableEntitiesView,
       currentView,
+      handleSwitchRedirectionMode,
+      redirectionMode,
     } = this.props;
-    let className = classes.container;
-    if (noBottomPadding) {
-      className = classes.containerWithoutPadding;
-    } else if (openExports && !noPadding) {
-      className = classes.containerOpenExports;
-    }
     return (
-      <div className={className}>
+      <div className={noPadding ? classes.containerNoPadding : classes.container}>
         <div className={classes.parameters}>
           {typeof handleSearch === 'function' && (
             <div style={{ float: 'left', marginRight: 20 }}>
@@ -207,53 +191,16 @@ class ListLines extends Component {
               handleAddFilter={handleAddFilter}
               availableEntityTypes={availableEntityTypes}
               availableRelationshipTypes={availableRelationshipTypes}
+              availableRelationFilterTypes={availableRelationFilterTypes}
             />
           )}
           {(!availableFilterKeys || availableFilterKeys.length === 0)
             && !noHeaders
             && !noFilters && <div style={{ height: 38 }}> &nbsp; </div>}
-          <div className={classes.filters}>
-            {map((currentFilter) => {
-              const label = `${truncate(t(`filter_${currentFilter[0]}`), 20)}`;
-              const values = (
-                <span>
-                  {map(
-                    (n) => (
-                      <span key={n.value}>
-                        {n.value && n.value.length > 0
-                          ? truncate(n.value, 15)
-                          : t('No label')}{' '}
-                        {last(currentFilter[1]).value !== n.value && (
-                          <code>OR</code>
-                        )}
-                      </span>
-                    ),
-                    currentFilter[1],
-                  )}
-                </span>
-              );
-              return (
-                <span>
-                  <Chip
-                    key={currentFilter[0]}
-                    classes={{ root: classes.filter }}
-                    label={
-                      <div>
-                        <strong>{label}</strong>: {values}
-                      </div>
-                    }
-                    onDelete={handleRemoveFilter.bind(this, currentFilter[0])}
-                  />
-                  {last(toPairs(filters))[0] !== currentFilter[0] && (
-                    <Chip
-                      classes={{ root: classes.operator }}
-                      label={t('AND')}
-                    />
-                  )}
-                </span>
-              );
-            }, toPairs(filters))}
-          </div>
+          <FilterIconButton
+            filters={filters}
+            handleRemoveFilter={handleRemoveFilter}
+          />
         </div>
         <div className={classes.views}>
           <div style={{ float: 'right', marginTop: -20 }}>
@@ -262,6 +209,52 @@ class ListLines extends Component {
                 <strong>{`${numberOfElements.number}${numberOfElements.symbol}`}</strong>{' '}
                 {t('entitie(s)')}
               </div>
+            )}
+            {handleSwitchRedirectionMode && (
+              <ToggleButtonGroup
+                size="small"
+                color="secondary"
+                exclusive={true}
+                onChange={(_, value) => {
+                  handleSwitchRedirectionMode(value);
+                }}
+                style={{ margin: '7px 20px 0 10px' }}
+              >
+                <ToggleButton value="overview" aria-label="overview">
+                  <Tooltip title={t('Redirecting to the Overview section')}>
+                    <PreviewOutlined
+                      fontSize="small"
+                      color={
+                        !redirectionMode || redirectionMode === 'overview'
+                          ? 'secondary'
+                          : 'primary'
+
+                    }
+                  /></Tooltip>
+                </ToggleButton>
+                <ToggleButton value="knowledge" aria-label="knowledge">
+                  <Tooltip title={t('Redirecting to the Knowledge section')}>
+                    <GraphOutline
+                      fontSize="small"
+                      color={
+                        redirectionMode === 'knowledge'
+                          ? 'secondary'
+                          : 'primary'
+                      }
+                    />
+                  </Tooltip>
+                </ToggleButton>
+                <ToggleButton value="content" aria-label="content">
+                  <Tooltip title={t('Redirecting to the Content section')}>
+                    <SourceOutlined
+                      fontSize="small"
+                      color={
+                        redirectionMode === 'content' ? 'secondary' : 'primary'
+                      }
+                    />
+                  </Tooltip>
+                </ToggleButton>
+              </ToggleButtonGroup>
             )}
             {(typeof handleChangeView === 'function'
               || typeof handleToggleExports === 'function') && (
@@ -286,22 +279,54 @@ class ListLines extends Component {
                     </Tooltip>
                   </ToggleButton>
                 )}
-                <ToggleButton value="lines" aria-label="lines">
-                  <Tooltip title={t('Lines view')}>
-                    <ViewListOutlined
-                      fontSize="small"
-                      color={
-                        currentView === 'lines' || !currentView
-                          ? 'secondary'
-                          : 'primary'
-                      }
-                    />
-                  </Tooltip>
-                </ToggleButton>
+                {typeof handleChangeView === 'function'
+                  && enableEntitiesView && (
+                    <ToggleButton value="entities" aria-label="entities">
+                      <Tooltip title={t('Entities view')}>
+                        <LibraryBooksOutlined
+                          fontSize="small"
+                          color={
+                            currentView === 'entities' ? 'secondary' : 'primary'
+                          }
+                        />
+                      </Tooltip>
+                    </ToggleButton>
+                )}
+                {enableEntitiesView && (
+                  <ToggleButton
+                    value="relationships"
+                    aria-label="relationships"
+                  >
+                    <Tooltip title={t('Relationships view')}>
+                      <RelationManyToMany
+                        fontSize="small"
+                        color={
+                          currentView === 'relationships' || !currentView
+                            ? 'secondary'
+                            : 'primary'
+                        }
+                      />
+                    </Tooltip>
+                  </ToggleButton>
+                )}
+                {!enableEntitiesView && (
+                  <ToggleButton value="lines" aria-label="lines">
+                    <Tooltip title={t('Lines view')}>
+                      <ViewListOutlined
+                        fontSize="small"
+                        color={
+                          currentView === 'lines' || !currentView
+                            ? 'secondary'
+                            : 'primary'
+                        }
+                      />
+                    </Tooltip>
+                  </ToggleButton>
+                )}
                 {typeof handleChangeView === 'function' && enableGraph && (
                   <ToggleButton value="graph" aria-label="graph">
                     <Tooltip title={t('Graph view')}>
-                      <GraphOutline fontSize="small" color="primary" />
+                      <VectorPolygon fontSize="small" color="primary" />
                     </Tooltip>
                   </ToggleButton>
                 )}
@@ -309,18 +334,6 @@ class ListLines extends Component {
                   <ToggleButton value="nested" aria-label="nested">
                     <Tooltip title={t('Nested view')}>
                       <FormatListGroup fontSize="small" color="primary" />
-                    </Tooltip>
-                  </ToggleButton>
-                )}
-                {typeof handleChangeView === 'function' && enableEntitiesView && (
-                  <ToggleButton value="entities" aria-label="entities">
-                    <Tooltip title={t('Entities view')}>
-                      <LibraryBooksOutlined
-                        fontSize="small"
-                        color={
-                          currentView === 'entities' ? 'secondary' : 'primary'
-                        }
-                      />
                     </Tooltip>
                   </ToggleButton>
                 )}
@@ -425,6 +438,7 @@ class ListLines extends Component {
           {children}
         </List>
         {typeof handleToggleExports === 'function'
+          && exportEntityType !== 'Stix-Core-Object'
           && exportEntityType !== 'Stix-Cyber-Observable'
           && exportEntityType !== 'stix-core-relationship' && (
             <Security needs={[KNOWLEDGE_KNGETEXPORT]}>
@@ -444,6 +458,18 @@ class ListLines extends Component {
                 open={openExports}
                 handleToggle={handleToggleExports.bind(this)}
                 paginationOptions={paginationOptions}
+                context={exportContext}
+              />
+            </Security>
+        )}
+        {typeof handleToggleExports === 'function'
+          && exportEntityType === 'Stix-Core-Object' && (
+            <Security needs={[KNOWLEDGE_KNGETEXPORT]}>
+              <StixCoreObjectsExports
+                open={openExports}
+                handleToggle={handleToggleExports.bind(this)}
+                paginationOptions={paginationOptions}
+                exportEntityType={exportEntityType}
                 context={exportContext}
               />
             </Security>
@@ -501,9 +527,12 @@ ListLines.propTypes = {
   enableGraph: PropTypes.bool,
   availableEntityTypes: PropTypes.array,
   availableRelationshipTypes: PropTypes.array,
+  availableRelationFilterTypes: PropTypes.object,
   enableNestedView: PropTypes.bool,
   enableEntitiesView: PropTypes.bool,
   currentView: PropTypes.string,
+  handleSwitchRedirectionMode: PropTypes.func,
+  redirectionMode: PropTypes.string,
 };
 
 export default compose(inject18n, withStyles(styles))(ListLines);

@@ -1,23 +1,22 @@
 /* eslint-disable camelcase */
 import { buildPeriodFromDates, computeRangeIntersection } from '../utils/format';
 import { createInferredRelation, deleteInferredRuleElement } from '../database/middleware';
-import { createRuleContent, RULE_MANAGER_USER } from './rules';
+import { createRuleContent } from './rules';
 import { computeAverage } from '../database/utils';
 import { listAllRelations } from '../database/middleware-loader';
-import type { RuleRuntime, RuleDefinition, RelationTypes } from '../types/rules';
-import type { StixObject } from '../types/stix-common';
-import type { Event } from '../types/event';
-import type { BasicStoreRelation } from '../types/store';
+import type { RelationTypes, RuleDefinition, RuleRuntime } from '../types/rules';
+import type { BasicStoreRelation, StoreObject } from '../types/store';
 import type { StixRelation } from '../types/stix-sro';
 import { STIX_EXT_OCTI } from '../types/stix-extensions';
 import { RELATION_OBJECT_MARKING } from '../schema/stixMetaRelationship';
+import { executionContext, RULE_MANAGER_USER } from '../utils/access';
 
 const buildRelationToRelationRule = (ruleDefinition: RuleDefinition, relationTypes: RelationTypes): RuleRuntime => {
   const { id } = ruleDefinition;
   const { leftType, rightType, creationType } = relationTypes;
   // Execution
-  const applyUpsert = async (data: StixRelation): Promise<Array<Event>> => {
-    const events: Array<Event> = [];
+  const applyUpsert = async (data: StixRelation): Promise<void> => {
+    const context = executionContext(ruleDefinition.name, RULE_MANAGER_USER);
     const { extensions } = data;
     const createdId = extensions[STIX_EXT_OCTI].id;
     const sourceRef = extensions[STIX_EXT_OCTI].source_ref;
@@ -50,15 +49,11 @@ const buildRelationToRelationRule = (ruleDefinition: RuleDefinition, relationTyp
             stop_time: range.end,
             objectMarking: elementMarkings,
           });
-          const event = await createInferredRelation(input, ruleContent) as Event;
-          // Re inject event if needed
-          if (event) {
-            events.push(event);
-          }
+          await createInferredRelation(context, input, ruleContent);
         }
       };
       const listFromArgs = { toId: sourceRef, callback: listFromCallback };
-      await listAllRelations(RULE_MANAGER_USER, leftType, listFromArgs);
+      await listAllRelations(context, RULE_MANAGER_USER, leftType, listFromArgs);
     }
     // Need to discover on the from and the to if attributed-to also exists
     // (A) -> leftType -> (B)
@@ -84,26 +79,21 @@ const buildRelationToRelationRule = (ruleDefinition: RuleDefinition, relationTyp
             stop_time: range.end,
             objectMarking: elementMarkings,
           });
-          const event = await createInferredRelation(input, ruleContent) as Event;
-          // Re inject event if needed
-          if (event) {
-            events.push(event);
-          }
+          await createInferredRelation(context, input, ruleContent);
         }
       };
       const listToArgs = { fromId: targetRef, callback: listToCallback };
-      await listAllRelations(RULE_MANAGER_USER, rightType, listToArgs);
+      await listAllRelations(context, RULE_MANAGER_USER, rightType, listToArgs);
     }
-    return events;
   };
   // Contract
-  const clean = async (element: StixObject, deletedDependencies: Array<string>): Promise<Array<Event>> => {
-    return deleteInferredRuleElement(id, element, deletedDependencies) as Promise<Array<Event>>;
+  const clean = async (element: StoreObject, deletedDependencies: Array<string>): Promise<void> => {
+    await deleteInferredRuleElement(id, element, deletedDependencies);
   };
-  const insert = async (element: StixRelation): Promise<Array<Event>> => {
+  const insert = async (element: StixRelation): Promise<void> => {
     return applyUpsert(element);
   };
-  const update = async (element: StixRelation): Promise<Array<Event>> => {
+  const update = async (element: StixRelation): Promise<void> => {
     return applyUpsert(element);
   };
   return { ...ruleDefinition, insert, update, clean };

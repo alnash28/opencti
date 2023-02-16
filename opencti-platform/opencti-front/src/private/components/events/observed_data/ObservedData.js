@@ -10,7 +10,8 @@ import ObservedDataDetails from './ObservedDataDetails';
 import ObservedDataEdition from './ObservedDataEdition';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixCoreObjectLatestHistory from '../../common/stix_core_objects/StixCoreObjectLatestHistory';
 import ObservedDataPopover from './ObservedDataPopover';
@@ -41,10 +42,10 @@ class ObservedDataComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={observedData} />
+            <ObservedDataDetails observedData={observedData} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <ObservedDataDetails observedData={observedData} />
+            <StixDomainObjectOverview stixDomainObject={observedData} />
           </Grid>
         </Grid>
         <Grid
@@ -82,6 +83,7 @@ class ObservedDataComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={observedData.id}
+          defaultMarking={(observedData.objectMarking?.edges ?? []).map((edge) => edge.node)}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <ObservedDataEdition observedDataId={observedData.id} />
@@ -120,6 +122,17 @@ const ObservedData = createFragmentContainer(ObservedDataComponent, {
       creator {
         id
         name
+      }
+      objectMarking {
+        edges {
+          node {
+            id
+            definition_type
+            definition
+            x_opencti_order
+            x_opencti_color
+          }
+        }
       }
       objectLabel {
         edges {

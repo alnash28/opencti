@@ -22,7 +22,16 @@ class RelationshipsStixCoreRelationshipsLines extends Component {
   }
 
   render() {
-    const { initialLoading, dataColumns, relay, onLabelClick } = this.props;
+    const {
+      initialLoading,
+      dataColumns,
+      relay,
+      onLabelClick,
+      onToggleEntity,
+      selectedElements,
+      deSelectedElements,
+      selectAll,
+    } = this.props;
     return (
       <ListLinesContent
         initialLoading={initialLoading}
@@ -44,6 +53,10 @@ class RelationshipsStixCoreRelationshipsLines extends Component {
         dataColumns={dataColumns}
         nbOfRowsToLoad={nbOfRowsToLoad}
         onLabelClick={onLabelClick.bind(this)}
+        selectedElements={selectedElements}
+        deSelectedElements={deSelectedElements}
+        selectAll={selectAll}
+        onToggleEntity={onToggleEntity.bind(this)}
       />
     );
   }
@@ -164,6 +177,9 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
               ... on City {
                 name
               }
+              ... on AdministrativeArea {
+                name
+              }
               ... on Country {
                 name
               }
@@ -249,6 +265,9 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                   ... on City {
                     name
                   }
+                  ... on AdministrativeArea {
+                    name
+                  }
                   ... on Country {
                     name
                   }
@@ -294,6 +313,8 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                 node {
                                   id
                                   definition
+                                  x_opencti_order
+                                  x_opencti_color
                                 }
                               }
                             }
@@ -323,6 +344,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                             name
                             description
                             published
+                          }
+                          ... on Grouping {
+                            name
+                            description
                           }
                           ... on CourseOfAction {
                             name
@@ -364,6 +389,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                             description
                           }
                           ... on City {
+                            name
+                            description
+                          }
+                          ... on AdministrativeArea {
                             name
                             description
                           }
@@ -468,6 +497,9 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                         name
                       }
                       ... on City {
+                        name
+                      }
+                      ... on AdministrativeArea {
                         name
                       }
                       ... on Country {
@@ -588,6 +620,8 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -617,6 +651,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -808,6 +846,8 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                 node {
                                   id
                                   definition
+                                  x_opencti_order
+                                  x_opencti_color
                                 }
                               }
                             }
@@ -837,6 +877,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                             name
                             description
                             published
+                          }
+                          ... on Grouping {
+                            name
+                            description
                           }
                           ... on CourseOfAction {
                             name
@@ -1031,6 +1075,8 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -1060,6 +1106,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -1248,6 +1298,8 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -1277,6 +1329,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -1472,6 +1528,8 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                 node {
                                   id
                                   definition
+                                  x_opencti_order
+                                  x_opencti_color
                                 }
                               }
                             }
@@ -1501,6 +1559,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                             name
                             description
                             published
+                          }
+                          ... on Grouping {
+                            name
+                            description
                           }
                           ... on CourseOfAction {
                             name
@@ -1766,6 +1828,8 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -1795,6 +1859,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -1986,6 +2054,8 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                 node {
                                   id
                                   definition
+                                  x_opencti_order
+                                  x_opencti_color
                                 }
                               }
                             }
@@ -2015,6 +2085,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                             name
                             description
                             published
+                          }
+                          ... on Grouping {
+                            name
+                            description
                           }
                           ... on CourseOfAction {
                             name
@@ -2209,6 +2283,8 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -2238,6 +2314,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -2426,6 +2506,8 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -2455,6 +2537,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -2560,6 +2646,8 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                 id
                 definition
                 x_opencti_color
+                x_opencti_order
+                x_opencti_color
               }
             }
           }
@@ -2663,7 +2751,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                         edges {
                           node {
                             id
+                            definition_type
                             definition
+                            x_opencti_order
+                            x_opencti_color
                           }
                         }
                       }
@@ -2693,6 +2784,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                       name
                       description
                       published
+                    }
+                    ... on Grouping {
+                      name
+                      description
                     }
                     ... on CourseOfAction {
                       name
@@ -3040,7 +3135,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                         edges {
                           node {
                             id
+                            definition_type
                             definition
+                            x_opencti_order
+                            x_opencti_color
                           }
                         }
                       }
@@ -3070,6 +3168,10 @@ export const relationshipsStixCoreRelationshipsLinesSearchQuery = graphql`
                       name
                       description
                       published
+                    }
+                    ... on Grouping {
+                      name
+                      description
                     }
                     ... on CourseOfAction {
                       name
@@ -3361,7 +3463,10 @@ export default createPaginationContainer(
                 edges {
                   node {
                     id
+                    definition_type
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }

@@ -1,33 +1,32 @@
 import https from 'node:https';
 import http from 'node:http';
-import { graphqlUploadExpress } from 'graphql-upload';
+import graphqlUploadExpress from 'graphql-upload/graphqlUploadExpress.mjs';
 import { readFileSync } from 'node:fs';
 import { SubscriptionServer } from 'subscriptions-transport-ws';
-import { execute, subscribe } from 'graphql';
+// eslint-disable-next-line import/extensions
+import { execute, subscribe } from 'graphql/index.js';
 import nconf from 'nconf';
 import express from 'express';
-import conf, { basePath, booleanConf, logApp } from '../config/conf';
+import conf, { basePath, booleanConf, logApp, PORT } from '../config/conf';
 import createApp from './httpPlatform';
 import createApolloServer from '../graphql/graphql';
 import { isStrategyActivated, STRATEGY_CERT } from '../config/providers';
-import { applicationSession, initializeSession } from '../database/session';
+import { applicationSession } from '../database/session';
 import { checkSystemDependencies } from '../initialization';
-import { getSettings } from '../domain/settings';
+import { executionContext } from '../utils/access';
 
 const MIN_20 = 20 * 60 * 1000;
-const PORT = conf.get('app:port');
 const REQ_TIMEOUT = conf.get('app:request_timeout');
 const CERT_KEY_PATH = conf.get('app:https_cert:key');
 const CERT_KEY_CERT = conf.get('app:https_cert:crt');
 const CA_CERTS = conf.get('app:https_cert:ca');
 const rejectUnauthorized = booleanConf('app:https_cert:reject_unauthorized', true);
 
-const onHealthCheck = () => checkSystemDependencies().then(() => getSettings());
+const onHealthCheck = () => checkSystemDependencies();
 
 const createHttpServer = async () => {
   const app = express();
-  const appSessionHandler = initializeSession();
-  app.use(appSessionHandler.session);
+  app.use(applicationSession.session);
   const { schema, apolloServer } = createApolloServer();
   let httpServer;
   if (CERT_KEY_PATH && CERT_KEY_CERT) {
@@ -51,7 +50,7 @@ const createHttpServer = async () => {
       async onConnect(connectionParams, webSocket) {
         const wsSession = await new Promise((resolve) => {
           // use same session parser as normal gql queries
-          const { session } = applicationSession();
+          const { session } = applicationSession;
           session(webSocket.upgradeReq, {}, () => {
             if (webSocket.upgradeReq.session) {
               resolve(webSocket.upgradeReq.session);
@@ -61,14 +60,16 @@ const createHttpServer = async () => {
         });
         // We have a good session. attach to context
         if (wsSession.user) {
-          return { user: wsSession.user };
+          const context = executionContext('api');
+          context.user = wsSession.user;
+          return context;
         }
         throw new Error('User must be authenticated');
       },
     },
     {
       server: httpServer,
-      path: apolloServer.graphqlPath,
+      path: `${basePath}${apolloServer.graphqlPath}`,
     }
   );
   apolloServer.plugins.push({
@@ -86,9 +87,7 @@ const createHttpServer = async () => {
   apolloServer.applyMiddleware({
     app,
     cors: true,
-    bodyParserConfig: {
-      limit: requestSizeLimit,
-    },
+    bodyParserConfig: { limit: requestSizeLimit },
     onHealthCheck,
     path: `${basePath}/graphql`,
   });

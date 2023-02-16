@@ -1,11 +1,8 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
-import { compose, includes } from 'ramda';
+import { compose } from 'ramda';
 import withStyles from '@mui/styles/withStyles';
-import Drawer from '@mui/material/Drawer';
-import Grid from '@mui/material/Grid';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
+import * as R from 'ramda';
 import { QueryRenderer } from '../../../../relay/environment';
 import ListLines from '../../../../components/list_lines/ListLines';
 import inject18n from '../../../../components/i18n';
@@ -13,7 +10,14 @@ import EntityStixSightingRelationshipsLines, {
   entityStixSightingRelationshipsLinesQuery,
 } from './EntityStixSightingRelationshipsLines';
 import StixSightingRelationshipCreationFromEntity from './StixSightingRelationshipCreationFromEntity';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
+import { isUniqFilter } from '../../../../utils/filters/filtersUtils';
+import {
+  buildViewParamsFromUrlAndStorage,
+  convertFilters,
+  saveViewParameters,
+} from '../../../../utils/ListParameters';
 
 const styles = (theme) => ({
   container: {
@@ -37,46 +41,90 @@ const styles = (theme) => ({
 class EntityStixSightingRelationships extends Component {
   constructor(props) {
     super(props);
+    let params = {};
+    if (!props.noState) {
+      params = buildViewParamsFromUrlAndStorage(
+        props.history,
+        props.location,
+        `view-sightings-${
+          props.entityId
+        }-${props.stixCoreObjectTypes?.join('-')}`,
+      );
+    }
     this.state = {
-      sortBy: 'first_seen',
-      orderAsc: true,
-      searchTerm: '',
-      openToType: false,
-      toType: 'All',
-      view: 'lines',
+      sortBy: R.propOr('first_seen', 'sortBy', params),
+      orderAsc: R.propOr(false, 'orderAsc', params),
+      searchTerm: R.propOr('', 'searchTerm', params),
+      view: R.propOr('lines', 'view', params),
+      filters: R.propOr({}, 'filters', params),
+      numberOfElements: { number: 0, symbol: '' },
+      openExports: false,
     };
   }
 
+  saveView() {
+    if (!this.props.noState) {
+      saveViewParameters(
+        this.props.history,
+        this.props.location,
+        `view-sightings-${
+          this.props.entityId
+        }-${this.props.stixCoreObjectTypes?.join('-')}`,
+        this.state,
+      );
+    }
+  }
+
   handleSort(field, orderAsc) {
-    this.setState({ sortBy: field, orderAsc });
+    this.setState({ sortBy: field, orderAsc }, () => this.saveView());
   }
 
   handleSearch(value) {
-    this.setState({ searchTerm: value });
+    this.setState({ searchTerm: value }, () => this.saveView());
   }
 
-  handleOpenToType() {
-    this.setState({ openToType: true });
-  }
-
-  handleCloseToType() {
-    this.setState({ openToType: false });
-  }
-
-  handleChangeEntities(event) {
-    const { value } = event.target;
-    if (value === 'All' && this.props.targetStixDomainObjectTypes.length > 1) {
-      return this.setState({
-        openToType: false,
-        toType: 'All',
-      });
+  handleAddFilter(key, id, value, event = null) {
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
     }
-    return this.setState({ openToType: false, toType: value });
+    if (this.state.filters[key] && this.state.filters[key].length > 0) {
+      this.setState(
+        {
+          filters: R.assoc(
+            key,
+            isUniqFilter(key)
+              ? [{ id, value }]
+              : R.uniqBy(R.prop('id'), [
+                { id, value },
+                ...this.state.filters[key],
+              ]),
+            this.state.filters,
+          ),
+        },
+        () => this.saveView(),
+      );
+    } else {
+      this.setState(
+        {
+          filters: R.assoc(key, [{ id, value }], this.state.filters),
+        },
+        () => this.saveView(),
+      );
+    }
+  }
+
+  handleRemoveFilter(key) {
+    this.setState({ filters: R.dissoc(key, this.state.filters) }, () => this.saveView());
+  }
+
+  handleToggleExports() {
+    this.setState({ openExports: !this.state.openExports });
   }
 
   renderLines(paginationOptions) {
-    const { sortBy, orderAsc } = this.state;
-    const { entityLink, isTo } = this.props;
+    const { sortBy, orderAsc, openExports, disableExport, filters } = this.state;
+    const { entityLink, isTo, stixCoreObjectTypes } = this.props;
     // sort only when inferences are disabled or inferences are resolved
     const dataColumns = {
       x_opencti_negative: {
@@ -121,8 +169,28 @@ class EntityStixSightingRelationships extends Component {
         dataColumns={dataColumns}
         handleSort={this.handleSort.bind(this)}
         handleSearch={this.handleSearch.bind(this)}
+        handleAddFilter={this.handleAddFilter.bind(this)}
+        handleRemoveFilter={this.handleRemoveFilter.bind(this)}
+        handleToggleExports={
+          disableExport ? null : this.handleToggleExports.bind(this)
+        }
+        filters={filters}
+        availableFilterKeys={[
+          'toTypes',
+          'labelledBy',
+          'markedBy',
+          'x_opencti_workflow_id',
+          'created_start_date',
+          'created_end_date',
+          'createdBy',
+          'x_opencti_negative',
+        ]}
+        openExports={openExports}
+        exportEntityType="stix-sighting-relationship"
+        availableEntityTypes={stixCoreObjectTypes}
         displayImport={true}
         secondaryAction={true}
+        paginationOptions={paginationOptions}
       >
         <QueryRenderer
           query={entityStixSightingRelationshipsLinesQuery}
@@ -143,90 +211,39 @@ class EntityStixSightingRelationships extends Component {
   }
 
   render() {
-    const {
-      t,
-      classes,
-      targetStixDomainObjectTypes,
-      entityId,
-      isTo,
-      noPadding,
-    } = this.props;
-    const { view, searchTerm, toType, openToType, sortBy, orderAsc } = this.state;
-    // Display types selection when target types are multiple
-    const displayTypes = !isTo
-      && (targetStixDomainObjectTypes.length > 1
-        || targetStixDomainObjectTypes.includes('Identity'));
-    // sort only when inferences are disabled or inferences are resolved
+    const { classes, stixCoreObjectTypes, entityId, isTo, noPadding } = this.props;
+    const { view, searchTerm, sortBy, orderAsc, filters } = this.state;
+    let finalFilters = convertFilters(filters);
+    const toTypes = R.head(finalFilters.filter((n) => n.key === 'toTypes'))?.values || null;
+    finalFilters = finalFilters.filter((n) => !['toTypes'].includes(n.key));
     const paginationOptions = {
       search: searchTerm,
       orderBy: sortBy,
       orderMode: orderAsc ? 'asc' : 'desc',
+      filters: finalFilters,
+      toTypes,
     };
     if (isTo) {
       paginationOptions.toId = entityId;
     } else {
       paginationOptions.fromId = entityId;
-      paginationOptions.toTypes = toType === 'All' ? targetStixDomainObjectTypes : [toType];
     }
     return (
       <div className={classes.container}>
-        {displayTypes && (
-          <Drawer
-            anchor="bottom"
-            variant="permanent"
-            classes={{ paper: classes.bottomNav }}
-            PaperProps={{ variant: 'elevation', elevation: 1 }}
-          >
-            <Grid container={true} spacing={1}>
-              <Grid item={true} xs="auto">
-                <Select
-                  variant="standard"
-                  value={toType}
-                  open={openToType}
-                  onClose={this.handleCloseToType.bind(this)}
-                  onOpen={this.handleOpenToType.bind(this)}
-                  onChange={this.handleChangeEntities.bind(this)}
-                >
-                  <MenuItem value="All">{t('All entities')}</MenuItem>
-                  {(includes('Region', targetStixDomainObjectTypes)
-                    || includes('Identity', targetStixDomainObjectTypes)) && (
-                    <MenuItem value="Region">{t('Region')}</MenuItem>
-                  )}
-                  {(includes('Country', targetStixDomainObjectTypes)
-                    || includes('Identity', targetStixDomainObjectTypes)) && (
-                    <MenuItem value="Country">{t('Country')}</MenuItem>
-                  )}
-                  {(includes('City', targetStixDomainObjectTypes)
-                    || includes('Identity', targetStixDomainObjectTypes)) && (
-                    <MenuItem value="City">{t('City')}</MenuItem>
-                  )}
-                  {(includes('Organization', targetStixDomainObjectTypes)
-                    || includes('Identity', targetStixDomainObjectTypes)) && (
-                    <MenuItem value="Organization">
-                      {t('Organization')}
-                    </MenuItem>
-                  )}
-                  {(includes('User', targetStixDomainObjectTypes)
-                    || includes('Identity', targetStixDomainObjectTypes)) && (
-                    <MenuItem value="User">{t('Individual')}</MenuItem>
-                  )}
-                </Select>
-              </Grid>
-            </Grid>
-          </Drawer>
-        )}
         {view === 'lines' ? this.renderLines(paginationOptions) : ''}
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           {isTo ? (
             <StixSightingRelationshipCreationFromEntity
               entityId={entityId}
               isTo={true}
-              targetStixDomainObjectTypes={[
+              stixCoreObjectTypes={[
                 'Threat-Actor',
                 'Intrusion-Set',
                 'Campaign',
                 'Malware',
                 'Tool',
+                'Vulnerability',
+                'Indicator',
               ]}
               targetStixCyberObservableTypes={['Stix-Cyber-Observable']}
               paddingRight={noPadding ? null : 220}
@@ -235,7 +252,7 @@ class EntityStixSightingRelationships extends Component {
           ) : (
             <StixSightingRelationshipCreationFromEntity
               entityId={entityId}
-              targetStixDomainObjectTypes={targetStixDomainObjectTypes}
+              stixCoreObjectTypes={stixCoreObjectTypes}
               paddingRight={noPadding ? null : 220}
               paginationOptions={paginationOptions}
             />
@@ -248,7 +265,7 @@ class EntityStixSightingRelationships extends Component {
 
 EntityStixSightingRelationships.propTypes = {
   entityId: PropTypes.string,
-  targetStixDomainObjectTypes: PropTypes.array,
+  stixCoreObjectTypes: PropTypes.array,
   entityLink: PropTypes.string,
   classes: PropTypes.object,
   t: PropTypes.func,

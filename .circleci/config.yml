@@ -1,15 +1,16 @@
 version: 2.1
 orbs:
   slack: circleci/slack@4.8.3
+  ms-teams: cloudradar-monitoring/ms-teams@0.0.1
 jobs:
   build_frontend:
     working_directory: ~/opencti
     docker:
-      - image: nikolaik/python-nodejs:python3.10-nodejs16
+      - image: nikolaik/python-nodejs:python3.10-nodejs18
     resource_class: large
     steps:
       - run:
-          command: apt-get update --allow-insecure-repositories --allow-unauthenticated && apt-get install -y build-essential libffi-dev
+          command: apt-get update --allow-insecure-repositories --allow-unauthenticated && apt-get install -y build-essential libffi-dev curl
       - checkout
       - run:
           working_directory: ~/opencti/opencti-platform/opencti-front
@@ -24,6 +25,9 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
       - persist_to_workspace:
           root: ~/
           paths:
@@ -34,11 +38,13 @@ jobs:
   build_platform:
     working_directory: ~/opencti
     docker:
-      - image: nikolaik/python-nodejs:python3.10-nodejs16
+      - image: nikolaik/python-nodejs:python3.10-nodejs18
     resource_class: medium+
     steps:
       - run:
-          command: apt-get update --allow-insecure-repositories --allow-unauthenticated && apt-get install -y build-essential libffi-dev
+          command: apt-get update --allow-insecure-repositories --allow-unauthenticated && apt-get install -y build-essential libffi-dev curl g++ make python3 python3-dev
+      - run:
+          command: npm install -g node-gyp
       - attach_workspace:
           at: ~/
       - run:
@@ -50,6 +56,9 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL          
       - persist_to_workspace:
           root: ~/
           paths:
@@ -58,11 +67,13 @@ jobs:
   build_platform_musl:
     working_directory: ~/opencti_musl
     docker:
-      - image: nikolaik/python-nodejs:python3.10-nodejs16-alpine
+      - image: nikolaik/python-nodejs:python3.10-nodejs18-alpine
     resource_class: medium+
     steps:
       - run:
-          command: apk update && apk upgrade && apk --no-cache add git build-base libmagic libffi-dev
+          command: apk update && apk upgrade && apk --no-cache add git tini gcc g++ make musl-dev python3 python3-dev postfix postfix-pcre build-base libmagic libffi-dev curl
+      - run:
+          command: npm install -g node-gyp          
       - attach_workspace:
           at: ~/
       - run:
@@ -74,6 +85,9 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
       - persist_to_workspace:
           root: ~/
           paths:
@@ -88,6 +102,7 @@ jobs:
       - attach_workspace:
           at: ~/
       - add_ssh_keys
+      - run: sudo apt-get update -qq && sudo apt install curl         
       - run: ssh-keyscan -H opencti.io >> ~/.ssh/known_hosts
       - run: git config --global user.email "ci@opencti.io" && git config --global user.name "OpenCTI CircleCI"
       - run: git remote add opencti ssh://git-OLOszi5F@opencti.io:/~/git-OLOszi5F.git && git push --force opencti master
@@ -106,6 +121,9 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
   package_rolling_musl:
     working_directory: ~/opencti_musl
@@ -116,6 +134,7 @@ jobs:
       - attach_workspace:
           at: ~/
       - add_ssh_keys
+      - run: sudo apt-get update -qq && sudo apt install curl      
       - run: ssh-keyscan -H opencti.io >> ~/.ssh/known_hosts
       - run: mkdir release
       - run: rm -Rf ./opencti-platform/opencti-graphql/.yarn/cache
@@ -132,6 +151,9 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
   deploy_demo:
     working_directory: ~/opencti
@@ -143,7 +165,7 @@ jobs:
           at: ~/
       - add_ssh_keys
       - run: ssh-keyscan -H opencti.io >> ~/.ssh/known_hosts
-      - run: sudo apt-get update -qq && sudo apt install rsync
+      - run: sudo apt-get update -qq && sudo apt install rsync curl
       - run: mkdir deploy
       - run: git config --global user.email "ci@opencti.io" && git config --global user.name "OpenCTI CircleCI"
       - run:
@@ -173,6 +195,9 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
   deploy_reference:
     working_directory: ~/opencti
@@ -184,7 +209,7 @@ jobs:
           at: ~/
       - add_ssh_keys
       - run: ssh-keyscan -H opencti.io >> ~/.ssh/known_hosts
-      - run: sudo apt-get update -qq && sudo apt install rsync
+      - run: sudo apt-get update -qq && sudo apt install rsync curl
       - run: mkdir -p deploy
       - run: git config --global user.email "ci@opencti.io" && git config --global user.name "OpenCTI CircleCI"
       - run:
@@ -214,8 +239,11 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
-  deploy_testing:
+  deploy_club:
     working_directory: ~/opencti
     docker:
       - image: circleci/node:15-stretch
@@ -225,7 +253,7 @@ jobs:
           at: ~/
       - add_ssh_keys
       - run: ssh-keyscan -H opencti.io >> ~/.ssh/known_hosts
-      - run: sudo apt-get update -qq && sudo apt install rsync
+      - run: sudo apt-get update -qq && sudo apt install rsync curl
       - run: mkdir deploy
       - run: git config --global user.email "ci@opencti.io" && git config --global user.name "OpenCTI CircleCI"
       - run:
@@ -255,8 +283,11 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
-  deploy_club:
+  deploy_testing:
     working_directory: ~/opencti
     docker:
       - image: circleci/node:15-stretch
@@ -266,7 +297,7 @@ jobs:
           at: ~/
       - add_ssh_keys
       - run: ssh-keyscan -H opencti.io >> ~/.ssh/known_hosts
-      - run: sudo apt-get update -qq && sudo apt install rsync
+      - run: sudo apt-get update -qq && sudo apt install rsync curl
       - run: mkdir deploy
       - run: git config --global user.email "ci@opencti.io" && git config --global user.name "OpenCTI CircleCI"
       - run:
@@ -296,6 +327,9 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
   deploy_lab:
     working_directory: ~/opencti
@@ -307,7 +341,7 @@ jobs:
           at: ~/
       - add_ssh_keys
       - run: ssh-keyscan -H opencti.io >> ~/.ssh/known_hosts
-      - run: sudo apt-get update -qq && sudo apt install rsync
+      - run: sudo apt-get update -qq && sudo apt install rsync curl
       - run: mkdir deploy
       - run: git config --global user.email "ci@opencti.io" && git config --global user.name "OpenCTI CircleCI"
       - run:
@@ -337,6 +371,9 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
   docker_build_platform:
     working_directory: ~/opencti_docker
@@ -349,6 +386,7 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/
+      - run: sudo apt-get update -qq && sudo apt install curl
       - run:
           name: Install buildx
           command: |
@@ -374,6 +412,9 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
   docker_build_worker:
     working_directory: ~/opencti_docker
@@ -386,6 +427,7 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/
+      - run: sudo apt-get update -qq && sudo apt install curl       
       - run:
           name: Install buildx
           command: |
@@ -410,6 +452,9 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
   docker_build_platform_rolling:
     working_directory: ~/opencti_docker
@@ -422,6 +467,7 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/
+      - run: sudo apt-get update -qq && sudo apt install curl        
       - run:
           name: Install buildx
           command: |
@@ -447,6 +493,9 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
   docker_build_worker_rolling:
     working_directory: ~/opencti_docker
@@ -459,6 +508,7 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/
+      - run: sudo apt-get update -qq && sudo apt install curl
       - run:
           name: Install buildx
           command: |
@@ -483,22 +533,32 @@ jobs:
       - slack/notify:
           event: fail
           template: basic_fail_1
+      - ms-teams/report:
+          only_on_fail: true
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
   notify_rolling:
     docker:
       - image: "cimg/base:stable"
     steps:
+      - run: sudo apt-get update -qq && sudo apt install curl      
       - slack/notify:
           event: pass
           template: basic_success_1
-
+      - ms-teams/report:
+          only_on_fail: false
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
   notify:
     docker:
       - image: "cimg/base:stable"
     steps:
+      - run: sudo apt-get update -qq && sudo apt install curl   
       - slack/notify:
           event: pass
           template: basic_success_1
+      - ms-teams/report:
+          only_on_fail: false
+          webhook_url: $MS_TEAMS_WEBHOOK_URL
 
 workflows:
   opencti:
@@ -556,6 +616,13 @@ workflows:
             branches:
               only:
                 - master
+      - deploy_testing:
+          requires:
+            - build_platform
+          filters:
+            branches:
+              only:
+                - master
       - docker_build_platform_rolling:
           requires:
             - build_frontend
@@ -591,6 +658,7 @@ workflows:
             - deploy_demo
             - deploy_lab
             - deploy_reference
+            - deploy_testing
             - package_rolling
             - package_rolling_musl
             - docker_build_platform_rolling

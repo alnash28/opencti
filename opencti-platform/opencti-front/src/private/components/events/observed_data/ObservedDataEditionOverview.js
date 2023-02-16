@@ -2,7 +2,6 @@ import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
 import { graphql, createFragmentContainer } from 'react-relay';
 import { Formik, Field, Form } from 'formik';
-import withStyles from '@mui/styles/withStyles';
 import * as Yup from 'yup';
 import * as R from 'ramda';
 import { commitMutation } from '../../../../relay/environment';
@@ -20,33 +19,9 @@ import {
   convertCreatedBy,
   convertMarkings,
   convertStatus,
-} from '../../../../utils/Edition';
+} from '../../../../utils/edition';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
-
-const styles = (theme) => ({
-  drawerPaper: {
-    minHeight: '100vh',
-    width: '50%',
-    position: 'fixed',
-    overflow: 'hidden',
-
-    transition: theme.transitions.create('width', {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-    padding: '30px 30px 30px 30px',
-  },
-  createButton: {
-    position: 'fixed',
-    bottom: 30,
-    right: 30,
-  },
-  importButton: {
-    position: 'absolute',
-    top: 30,
-    right: 30,
-  },
-});
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
 
 export const observedDataMutationFieldPatch = graphql`
   mutation ObservedDataEditionOverviewFieldPatchMutation(
@@ -98,7 +73,7 @@ const observedDataMutationRelationAdd = graphql`
 const observedDataMutationRelationDelete = graphql`
   mutation ObservedDataEditionOverviewRelationDeleteMutation(
     $id: ID!
-    $toId: String!
+    $toId: StixRef!
     $relationship_type: String!
   ) {
     observedDataEdit(id: $id) {
@@ -270,7 +245,6 @@ class ObservedDataEditionOverviewComponent extends Component {
         {({
           submitForm,
           isSubmitting,
-          validateForm,
           setFieldValue,
           values,
         }) => (
@@ -302,6 +276,7 @@ class ObservedDataEditionOverviewComponent extends Component {
                   label: t('Last observed'),
                   variant: 'standard',
                   fullWidth: true,
+                  style: { marginTop: 20 },
                   helperText: (
                     <SubscriptionFocus
                       context={context}
@@ -332,7 +307,7 @@ class ObservedDataEditionOverviewComponent extends Component {
                 onChange={this.handleSubmitField.bind(this)}
                 label={t('Confidence')}
                 fullWidth={true}
-                containerstyle={{ width: '100%', marginTop: 20 }}
+                containerStyle={fieldSpacingContainerStyle}
                 editContext={context}
                 variant="edit"
               />
@@ -376,9 +351,9 @@ class ObservedDataEditionOverviewComponent extends Component {
                 <CommitMessage
                   submitForm={submitForm}
                   disabled={isSubmitting}
-                  validateForm={validateForm}
                   setFieldValue={setFieldValue}
-                  values={values}
+                  open={false}
+                  values={values.references}
                 />
               )}
             </Form>
@@ -419,8 +394,10 @@ const ObservedDataEditionOverview = createFragmentContainer(
           edges {
             node {
               id
-              definition
               definition_type
+              definition
+              x_opencti_order
+              x_opencti_color
             }
           }
         }
@@ -439,7 +416,4 @@ const ObservedDataEditionOverview = createFragmentContainer(
   },
 );
 
-export default R.compose(
-  inject18n,
-  withStyles(styles, { withTheme: true }),
-)(ObservedDataEditionOverview);
+export default inject18n(ObservedDataEditionOverview);

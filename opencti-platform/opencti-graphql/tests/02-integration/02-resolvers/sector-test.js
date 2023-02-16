@@ -1,5 +1,6 @@
+import { expect, it, describe } from 'vitest';
 import gql from 'graphql-tag';
-import { ADMIN_USER, queryAsAdmin } from '../../utils/testQuery';
+import { ADMIN_USER, testContext, queryAsAdmin } from '../../utils/testQuery';
 import { elLoadById } from '../../../src/database/engine';
 
 const LIST_QUERY = gql`
@@ -105,7 +106,7 @@ describe('Sector resolver standard behavior', () => {
     expect(queryResult.data.sector.id).toEqual(sectorInternalId);
   });
   it('should sector subsectors be accurate', async () => {
-    const sector = await elLoadById(ADMIN_USER, 'identity--5556c4ab-3e5e-4d56-8410-60b29cecbeb6');
+    const sector = await elLoadById(testContext, ADMIN_USER, 'identity--5556c4ab-3e5e-4d56-8410-60b29cecbeb6');
     const queryResult = await queryAsAdmin({
       query: READ_QUERY,
       variables: { id: sector.internal_id },
@@ -120,7 +121,7 @@ describe('Sector resolver standard behavior', () => {
     );
   });
   it('should sector parent sectors be accurate', async () => {
-    const sector = await elLoadById(ADMIN_USER, 'identity--360f3368-b911-4bb1-a7f9-0a8e4ef4e023');
+    const sector = await elLoadById(testContext, ADMIN_USER, 'identity--360f3368-b911-4bb1-a7f9-0a8e4ef4e023');
     const queryResult = await queryAsAdmin({
       query: READ_QUERY,
       variables: { id: sector.internal_id },
@@ -222,7 +223,7 @@ describe('Sector resolver standard behavior', () => {
   });
   it('should delete relation in sector', async () => {
     const RELATION_DELETE_QUERY = gql`
-      mutation SectorEdit($id: ID!, $toId: String!, $relationship_type: String!) {
+      mutation SectorEdit($id: ID!, $toId: StixRef!, $relationship_type: String!) {
         sectorEdit(id: $id) {
           relationDelete(toId: $toId, relationship_type: $relationship_type) {
             id

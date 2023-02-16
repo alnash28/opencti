@@ -25,9 +25,15 @@
       "logs_directory": "./logs"
     },
     "telemetry": {
-      "prometheus": {
+      "tracing": {
         "enabled": false,
-        "metrics_path": "/prometheus/metrics"
+        "exporter_otlp": "",
+        "exporter_zipkin": ""
+      },
+      "metrics": {
+        "enabled": false,
+        "exporter_otlp": "",
+        "exporter_prometheus": 14269
       }
     },
     "request_timeout": 1200000,
@@ -51,8 +57,8 @@
     "performance_logger": false,
     "map_tile_server_dark": "https://map.opencti.io/styles/luatix-dark/{z}/{x}/{y}.png",
     "map_tile_server_light": "https://map.opencti.io/styles/luatix-light/{z}/{x}/{y}.png",
-    "enforce_references": [],
     "reference_attachment": false,
+    "python_execution": "native",
     "admin": {
       "email": "admin@opencti.io",
       "password": "ChangeMe",
@@ -67,6 +73,12 @@
     "enabled": true,
     "lock_key": "history_manager_lock"
   },
+  "connector_manager": {
+    "enabled": true,
+    "lock_key": "connector_manager_lock",
+    "works_day_range": 7,
+    "interval": 60000
+  },
   "task_scheduler": {
     "enabled": true,
     "lock_key": "task_manager_lock",
@@ -77,9 +89,14 @@
     "lock_key": "expired_manager_lock",
     "interval": 300000
   },
-  "subscription_scheduler": {
-    "enabled": false,
-    "lock_key": "subscription_manager_lock",
+  "notification_manager": {
+    "enabled": true,
+    "lock_key": "notification_manager_lock",
+    "interval": 10000
+  },
+  "publisher_manager": {
+    "enabled": true,
+    "lock_key": "publisher_manager_lock",
     "interval": 10000
   },
   "sync_manager": {
@@ -93,14 +110,13 @@
     "interval": 60000
   },
   "redis": {
+    "mode": "single",
     "namespace": "",
     "hostname": "localhost",
     "use_ssl": false,
     "ca": [],
     "port": 6379,
-    "trimming": 0,
-    "include_inferences": false,
-    "use_as_cache": false
+    "trimming": 0
   },
   "elasticsearch": {
     "index_prefix": "opencti",
@@ -122,6 +138,7 @@
     "use_aws_role": false
   },
   "rabbitmq": {
+    "queue_prefix": "",
     "hostname": "localhost",
     "vhost": "/",
     "use_ssl": false,

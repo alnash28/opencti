@@ -14,6 +14,7 @@ import { buildDate, parse } from '../../../../utils/Time';
 import CommitMessage from '../../common/form/CommitMessage';
 import { adaptFieldValue } from '../../../../utils/String';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -79,10 +80,10 @@ const threatActorValidation = (t) => Yup.object().shape({
   last_seen: Yup.date()
     .nullable()
     .typeError(t('The value must be a datetime (yyyy-MM-dd hh:mm (a|p)m)')),
-  sophistication: Yup.string().nullable(),
-  resource_level: Yup.string().nullable(),
+  sophistication: Yup.object().nullable(),
+  resource_level: Yup.object().nullable(),
   roles: Yup.array().nullable(),
-  primary_motivation: Yup.string().nullable(),
+  primary_motivation: Yup.object().nullable(),
   secondary_motivations: Yup.array().nullable(),
   personal_motivations: Yup.array().nullable(),
   goals: Yup.string().nullable(),
@@ -207,7 +208,6 @@ class ThreatActorEditionDetailsComponent extends Component {
           {({
             submitForm,
             isSubmitting,
-            validateForm,
             setFieldValue,
             values,
           }) => (
@@ -253,8 +253,9 @@ class ThreatActorEditionDetailsComponent extends Component {
                   type="threat-actor-sophistication-ov"
                   name="sophistication"
                   onFocus={this.handleChangeFocus.bind(this)}
-                  onChange={this.handleSubmitField.bind(this)}
-                  containerstyle={{ marginTop: 20, width: '100%' }}
+                  onChange={(name, value) => setFieldValue(name, value)}
+                  onSubmit={this.handleSubmitField.bind(this)}
+                  containerStyle={fieldSpacingContainerStyle}
                   variant="edit"
                   multiple={false}
                   editContext={context}
@@ -264,8 +265,9 @@ class ThreatActorEditionDetailsComponent extends Component {
                   type="attack-resource-level-ov"
                   name="resource_level"
                   onFocus={this.handleChangeFocus.bind(this)}
-                  onChange={this.handleSubmitField.bind(this)}
-                  containerstyle={{ marginTop: 20, width: '100%' }}
+                  onChange={(name, value) => setFieldValue(name, value)}
+                  onSubmit={this.handleSubmitField.bind(this)}
+                  containerStyle={fieldSpacingContainerStyle}
                   variant="edit"
                   multiple={false}
                   editContext={context}
@@ -275,8 +277,9 @@ class ThreatActorEditionDetailsComponent extends Component {
                   type="threat-actor-role-ov"
                   name="roles"
                   onFocus={this.handleChangeFocus.bind(this)}
-                  onChange={this.handleSubmitField.bind(this)}
-                  containerstyle={{ marginTop: 20, width: '100%' }}
+                  onChange={(name, value) => setFieldValue(name, value)}
+                  onSubmit={this.handleSubmitField.bind(this)}
+                  containerStyle={fieldSpacingContainerStyle}
                   variant="edit"
                   multiple={true}
                   editContext={context}
@@ -286,8 +289,9 @@ class ThreatActorEditionDetailsComponent extends Component {
                   type="attack-motivation-ov"
                   name="primary_motivation"
                   onFocus={this.handleChangeFocus.bind(this)}
-                  onChange={this.handleSubmitField.bind(this)}
-                  containerstyle={{ marginTop: 20, width: '100%' }}
+                  onChange={(name, value) => setFieldValue(name, value)}
+                  onSubmit={this.handleSubmitField.bind(this)}
+                  containerStyle={fieldSpacingContainerStyle}
                   variant="edit"
                   multiple={false}
                   editContext={context}
@@ -297,8 +301,9 @@ class ThreatActorEditionDetailsComponent extends Component {
                   type="attack-motivation-ov"
                   name="secondary_motivations"
                   onFocus={this.handleChangeFocus.bind(this)}
-                  onChange={this.handleSubmitField.bind(this)}
-                  containerstyle={{ marginTop: 20, width: '100%' }}
+                  onChange={(name, value) => setFieldValue(name, value)}
+                  onSubmit={this.handleSubmitField.bind(this)}
+                  containerStyle={fieldSpacingContainerStyle}
                   variant="edit"
                   multiple={true}
                   editContext={context}
@@ -308,8 +313,9 @@ class ThreatActorEditionDetailsComponent extends Component {
                   type="attack-motivation-ov"
                   name="personal_motivations"
                   onFocus={this.handleChangeFocus.bind(this)}
-                  onChange={this.handleSubmitField.bind(this)}
-                  containerstyle={{ marginTop: 20, width: '100%' }}
+                  onChange={(name, value) => setFieldValue(name, value)}
+                  onSubmit={this.handleSubmitField.bind(this)}
+                  containerStyle={fieldSpacingContainerStyle}
                   variant="edit"
                   multiple={true}
                   editContext={context}
@@ -333,9 +339,9 @@ class ThreatActorEditionDetailsComponent extends Component {
                   <CommitMessage
                     submitForm={submitForm}
                     disabled={isSubmitting}
-                    validateForm={validateForm}
                     setFieldValue={setFieldValue}
-                    values={values}
+                    open={false}
+                    values={values.references}
                     id={threatActor.id}
                   />
                 )}

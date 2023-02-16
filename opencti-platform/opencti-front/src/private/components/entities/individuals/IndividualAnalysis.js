@@ -22,6 +22,8 @@ class IndividualAnalysisComponent extends Component {
     return (
       <div className={classes.container}>
         <StixDomainObjectHeader
+          entityType={'Individual'}
+          disableSharing={true}
           stixDomainObject={individual}
           PopoverComponent={<IndividualPopover />}
           onViewAs={onViewAs.bind(this)}

@@ -266,6 +266,7 @@ export const stixDomainObjectsLinesSearchQuery = graphql`
         node {
           id
           entity_type
+          standard_id
           ... on AttackPattern {
             name
             description
@@ -284,6 +285,10 @@ export const stixDomainObjectsLinesSearchQuery = graphql`
           }
           ... on Report {
             name
+          }
+          ... on Grouping {
+            name
+            description
           }
           ... on Campaign {
             name
@@ -329,6 +334,10 @@ export const stixDomainObjectsLinesSearchQuery = graphql`
             name
             description
           }
+          ... on AdministrativeArea {
+            name
+            description
+          }
           ... on Country {
             name
             description
@@ -368,6 +377,10 @@ export const stixDomainObjectsLinesSearchQuery = graphql`
             edges {
               node {
                 definition
+                definition_type
+                definition
+                x_opencti_order
+                x_opencti_color
               }
             }
           }
@@ -427,6 +440,10 @@ const StixDomainObjectsLines = createPaginationContainer(
               ... on Report {
                 name
               }
+              ... on Grouping {
+                name
+                description
+              }
               ... on CourseOfAction {
                 name
                 description
@@ -467,6 +484,10 @@ const StixDomainObjectsLines = createPaginationContainer(
                 name
                 description
               }
+              ... on AdministrativeArea {
+                name
+                description
+              }
               ... on Country {
                 name
                 description
@@ -494,6 +515,30 @@ const StixDomainObjectsLines = createPaginationContainer(
               ... on Incident {
                 name
                 description
+              }
+              ... on Event {
+                name
+                description
+              }
+              ... on Channel {
+                name
+                description
+              }
+              ... on Narrative {
+                name
+                description
+              }
+              ... on Language {
+                name
+              }
+              ... on DataComponent {
+                name
+              }
+              ... on DataSource {
+                name
+              }
+              ... on Case {
+                name
               }
               objectLabel {
                 edges {

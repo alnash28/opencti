@@ -274,6 +274,10 @@ const StixDomainObjectAddObjectRefsLines = createPaginationContainer(
                 name
                 description
               }
+              ... on AdministrativeArea {
+                name
+                description
+              }
               ... on Country {
                 name
                 description
@@ -301,6 +305,30 @@ const StixDomainObjectAddObjectRefsLines = createPaginationContainer(
               ... on Incident {
                 name
                 description
+              }
+              ... on Event {
+                name
+                description
+              }
+              ... on Channel {
+                name
+                description
+              }
+              ... on Narrative {
+                name
+                description
+              }
+              ... on Language {
+                name
+              }
+              ... on DataComponent {
+                name
+              }
+              ... on DataSource {
+                name
+              }
+              ... on Case {
+                name
               }
             }
           }

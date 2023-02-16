@@ -16,6 +16,7 @@ import StixCyberObservableHeader from '../stix_cyber_observables/StixCyberObserv
 import EntityStixSightingRelationships from '../../events/stix_sighting_relationships/EntityStixSightingRelationships';
 import ErrorNotFound from '../../../../components/ErrorNotFound';
 import FileManager from '../../common/files/FileManager';
+import StixSightingRelationship from '../../events/stix_sighting_relationships/StixSightingRelationship';
 
 const subscription = graphql`
   subscription RootArtifactSubscription($id: ID!) {
@@ -26,7 +27,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -44,7 +45,10 @@ const rootArtifactQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
+    }
+    connectorsForImport {
+      ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
@@ -72,7 +76,6 @@ class RootArtifact extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { observableId },
       },
@@ -80,7 +83,7 @@ class RootArtifact extends Component {
     const link = `/dashboard/observations/artifacts/${observableId}/knowledge`;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <QueryRenderer
           query={rootArtifactQuery}
           variables={{ id: observableId, relationship_type: 'indicates' }}
@@ -127,7 +130,7 @@ class RootArtifact extends Component {
                             entityLink={link}
                             noRightBar={true}
                             noPadding={true}
-                            targetStixDomainObjectTypes={[
+                            stixCoreObjectTypes={[
                               'Region',
                               'Country',
                               'City',
@@ -152,7 +155,7 @@ class RootArtifact extends Component {
                           <FileManager
                             {...routeProps}
                             id={observableId}
-                            connectorsImport={[]}
+                            connectorsImport={props.connectorsForImport}
                             connectorsExport={props.connectorsForExport}
                             entity={props.stixCyberObservable}
                           />
@@ -185,6 +188,21 @@ class RootArtifact extends Component {
                         />
                       )}
                     />
+                    <Route
+                      exact
+                      path="/dashboard/observations/artifacts/:observableId/knowledge/sightings/:sightingId"
+                      render={(routeProps) => (
+                        <React.Fragment>
+                          <StixCyberObservableHeader
+                            stixCyberObservable={props.stixCyberObservable}
+                          />
+                          <StixSightingRelationship
+                            entityId={observableId}
+                            {...routeProps}
+                          />
+                        </React.Fragment>
+                      )}
+                    />
                   </div>
                 );
               }
@@ -201,7 +219,6 @@ class RootArtifact extends Component {
 RootArtifact.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootArtifact);

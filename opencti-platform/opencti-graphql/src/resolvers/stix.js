@@ -1,18 +1,32 @@
-import { stixDelete } from '../domain/stix';
-import { stixLoadById } from '../database/middleware';
+import { stixDelete, stixObjectMerge } from '../domain/stix';
+import { batchLoader, stixLoadByIdStringify } from '../database/middleware';
+import { connectorsForEnrichment } from '../database/repository';
+import { batchCreators } from '../domain/user';
+
+const creatorsLoader = batchLoader(batchCreators);
 
 const stixResolvers = {
   Query: {
-    stix: async (_, { id }, { user }) => {
-      const data = await stixLoadById(user, id);
-      return JSON.stringify(data);
-    }
+    stix: async (_, { id }, context) => stixLoadByIdStringify(context, context.user, id),
+    enrichmentConnectors: (_, { type }, context) => connectorsForEnrichment(context, context.user, type, true),
   },
   Mutation: {
-    stixEdit: (_, { id }, { user }) => ({
-      delete: () => stixDelete(user, id),
+    stixEdit: (_, { id }, context) => ({
+      delete: () => stixDelete(context, context.user, id),
+      merge: ({ stixObjectsIds }) => stixObjectMerge(context, context.user, id, stixObjectsIds),
     }),
   },
+  StixObject: {
+    // eslint-disable-next-line
+    __resolveType(obj) {
+      if (obj.entity_type) {
+        return obj.entity_type.replace(/(?:^|-|_)(\w)/g, (matches, letter) => letter.toUpperCase());
+      }
+      /* istanbul ignore next */
+      return 'Unknown';
+    },
+    creator: (stix, _, context) => creatorsLoader.load(stix.creator_id, context, context.user),
+  }
 };
 
 export default stixResolvers;

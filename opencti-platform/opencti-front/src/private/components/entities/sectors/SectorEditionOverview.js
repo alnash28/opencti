@@ -2,15 +2,7 @@ import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
 import { graphql, createFragmentContainer } from 'react-relay';
 import { Formik, Form, Field } from 'formik';
-import {
-  assoc,
-  map,
-  pathOr,
-  pipe,
-  pick,
-  difference,
-  head,
-} from 'ramda';
+import { assoc, map, pathOr, pipe, pick, difference, head } from 'ramda';
 import * as Yup from 'yup';
 import * as R from 'ramda';
 import inject18n from '../../../../components/i18n';
@@ -22,7 +14,11 @@ import ObjectMarkingField from '../../common/form/ObjectMarkingField';
 import MarkDownField from '../../../../components/MarkDownField';
 import CommitMessage from '../../common/form/CommitMessage';
 import { adaptFieldValue } from '../../../../utils/String';
-import { convertCreatedBy, convertMarkings, convertStatus } from '../../../../utils/Edition';
+import {
+  convertCreatedBy,
+  convertMarkings,
+  convertStatus,
+} from '../../../../utils/edition';
 import StatusField from '../../common/form/StatusField';
 
 const sectorMutationFieldPatch = graphql`
@@ -73,7 +69,7 @@ const sectorMutationRelationAdd = graphql`
 const sectorMutationRelationDelete = graphql`
   mutation SectorEditionOverviewRelationDeleteMutation(
     $id: ID!
-    $toId: String!
+    $toId: StixRef!
     $relationship_type: String!
   ) {
     sectorEdit(id: $id) {
@@ -129,7 +125,8 @@ class SectorEditionOverviewComponent extends Component {
       variables: {
         id: this.props.sector.id,
         input: inputValues,
-        commitMessage: commitMessage && commitMessage.length > 0 ? commitMessage : null,
+        commitMessage:
+          commitMessage && commitMessage.length > 0 ? commitMessage : null,
         references,
       },
       setSubmitting,
@@ -219,7 +216,13 @@ class SectorEditionOverviewComponent extends Component {
       assoc('createdBy', createdBy),
       assoc('objectMarking', objectMarking),
       assoc('x_opencti_workflow_id', status),
-      pick(['name', 'description', 'createdBy', 'objectMarking', 'x_opencti_workflow_id']),
+      pick([
+        'name',
+        'description',
+        'createdBy',
+        'objectMarking',
+        'x_opencti_workflow_id',
+      ]),
     )(sector);
     return (
       <Formik
@@ -231,7 +234,6 @@ class SectorEditionOverviewComponent extends Component {
         {({
           submitForm,
           isSubmitting,
-          validateForm,
           setFieldValue,
           values,
         }) => (
@@ -263,20 +265,20 @@ class SectorEditionOverviewComponent extends Component {
               }
             />
             {sector.workflowEnabled && (
-                <StatusField
-                    name="x_opencti_workflow_id"
-                    type="Sector"
-                    onFocus={this.handleChangeFocus.bind(this)}
-                    onChange={this.handleSubmitField.bind(this)}
-                    setFieldValue={setFieldValue}
-                    style={{ marginTop: 20 }}
-                    helpertext={
-                      <SubscriptionFocus
-                          context={context}
-                          fieldName="x_opencti_workflow_id"
-                      />
-                    }
-                />
+              <StatusField
+                name="x_opencti_workflow_id"
+                type="Sector"
+                onFocus={this.handleChangeFocus.bind(this)}
+                onChange={this.handleSubmitField.bind(this)}
+                setFieldValue={setFieldValue}
+                style={{ marginTop: 20 }}
+                helpertext={
+                  <SubscriptionFocus
+                    context={context}
+                    fieldName="x_opencti_workflow_id"
+                  />
+                }
+              />
             )}
             <CreatedByField
               name="createdBy"
@@ -302,9 +304,9 @@ class SectorEditionOverviewComponent extends Component {
               <CommitMessage
                 submitForm={submitForm}
                 disabled={isSubmitting}
-                validateForm={validateForm}
                 setFieldValue={setFieldValue}
-                values={values}
+                open={false}
+                values={values.references}
                 id={sector.id}
               />
             )}
@@ -321,6 +323,7 @@ SectorEditionOverviewComponent.propTypes = {
   t: PropTypes.func,
   sector: PropTypes.object,
   context: PropTypes.array,
+  enableReferences: PropTypes.bool,
 };
 
 const SectorEditionOverview = createFragmentContainer(
@@ -343,8 +346,10 @@ const SectorEditionOverview = createFragmentContainer(
           edges {
             node {
               id
-              definition
               definition_type
+              definition
+              x_opencti_order
+              x_opencti_color
             }
           }
         }

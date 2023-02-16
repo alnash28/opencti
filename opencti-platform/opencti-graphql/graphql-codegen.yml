@@ -1,5 +1,8 @@
 overwrite: true
-schema: "./config/schema/opencti.graphql"
+schema:
+  - "./config/schema/opencti.graphql"
+  - "./src/**/*.graphql":
+      includeSources: true
 documents: null
 generates:
   src/generated/graphql.ts:
@@ -8,6 +11,21 @@ generates:
       - "typescript-resolvers"
     config:
       useTypeImports: true
+      useIndexSignature: true
+      mappers:
+        Channel: ../modules/channel/channel-types#BasicStoreEntityChannel
+        Language: ../modules/language/language-types#BasicStoreEntityLanguage
+        Event: ../modules/event/event-types#BasicStoreEntityEvent
+        Narrative: ../modules/narrative/narrative-types#BasicStoreEntityNarrative
+        Grouping: ../modules/grouping/grouping-types#BasicStoreEntityGrouping
+        DataSource: ../modules/dataSource/dataSource-types#BasicStoreEntityDataSource
+        DataComponent: ../modules/dataComponent/dataComponent-types#BasicStoreEntityDataComponent
+        Vocabulary: ../modules/vocabulary/vocabulary-types#BasicStoreEntityVocabulary
+        AdministrativeArea: ../modules/administrativeArea/administrativeArea-types#BasicStoreEntityAdministrativeArea
+        Case: ../modules/case/case-types#BasicStoreEntityCase
+        Notification: ../modules/notification/notification-types#BasicStoreEntityNotification
+        Trigger: ../modules/notification/notification-types#BasicStoreEntityTrigger
+        EntitySetting: ../modules/entitySetting/entitySetting-types#BasicStoreEntityEntitySetting
   ./graphql.schema.json:
     plugins:
       - "introspection"

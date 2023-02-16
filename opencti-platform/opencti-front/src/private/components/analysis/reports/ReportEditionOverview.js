@@ -1,16 +1,15 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
-import { graphql, createFragmentContainer } from 'react-relay';
-import { Formik, Field, Form } from 'formik';
+import { createFragmentContainer, graphql } from 'react-relay';
+import { Field, Form, Formik } from 'formik';
 import withStyles from '@mui/styles/withStyles';
 import * as Yup from 'yup';
 import * as R from 'ramda';
 import { buildDate, parse } from '../../../../utils/Time';
-import { QueryRenderer, commitMutation } from '../../../../relay/environment';
+import { commitMutation, QueryRenderer } from '../../../../relay/environment';
 import inject18n from '../../../../components/i18n';
 import TextField from '../../../../components/TextField';
 import { SubscriptionFocus } from '../../../../components/Subscription';
-import { attributesQuery } from '../../settings/attributes/AttributesLines';
 import Loader from '../../../../components/Loader';
 import CreatedByField from '../../common/form/CreatedByField';
 import ObjectMarkingField from '../../common/form/ObjectMarkingField';
@@ -19,16 +18,17 @@ import MarkDownField from '../../../../components/MarkDownField';
 import StatusField from '../../common/form/StatusField';
 import CommitMessage from '../../common/form/CommitMessage';
 import { adaptFieldValue } from '../../../../utils/String';
-import ItemIcon from '../../../../components/ItemIcon';
-import AutocompleteFreeSoloField from '../../../../components/AutocompleteFreeSoloField';
-import Security, { SETTINGS_SETLABELS } from '../../../../utils/Security';
-import AutocompleteField from '../../../../components/AutocompleteField';
 import {
+  convertAssignees,
   convertCreatedBy,
   convertMarkings,
   convertStatus,
-} from '../../../../utils/Edition';
+} from '../../../../utils/edition';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
+import { vocabulariesQuery } from '../../settings/attributes/VocabulariesLines';
+import OpenVocabField from '../../common/form/OpenVocabField';
+import ObjectAssigneeField from '../../common/form/ObjectAssigneeField';
 
 const styles = (theme) => ({
   createButton: {
@@ -105,7 +105,7 @@ const reportMutationRelationAdd = graphql`
 const reportMutationRelationDelete = graphql`
   mutation ReportEditionOverviewRelationDeleteMutation(
     $id: ID!
-    $toId: String!
+    $toId: StixRef!
     $relationship_type: String!
   ) {
     reportEdit(id: $id) {
@@ -149,8 +149,9 @@ class ReportEditionOverviewComponent extends Component {
       R.assoc('published', parse(values.published).format()),
       R.assoc('x_opencti_workflow_id', values.x_opencti_workflow_id?.value),
       R.assoc('createdBy', values.createdBy?.value),
-      R.assoc('report_types', R.pluck('value', values.report_types)),
+      R.assoc('report_types', values.report_types),
       R.assoc('objectMarking', R.pluck('value', values.objectMarking)),
+      R.assoc('objectAssignee', R.pluck('value', values.objectAssignee)),
       R.toPairs,
       R.map((n) => ({
         key: n[0],
@@ -179,9 +180,6 @@ class ReportEditionOverviewComponent extends Component {
       let finalValue = value;
       if (name === 'x_opencti_workflow_id') {
         finalValue = value.value;
-      }
-      if (name === 'report_types') {
-        finalValue = R.pluck('value', value);
       }
       reportValidation(this.props.t)
         .validateAt(name, { [name]: value })
@@ -250,20 +248,56 @@ class ReportEditionOverviewComponent extends Component {
     }
   }
 
+  handleChangeObjectAssignee(name, values) {
+    if (!this.props.enableReferences) {
+      const { report } = this.props;
+      const currentAssignees = R.pipe(
+        R.pathOr([], ['objectAssignee', 'edges']),
+        R.map((n) => ({
+          label: n.node.name,
+          value: n.node.id,
+        })),
+      )(report);
+      const added = R.difference(values, currentAssignees);
+      const removed = R.difference(currentAssignees, values);
+      if (added.length > 0) {
+        commitMutation({
+          mutation: reportMutationRelationAdd,
+          variables: {
+            id: this.props.report.id,
+            input: {
+              toId: R.head(added).value,
+              relationship_type: 'object-assignee',
+            },
+          },
+        });
+      }
+      if (removed.length > 0) {
+        commitMutation({
+          mutation: reportMutationRelationDelete,
+          variables: {
+            id: this.props.report.id,
+            toId: R.head(removed).value,
+            relationship_type: 'object-assignee',
+          },
+        });
+      }
+    }
+  }
+
   render() {
-    const { t, report, context, enableReferences, classes } = this.props;
+    const { t, report, context, enableReferences } = this.props;
     const createdBy = convertCreatedBy(report);
     const objectMarking = convertMarkings(report);
+    const objectAssignee = convertAssignees(report);
     const status = convertStatus(t, report);
     const initialValues = R.pipe(
       R.assoc('createdBy', createdBy),
       R.assoc('objectMarking', objectMarking),
+      R.assoc('objectAssignee', objectAssignee),
       R.assoc('published', buildDate(report.published)),
       R.assoc('x_opencti_workflow_id', status),
-      R.assoc(
-        'report_types',
-        (report.report_types || []).map((n) => ({ label: n, value: n })),
-      ),
+      R.assoc('report_types', report.report_types ?? []),
       R.pick([
         'name',
         'published',
@@ -271,6 +305,7 @@ class ReportEditionOverviewComponent extends Component {
         'report_types',
         'createdBy',
         'objectMarking',
+        'objectAssignee',
         'confidence',
         'x_opencti_workflow_id',
       ]),
@@ -278,18 +313,10 @@ class ReportEditionOverviewComponent extends Component {
     return (
       <div>
         <QueryRenderer
-          query={attributesQuery}
-          variables={{ key: 'report_types' }}
+          query={vocabulariesQuery}
+          variables={{ category: 'report_types_ov' }}
           render={({ props }) => {
-            if (props && props.runtimeAttributes) {
-              const reportEdges = props.runtimeAttributes.edges.map(
-                (e) => e.node.value,
-              );
-              const elements = R.uniq([
-                ...reportEdges,
-                'threat-report',
-                'internal-report',
-              ]);
+            if (props && props.vocabularies) {
               return (
                 <Formik
                   enableReinitialize={true}
@@ -300,195 +327,137 @@ class ReportEditionOverviewComponent extends Component {
                   {({
                     submitForm,
                     isSubmitting,
-                    validateForm,
+
                     setFieldValue,
                     values,
                   }) => (
-                    <div>
-                      <Form style={{ margin: '20px 0 20px 0' }}>
-                        <Field
-                          component={TextField}
-                          variant="standard"
-                          name="name"
-                          label={t('Name')}
-                          fullWidth={true}
-                          onFocus={this.handleChangeFocus.bind(this)}
-                          onSubmit={this.handleSubmitField.bind(this)}
-                          helperText={
+                    <Form style={{ margin: '20px 0 20px 0' }}>
+                      <Field
+                        component={TextField}
+                        variant="standard"
+                        name="name"
+                        label={t('Name')}
+                        fullWidth={true}
+                        onFocus={this.handleChangeFocus.bind(this)}
+                        onSubmit={this.handleSubmitField.bind(this)}
+                        helperText={
+                          <SubscriptionFocus
+                            context={context}
+                            fieldName="name"
+                          />
+                        }
+                      />
+                      <OpenVocabField
+                        label={t('Report types')}
+                        type="report_types_ov"
+                        name="report_types"
+                        onSubmit={this.handleSubmitField.bind(this)}
+                        onChange={(name, value) => setFieldValue(name, value)}
+                        containerStyle={fieldSpacingContainerStyle}
+                        variant="edit"
+                        multiple={true}
+                        editContext={context}
+                      />
+                      <ConfidenceField
+                        name="confidence"
+                        onFocus={this.handleChangeFocus.bind(this)}
+                        onChange={this.handleSubmitField.bind(this)}
+                        label={t('Confidence')}
+                        fullWidth={true}
+                        containerStyle={fieldSpacingContainerStyle}
+                        editContext={context}
+                        variant="edit"
+                      />
+                      <Field
+                        component={DateTimePickerField}
+                        name="published"
+                        onFocus={this.handleChangeFocus.bind(this)}
+                        onSubmit={this.handleSubmitField.bind(this)}
+                        TextFieldProps={{
+                          label: t('Publication date'),
+                          variant: 'standard',
+                          fullWidth: true,
+                          style: { marginTop: 20 },
+                          helperText: (
                             <SubscriptionFocus
                               context={context}
-                              fieldName="name"
+                              fieldName="published"
                             />
-                          }
-                        />
-                        <Security
-                          needs={[SETTINGS_SETLABELS]}
-                          placeholder={
-                            <Field
-                              component={AutocompleteField}
-                              onChange={this.handleSubmitField.bind(this)}
-                              style={{ marginTop: 20 }}
-                              name="report_types"
-                              multiple={true}
-                              createLabel={t('Add')}
-                              textfieldprops={{
-                                variant: 'standard',
-                                label: t('Report types'),
-                                helperText: (
-                                  <SubscriptionFocus
-                                    context={context}
-                                    fieldName="report_types"
-                                  />
-                                ),
-                              }}
-                              options={elements.map((n) => ({
-                                id: n,
-                                value: n,
-                                label: n,
-                              }))}
-                              renderOption={(optionProps, option) => (
-                                <li {...optionProps}>
-                                  <div className={classes.icon}>
-                                    <ItemIcon type="attribute" />
-                                  </div>
-                                  <div className={classes.text}>
-                                    {option.label}
-                                  </div>
-                                </li>
-                              )}
-                              classes={{
-                                clearIndicator: classes.autoCompleteIndicator,
-                              }}
-                            />
-                          }
-                        >
-                          <Field
-                            component={AutocompleteFreeSoloField}
-                            onChange={this.handleSubmitField.bind(this)}
-                            style={{ marginTop: 20 }}
-                            name="report_types"
-                            multiple={true}
-                            createLabel={t('Add')}
-                            textfieldprops={{
-                              variant: 'standard',
-                              label: t('Report types'),
-                              helperText: (
-                                <SubscriptionFocus
-                                  context={context}
-                                  fieldName="report_types"
-                                />
-                              ),
-                            }}
-                            options={elements.map((n) => ({
-                              id: n,
-                              value: n,
-                              label: n,
-                            }))}
-                            renderOption={(optionProps, option) => (
-                              <li {...optionProps}>
-                                <div className={classes.icon}>
-                                  <ItemIcon type="attribute" />
-                                </div>
-                                <div className={classes.text}>
-                                  {option.label}
-                                </div>
-                              </li>
-                            )}
-                            classes={{
-                              clearIndicator: classes.autoCompleteIndicator,
-                            }}
+                          ),
+                        }}
+                      />
+                      <Field
+                        component={MarkDownField}
+                        name="description"
+                        label={t('Description')}
+                        fullWidth={true}
+                        multiline={true}
+                        rows="4"
+                        style={{ marginTop: 20 }}
+                        onFocus={this.handleChangeFocus.bind(this)}
+                        onSubmit={this.handleSubmitField.bind(this)}
+                      />
+                      <ObjectAssigneeField
+                        name="objectAssignee"
+                        style={{ marginTop: 20, width: '100%' }}
+                        helpertext={
+                          <SubscriptionFocus
+                            context={context}
+                            fieldname="objectAssignee"
                           />
-                        </Security>
-                        <ConfidenceField
-                          name="confidence"
+                        }
+                        onChange={this.handleChangeObjectAssignee.bind(this)}
+                      />
+                      {report.workflowEnabled && (
+                        <StatusField
+                          name="x_opencti_workflow_id"
+                          type="Report"
                           onFocus={this.handleChangeFocus.bind(this)}
                           onChange={this.handleSubmitField.bind(this)}
-                          label={t('Confidence')}
-                          fullWidth={true}
-                          containerstyle={{ width: '100%', marginTop: 20 }}
-                          editContext={context}
-                          variant="edit"
-                        />
-                        <Field
-                          component={DateTimePickerField}
-                          name="published"
-                          onFocus={this.handleChangeFocus.bind(this)}
-                          onSubmit={this.handleSubmitField.bind(this)}
-                          TextFieldProps={{
-                            label: t('Publication date'),
-                            variant: 'standard',
-                            fullWidth: true,
-                            style: { marginTop: 20 },
-                            helperText: (
-                              <SubscriptionFocus
-                                context={context}
-                                fieldName="published"
-                              />
-                            ),
-                          }}
-                        />
-                        <Field
-                          component={MarkDownField}
-                          name="description"
-                          label={t('Description')}
-                          fullWidth={true}
-                          multiline={true}
-                          rows="4"
-                          style={{ marginTop: 20 }}
-                          onFocus={this.handleChangeFocus.bind(this)}
-                          onSubmit={this.handleSubmitField.bind(this)}
-                        />
-                        {report.workflowEnabled && (
-                          <StatusField
-                            name="x_opencti_workflow_id"
-                            type="Report"
-                            onFocus={this.handleChangeFocus.bind(this)}
-                            onChange={this.handleSubmitField.bind(this)}
-                            setFieldValue={setFieldValue}
-                            style={{ marginTop: 20 }}
-                            helpertext={
-                              <SubscriptionFocus
-                                context={context}
-                                fieldName="x_opencti_workflow_id"
-                              />
-                            }
-                          />
-                        )}
-                        <CreatedByField
-                          name="createdBy"
-                          style={{ marginTop: 20, width: '100%' }}
                           setFieldValue={setFieldValue}
+                          style={{ marginTop: 20 }}
                           helpertext={
                             <SubscriptionFocus
                               context={context}
-                              fieldName="createdBy"
+                              fieldName="x_opencti_workflow_id"
                             />
                           }
-                          onChange={this.handleChangeCreatedBy.bind(this)}
                         />
-                        <ObjectMarkingField
-                          name="objectMarking"
-                          style={{ marginTop: 20, width: '100%' }}
-                          helpertext={
-                            <SubscriptionFocus
-                              context={context}
-                              fieldname="objectMarking"
-                            />
-                          }
-                          onChange={this.handleChangeObjectMarking.bind(this)}
-                        />
-                        {enableReferences && (
-                          <CommitMessage
-                            submitForm={submitForm}
-                            disabled={isSubmitting}
-                            validateForm={validateForm}
-                            setFieldValue={setFieldValue}
-                            values={values}
-                            id={report.id}
+                      )}
+                      <CreatedByField
+                        name="createdBy"
+                        style={{ marginTop: 20, width: '100%' }}
+                        setFieldValue={setFieldValue}
+                        helpertext={
+                          <SubscriptionFocus
+                            context={context}
+                            fieldName="createdBy"
                           />
-                        )}
-                      </Form>
-                    </div>
+                        }
+                        onChange={this.handleChangeCreatedBy.bind(this)}
+                      />
+                      <ObjectMarkingField
+                        name="objectMarking"
+                        style={{ marginTop: 20, width: '100%' }}
+                        helpertext={
+                          <SubscriptionFocus
+                            context={context}
+                            fieldname="objectMarking"
+                          />
+                        }
+                        onChange={this.handleChangeObjectMarking.bind(this)}
+                      />
+                      {enableReferences && (
+                        <CommitMessage
+                          submitForm={submitForm}
+                          disabled={isSubmitting}
+                          setFieldValue={setFieldValue}
+                          open={false}
+                          values={values.references}
+                          id={report.id}
+                        />
+                      )}
+                    </Form>
                   )}
                 </Formik>
               );
@@ -507,6 +476,7 @@ ReportEditionOverviewComponent.propTypes = {
   t: PropTypes.func,
   report: PropTypes.object,
   context: PropTypes.array,
+  enableReferences: PropTypes.bool,
 };
 
 const ReportEditionOverview = createFragmentContainer(
@@ -531,8 +501,19 @@ const ReportEditionOverview = createFragmentContainer(
           edges {
             node {
               id
-              definition
               definition_type
+              definition
+              x_opencti_order
+              x_opencti_color
+            }
+          }
+        }
+        objectAssignee {
+          edges {
+            node {
+              id
+              name
+              entity_type
             }
           }
         }

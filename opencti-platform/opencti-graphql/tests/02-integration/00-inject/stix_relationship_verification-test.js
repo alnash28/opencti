@@ -1,3 +1,7 @@
+/* eslint-disable */
+
+import { expect, it, describe } from 'vitest';
+
 describe('Temporary', () => {
   it('should be true', () => {
     return expect(true).toBeTruthy();
@@ -501,6 +505,7 @@ describe('Test that all STIX relationships are correctly implemented', () => {
 
         it(`[${location}] Verifying that the relationship '${relationshipName}' contains all STIX relationships (${ctiRelationships})`, () => {
           // TODO Fix resolves-to and belongs-to
+          // eslint-disable-next-line
           if (!['sector_region', 'sector_country', 'sector_city', 'sector_position'].includes(relationshipName) && !ctiRelationships.includes('obs_belongs-to') && !ctiRelationships.includes('obs_resolves-to')) {
             expect(implementationDictionary[relationshipName].sort()).toEqual(ctiRelationships.sort());
           }

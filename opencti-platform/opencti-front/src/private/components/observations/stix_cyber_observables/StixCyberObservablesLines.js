@@ -92,7 +92,7 @@ export const stixCyberObservablesLinesSubTypesQuery = graphql`
 `;
 
 export const stixCyberObservablesLinesAttributesQuery = graphql`
-  query StixCyberObservablesLinesAttributesQuery($elementType: String!) {
+  query StixCyberObservablesLinesAttributesQuery($elementType: [String]!) {
     schemaAttributes(elementType: $elementType) {
       edges {
         node {
@@ -127,11 +127,22 @@ export const stixCyberObservablesLinesQuery = graphql`
 `;
 
 export const stixCyberObservablesLinesSearchQuery = graphql`
-  query StixCyberObservablesLinesSearchQuery($search: String) {
-    stixCyberObservables(search: $search) {
+  query StixCyberObservablesLinesSearchQuery(
+    $types: [String]
+    $search: String
+    $filters: [StixCyberObservablesFiltering]
+    $count: Int
+  ) {
+    stixCyberObservables(
+      types: $types
+      search: $search
+      filters: $filters
+      first: $count
+    ) {
       edges {
         node {
           id
+          standard_id
           entity_type
           observable_value
           created_at
@@ -171,14 +182,21 @@ export default createPaginationContainer(
           edges {
             node {
               id
+              standard_id
               entity_type
               observable_value
               created_at
+              creator {
+                id
+                name
+              }
               objectMarking {
                 edges {
                   node {
                     id
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }

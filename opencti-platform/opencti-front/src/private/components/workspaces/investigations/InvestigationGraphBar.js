@@ -5,33 +5,21 @@ import { Link } from 'react-router-dom';
 import withTheme from '@mui/styles/withTheme';
 import withStyles from '@mui/styles/withStyles';
 import IconButton from '@mui/material/IconButton';
+import { ResponsiveContainer, Scatter, ScatterChart, YAxis, ZAxis } from 'recharts';
 import {
-  YAxis,
-  ZAxis,
-  ResponsiveContainer,
-  ScatterChart,
-  Scatter,
-} from 'recharts';
-import {
-  AspectRatio,
-  FilterListOutlined,
   AccountBalanceOutlined,
-  DeleteOutlined,
+  AspectRatio,
   CenterFocusStrongOutlined,
+  DateRangeOutlined,
+  DeleteOutlined,
   EditOutlined,
+  FilterListOutlined,
   InfoOutlined,
+  LinkOutlined,
   OpenWithOutlined,
   ScatterPlotOutlined,
-  DateRangeOutlined,
-  LinkOutlined,
 } from '@mui/icons-material';
-import {
-  Video3d,
-  SelectAll,
-  SelectGroup,
-  FamilyTree,
-  AutoFix,
-} from 'mdi-material-ui';
+import { AutoFix, FamilyTree, SelectAll, SelectGroup, Video3d } from 'mdi-material-ui';
 import TimeRange from 'react-timeline-range-slider';
 import LinearProgress from '@mui/material/LinearProgress';
 import Tooltip from '@mui/material/Tooltip';
@@ -60,6 +48,8 @@ import { dateFormat } from '../../../../utils/Time';
 import { parseDomain } from '../../../../utils/Graph';
 import StixCoreRelationshipCreation from '../../common/stix_core_relationships/StixCoreRelationshipCreation';
 import SearchInput from '../../../../components/SearchInput';
+import { MESSAGING$ } from '../../../../relay/environment';
+import StixCyberObservableEdition from '../../observations/stix_cyber_observables/StixCyberObservableEdition';
 
 const styles = () => ({
   bottomNav: {
@@ -93,12 +83,24 @@ class InvestigationGraphBar extends Component {
       openSelectByType: false,
       anchorElSelectByType: null,
       openEditRelation: false,
-      openEditEntity: false,
+      openEditDomainObject: false,
+      openEditObservable: false,
       openExpandElements: false,
       displayRemove: false,
       relationReversed: false,
       openCreatedRelation: false,
+      navOpen: localStorage.getItem('navOpen') === 'true',
     };
+  }
+
+  componentDidMount() {
+    this.subscription = MESSAGING$.toggleNav.subscribe({
+      next: () => this.setState({ navOpen: localStorage.getItem('navOpen') === 'true' }),
+    });
+  }
+
+  componentWillUnmount() {
+    this.subscription.unsubscribe();
   }
 
   handleOpenRemove() {
@@ -175,8 +177,15 @@ class InvestigationGraphBar extends Component {
     if (
       this.props.numberOfSelectedNodes === 1
       && !this.props.selectedNodes[0].relationship_type
+      && !this.props.selectedNodes[0].parent_types.includes('Stix-Cyber-Observable')
     ) {
-      this.setState({ openEditEntity: true });
+      this.setState({ openEditDomainObject: true });
+    } else if (
+      this.props.numberOfSelectedNodes === 1
+      && !this.props.selectedNodes[0].relationship_type
+      && this.props.selectedNodes[0].parent_types.includes('Stix-Cyber-Observable')
+    ) {
+      this.setState({ openEditObservable: true });
     } else if (
       this.props.numberOfSelectedLinks === 1
       || this.props.selectedNodes[0].relationship_type
@@ -185,17 +194,24 @@ class InvestigationGraphBar extends Component {
     }
   }
 
-  handleCloseEntityEdition() {
-    this.setState({ openEditEntity: false });
+  handleCloseDomainObjectEdition() {
+    this.setState({ openEditDomainObject: false });
     this.props.handleCloseEntityEdition(
-      R.propOr(null, 'id', this.props.selectedNodes[0]),
+      this.props.selectedNodes[0]?.id ?? null,
+    );
+  }
+
+  handleCloseObservableEdition() {
+    this.setState({ openEditObservable: false });
+    this.props.handleCloseEntityEdition(
+      this.props.selectedNodes[0]?.id ?? null,
     );
   }
 
   handleCloseRelationEdition() {
     this.setState({ openEditRelation: false });
     this.props.handleCloseRelationEdition(
-      R.propOr(null, 'id', this.props.selectedLinks[0]),
+      this.props.selectedLinks[0]?.id ?? null,
     );
   }
 
@@ -257,15 +273,17 @@ class InvestigationGraphBar extends Component {
       openSelectByType,
       anchorElSelectByType,
       openEditRelation,
-      openEditEntity,
+      openEditDomainObject,
+      openEditObservable,
       relationReversed,
       openCreatedRelation,
+      navOpen,
     } = this.state;
     const viewEnabled = (numberOfSelectedNodes === 1 && numberOfSelectedLinks === 0)
       || (numberOfSelectedNodes === 0 && numberOfSelectedLinks === 1);
     let viewLink = null;
-    const isInferred = R.filter((n) => n.inferred, selectedNodes).length > 0
-      || R.filter((n) => n.inferred, selectedLinks).length > 0;
+    const isInferred = selectedNodes.filter((n) => n.inferred).length > 0
+      || selectedLinks.filter((n) => n.inferred).length > 0;
     if (viewEnabled) {
       if (numberOfSelectedNodes === 1 && selectedNodes.length === 1) {
         if (selectedNodes[0].relationship_type) {
@@ -289,8 +307,7 @@ class InvestigationGraphBar extends Component {
     const editionEnabled = (!isInferred
         && numberOfSelectedNodes === 1
         && numberOfSelectedLinks === 0
-        && selectedNodes.length === 1
-        && !selectedNodes[0].isObservable)
+        && selectedNodes.length === 1)
       || (!isInferred
         && numberOfSelectedNodes === 0
         && numberOfSelectedLinks === 1
@@ -364,7 +381,7 @@ class InvestigationGraphBar extends Component {
             <div
               style={{
                 float: 'left',
-                marginLeft: 185,
+                marginLeft: navOpen ? 185 : 60,
                 height: '100%',
                 display: 'flex',
               }}
@@ -726,10 +743,9 @@ class InvestigationGraphBar extends Component {
                 <InvestigationAddStixCoreObjects
                   workspaceId={workspace.id}
                   workspaceStixCoreObjects={workspace.objects.edges}
-                  defaultCreatedBy={R.propOr(null, 'createdBy', workspace)}
-                  defaultMarkingDefinitions={R.map(
+                  defaultCreatedBy={workspace.createdBy ?? null}
+                  defaultMarkingDefinitions={(workspace.objectMarking?.edges ?? []).map(
                     (n) => n.node,
-                    R.pathOr([], ['objectMarking', 'edges'], workspace),
                   )}
                   targetStixCoreObjectTypes={[
                     'Stix-Domain-Object',
@@ -767,16 +783,21 @@ class InvestigationGraphBar extends Component {
                   </span>
                 </Tooltip>
                 <StixDomainObjectEdition
-                  open={openEditEntity}
-                  stixDomainObjectId={R.propOr(null, 'id', selectedNodes[0])}
-                  handleClose={this.handleCloseEntityEdition.bind(this)}
+                  open={openEditDomainObject}
+                  stixDomainObjectId={selectedNodes[0]?.id ?? null}
+                  handleClose={this.handleCloseDomainObjectEdition.bind(this)}
                   noStoreUpdate={true}
+                />
+                <StixCyberObservableEdition
+                  open={openEditObservable}
+                  stixCyberObservableId={selectedNodes[0]?.id ?? null}
+                  handleClose={this.handleCloseObservableEdition.bind(this)}
                 />
                 <StixCoreRelationshipEdition
                   open={openEditRelation}
                   stixCoreRelationshipId={
-                    R.propOr(null, 'id', selectedNodes[0])
-                    || R.propOr(null, 'id', selectedLinks[0])
+                    (selectedNodes[0]?.id ?? null)
+                    || (selectedLinks[0]?.id ?? null)
                   }
                   handleClose={this.handleCloseRelationEdition.bind(this)}
                   noStoreUpdate={true}
@@ -870,7 +891,12 @@ class InvestigationGraphBar extends Component {
             )}
           </div>
           <div className="clearfix" />
-          <div style={{ height: '100%', padding: '30px 10px 0px 190px' }}>
+          <div
+            style={{
+              height: '100%',
+              padding: navOpen ? '30px 10px 0px 190px' : '30px 10px 0px 65px',
+            }}
+          >
             <div
               style={{
                 position: 'absolute',

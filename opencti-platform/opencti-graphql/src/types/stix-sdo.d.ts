@@ -1,10 +1,17 @@
-import type { StixDomainObject, StixId, StixKillChainPhase, StixOpenctiExtension, StixMitreExtension } from './stix-common';
+import type {
+  StixDomainObject,
+  StixId,
+  StixKillChainPhase,
+  StixOpenctiExtension,
+  StixMitreExtension,
+  StixContainerExtension
+} from './stix-common';
 import { STIX_EXT_MITRE, STIX_EXT_OCTI } from './stix-extensions';
-import { OrganizationReliability, StixOpenctiExtensionSDO } from './stix-common';
+import { OrganizationReliability, StixOpenctiExtensionSDO, StixDate } from './stix-common';
 
 // Attack Pattern Specific Properties
 // name, description, aliases, kill_chain_phases
-interface StixAttackPattern extends StixDomainObject {
+export interface StixAttackPattern extends StixDomainObject {
   name: string; // optional
   description: string; // optional
   aliases: Array<string>; // optional
@@ -17,18 +24,18 @@ interface StixAttackPattern extends StixDomainObject {
 
 // Campaign Specific Properties
 // name, description, aliases, first_seen, last_seen, objective
-interface StixCampaign extends StixDomainObject {
+export interface StixCampaign extends StixDomainObject {
   name: string;
   description: string; // optional
   aliases: Array<string>; // optional
-  first_seen: Date; // optional
-  last_seen: Date; // optional
+  first_seen: StixDate; // optional
+  last_seen: StixDate; // optional
   objective: string; // optional
 }
 
 // Course of Action Specific Properties
 // name, description, action
-interface StixCourseOfAction extends StixDomainObject {
+export interface StixCourseOfAction extends StixDomainObject {
   name: string; // optional
   description: string; // optional
   // action - RESERVED
@@ -38,25 +45,15 @@ interface StixCourseOfAction extends StixDomainObject {
   };
 }
 
-// TODO Add support for Grouping
-// Grouping Specific Properties
-// name, description, context, object_refs
-interface StixGrouping extends StixDomainObject {
-  name: string; // optional
-  description: string; // optional
-  context: string; // grouping-context-ov
-  object_refs: Array<StixId>;
-}
-
 // Identity Specific Properties
-interface StixIdentityExtension extends StixOpenctiExtension {
+export interface StixIdentityExtension extends StixOpenctiExtension {
   firstname: string;
   lastname: string;
   organization_type: string;
   reliability: OrganizationReliability;
 }
 // name, description, roles, identity_class, sectors, contact_information
-interface StixIdentity extends StixDomainObject {
+export interface StixIdentity extends StixDomainObject {
   name: string; // optional
   description: string; // optional
   roles: Array<string>; // optional
@@ -73,32 +70,35 @@ interface StixIdentity extends StixDomainObject {
 // Not in https://docs.oasis-open.org/cti/stix/v2.1
 interface StixIncident extends StixDomainObject {
   name: string;
+  incident_type: string; // optional
   description: string; // optional
-  first_seen: Date;
-  last_seen: Date;
+  first_seen: StixDate;
+  last_seen: StixDate;
   objective: string;
   aliases: Array<string>;
+  source: string;
+  severity: string;
   extensions: {
     [STIX_EXT_OCTI]: StixOpenctiExtensionSDO;
   };
 }
 
 // Indicator Specific Properties
-interface StixIndicatorExtension extends StixOpenctiExtension {
+export interface StixIndicatorExtension extends StixOpenctiExtension {
   detection: boolean;
   score: number;
   main_observable_type: string;
 }
 // name, description, indicator_types, pattern, pattern_type, pattern_version, valid_from, valid_until, kill_chain_phases
-interface StixIndicator extends StixDomainObject {
+export interface StixIndicator extends StixDomainObject {
   name: string; // optional
   description: string; // optional
   indicator_types : Array<string>; // optional
   pattern : string;
   pattern_type : string;
   pattern_version : string; // optional
-  valid_from : Date;
-  valid_until : Date; // optional
+  valid_from : StixDate;
+  valid_until : StixDate; // optional
   kill_chain_phases: Array<StixKillChainPhase>; // optional
   extensions: {
     [STIX_EXT_OCTI]: StixIndicatorExtension;
@@ -108,24 +108,24 @@ interface StixIndicator extends StixDomainObject {
 
 // infrastructure Specific Properties
 // name, description, infrastructure_types, aliases, kill_chain_phases, first_seen, last_seen
-interface StixInfrastructure extends StixDomainObject {
+export interface StixInfrastructure extends StixDomainObject {
   name: string;
   description: string; // optional
   infrastructure_types: Array<string>; // infrastructure-type-ov - optional
   aliases : Array<string>; // optional
   kill_chain_phases: Array<StixKillChainPhase>; // optional
-  first_seen: Date; // optional
-  last_seen: Date; // optional
+  first_seen: StixDate; // optional
+  last_seen: StixDate; // optional
 }
 
 // Intrusion Set Specific Properties
 // name, description, aliases, first_seen, last_seen, goals, resource_level, primary_motivation, secondary_motivations
-interface StixIntrusionSet extends StixDomainObject {
+export interface StixIntrusionSet extends StixDomainObject {
   name: string;
   description: string; // optional
   aliases: Array<string>; // optional
-  first_seen : Date; // optional
-  last_seen : Date; // optional
+  first_seen : StixDate; // optional
+  last_seen : StixDate; // optional
   goals: Array<string>; // optional
   resource_level: string; // optional
   primary_motivation: string; // optional
@@ -134,15 +134,14 @@ interface StixIntrusionSet extends StixDomainObject {
 
 // Location Specific Properties
 // name, description, latitude, longitude, precision, region, country, administrative_area, city, street_address, postal_code
-interface StixLocation extends StixDomainObject {
+export interface StixLocation extends StixDomainObject {
   name: string; // optional
   description: string; // optional
-  latitude: number; // optional
-  longitude: number; // optional
+  latitude: number | undefined; // optional
+  longitude: number | undefined; // optional
   precision: number; // optional
   region: string; // optional
   country: string; // optional
-  administrative_area: string; // optional
   city: string; // optional
   street_address: string; // optional
   postal_code: string; // optional
@@ -151,15 +150,15 @@ interface StixLocation extends StixDomainObject {
 // Malware Specific Properties
 // name, description, malware_types, is_family, aliases, kill_chain_phases, first_seen, last_seen,
 // operating_system_refs, architecture_execution_envs, implementation_languages, capabilities, sample_refs
-interface StixMalware extends StixDomainObject {
+export interface StixMalware extends StixDomainObject {
   name: string; // optional
   description: string; // optional
   malware_types: Array<string>; // optional
   is_family: boolean;
   aliases: Array<string>; // optional
   kill_chain_phases: Array<StixKillChainPhase>; // optional
-  first_seen: Date; // optional
-  last_seen: Date; // optional
+  first_seen: StixDate; // optional
+  last_seen: StixDate; // optional
   architecture_execution_envs: Array<string>; // optional
   implementation_languages: Array<string>; // optional
   capabilities: Array<string>; // optional
@@ -172,7 +171,7 @@ interface StixMalware extends StixDomainObject {
 // product, version, host_vm_ref, operating_system_ref, installed_software_refs, configuration_version,
 // modules, analysis_engine_version, analysis_definition_version, submitted, analysis_started,
 // analysis_ended, result_name, result, analysis_sco_refs, sample_ref
-interface StixMalwareAnalysis extends StixDomainObject {
+export interface StixMalwareAnalysis extends StixDomainObject {
   product: string;
   version: string; // optional
   host_vm_ref: StixId; // optional
@@ -182,62 +181,68 @@ interface StixMalwareAnalysis extends StixDomainObject {
   modules: Array<string>; // optional
   analysis_engine_version: string; // optional
   analysis_definition_version: string; // optional
-  submitted: Date; // optional
-  analysis_started: Date; // optional
-  analysis_ended: Date; // optional
+  submitted: StixDate; // optional
+  analysis_started: StixDate; // optional
+  analysis_ended: StixDate; // optional
   result_name: string; // optional
   result: string; // malware-result-ov - optional
   analysis_sco_refs: Array<StixId>; // optional
   sample_ref: StixId; // optional
 }
 
+// Container specific Properties
+export interface StixContainer extends StixDomainObject {
+  object_refs: Array<StixId>;
+  extensions: {
+    [STIX_EXT_OCTI]: StixContainerExtension;
+  };
+}
+
 // Note Specific Properties
 // abstract, content, authors, object_refs
-interface StixNote extends StixDomainObject {
-  abstract: string;
-  content: string;
-  authors: Array<string>;
-  object_refs: Array<StixId>;
+export interface StixNote extends StixContainer {
+  abstract: string
+  content: string
+  authors: Array<string>
+  note_types: Array<string>
+  likelihood: number
 }
 
 // Observed Data Specific Properties
 // first_observed, last_observed, number_observed, objects, object_refs
-interface StixObservedData extends StixDomainObject {
-  first_observed: Date;
-  last_observed: Date;
-  number_observed: number;
-  object_refs: Array<StixId>;
+export interface StixObservedData extends StixContainer {
+  first_observed: Date
+  last_observed: Date
+  number_observed: number
 }
 
 // Opinion Specific Properties
 // explanation, authors, opinion, object_refs
-interface StixOpinion extends StixDomainObject {
-  explanation: string; // optional
-  authors: Array<string>; // optional
-  opinion: 'strongly-disagree' | 'disagree' | 'neutral' | 'agree' | 'strongly-agree';
-  object_refs: Array<StixId>;
+export interface StixOpinion extends StixContainer {
+  explanation: string // optional
+  authors: Array<string> // optional
+  opinion: 'strongly-disagree' | 'disagree' | 'neutral' | 'agree' | 'strongly-agree'
 }
 
 // Report Specific Properties
 // name, description, report_types, published, object_refs
-interface StixReport extends StixDomainObject {
-  name: string;
-  description: string;
-  report_types: Array<string>;
-  published: Date;
-  object_refs: Array<StixId>;
+export interface StixReport extends StixContainer {
+  name: string
+  description: string
+  report_types: Array<string>
+  published: Date
 }
 
 // Threat Actor Specific Properties
 // name, description, threat_actor_types, aliases, first_seen, last_seen, roles, goals,
 // sophistication, resource_level, primary_motivation, secondary_motivations, personal_motivations
-interface StixThreatActor extends StixDomainObject {
+export interface StixThreatActor extends StixDomainObject {
   name: string;
   description: string; // optional
   threat_actor_types : Array<string>; // threat-actor-type-ov - optional
   aliases: Array<string>; // optional
-  first_seen: Date; // optional
-  last_seen: Date; // optional
+  first_seen: StixDate; // optional
+  last_seen: StixDate; // optional
   roles: Array<string>; // threat-actor-role-ov - optional
   goals: Array<string>; // optional
   sophistication: string; // threat-actor-sophistication-ov - optional
@@ -249,7 +254,7 @@ interface StixThreatActor extends StixDomainObject {
 
 // Tool Specific Properties
 // name, description, tool_types, aliases, kill_chain_phases, tool_version
-interface StixTool extends StixDomainObject {
+export interface StixTool extends StixDomainObject {
   name: string;
   description: string; // optional
   tool_types : Array<string>; // tool-type-ov - optional
@@ -259,7 +264,7 @@ interface StixTool extends StixDomainObject {
 }
 
 // Vulnerability Specific Properties
-interface StixVulnerabilityExtension extends StixOpenctiExtension {
+export interface StixVulnerabilityExtension extends StixOpenctiExtension {
   attack_vector: string;
   availability_impact: string;
   base_score: number;
@@ -268,7 +273,7 @@ interface StixVulnerabilityExtension extends StixOpenctiExtension {
   integrity_impact: string;
 }
 // name, description
-interface StixVulnerability extends StixDomainObject {
+export interface StixVulnerability extends StixDomainObject {
   name: string;
   description: string; // optional
   extensions: {

@@ -1,8 +1,8 @@
 /* eslint-disable camelcase */
 import { ENTITY_TYPE_FEED } from '../schema/internalObject';
-import { createEntity, deleteElementById, storeLoadById } from '../database/middleware';
-import { listEntitiesPaginated } from '../database/middleware-loader';
-import type { AuthUser } from '../types/user';
+import { createEntity, deleteElementById } from '../database/middleware';
+import { listEntitiesPaginated, storeLoadById } from '../database/middleware-loader';
+import type { AuthContext, AuthUser } from '../types/user';
 import type { FeedAddInput, QueryFeedsArgs } from '../generated/graphql';
 import type { StoreEntityFeed } from '../types/store';
 import { elReplace } from '../database/engine';
@@ -10,6 +10,7 @@ import { INDEX_INTERNAL_OBJECTS } from '../database/utils';
 import { FunctionalError, UnsupportedError, ValidationError } from '../config/errors';
 import { isStixCyberObservable } from '../schema/stixCyberObservable';
 import { isStixDomainObject } from '../schema/stixDomainObject';
+import type { DomainFindById } from './domainTypes';
 
 const checkFeedIntegrity = (input: FeedAddInput) => {
   if (input.separator.length > 1) {
@@ -35,26 +36,26 @@ const checkFeedIntegrity = (input: FeedAddInput) => {
   }
 };
 
-export const createFeed = async (user: AuthUser, input: FeedAddInput): Promise<StoreEntityFeed> => {
+export const createFeed = async (context: AuthContext, user: AuthUser, input: FeedAddInput): Promise<StoreEntityFeed> => {
   checkFeedIntegrity(input);
-  return createEntity(user, input, ENTITY_TYPE_FEED);
+  return createEntity(context, user, input, ENTITY_TYPE_FEED);
 };
-export const findById = async (user: AuthUser, feedId: string): Promise<StoreEntityFeed> => {
-  return storeLoadById(user, feedId, ENTITY_TYPE_FEED) as unknown as StoreEntityFeed;
+export const findById: DomainFindById<StoreEntityFeed> = async (context: AuthContext, user: AuthUser, feedId: string) => {
+  return storeLoadById<StoreEntityFeed>(context, user, feedId, ENTITY_TYPE_FEED);
 };
-export const editFeed = async (user: AuthUser, id: string, input: FeedAddInput): Promise<StoreEntityFeed> => {
+export const editFeed = async (context: AuthContext, user: AuthUser, id: string, input: FeedAddInput): Promise<StoreEntityFeed> => {
   checkFeedIntegrity(input);
-  const feed = await findById(user, id);
+  const feed = await findById(context, user, id);
   if (!feed) {
     throw FunctionalError(`Feed ${id} cant be found`);
   }
   await elReplace(INDEX_INTERNAL_OBJECTS, id, { doc: input });
-  return findById(user, id);
+  return findById(context, user, id);
 };
-export const findAll = (user: AuthUser, opts: QueryFeedsArgs) => {
-  return listEntitiesPaginated<StoreEntityFeed>(user, [ENTITY_TYPE_FEED], opts);
+export const findAll = (context: AuthContext, user: AuthUser, opts: QueryFeedsArgs) => {
+  return listEntitiesPaginated<StoreEntityFeed>(context, user, [ENTITY_TYPE_FEED], opts);
 };
-export const feedDelete = async (user: AuthUser, feedId: string) => {
-  await deleteElementById(user, feedId, ENTITY_TYPE_FEED);
+export const feedDelete = async (context: AuthContext, user: AuthUser, feedId: string) => {
+  await deleteElementById(context, user, feedId, ENTITY_TYPE_FEED);
   return feedId;
 };

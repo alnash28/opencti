@@ -26,7 +26,11 @@ import ObjectMarkingField from '../../common/form/ObjectMarkingField';
 import MarkDownField from '../../../../components/MarkDownField';
 import { adaptFieldValue } from '../../../../utils/String';
 import CommitMessage from '../../common/form/CommitMessage';
-import { convertCreatedBy, convertMarkings, convertStatus } from '../../../../utils/Edition';
+import {
+  convertCreatedBy,
+  convertMarkings,
+  convertStatus,
+} from '../../../../utils/edition';
 import StatusField from '../../common/form/StatusField';
 
 const styles = (theme) => ({
@@ -104,7 +108,7 @@ const organizationMutationRelationAdd = graphql`
 const organizationMutationRelationDelete = graphql`
   mutation OrganizationEditionOverviewRelationDeleteMutation(
     $id: ID!
-    $toId: String!
+    $toId: StixRef!
     $relationship_type: String!
   ) {
     organizationEdit(id: $id) {
@@ -160,7 +164,8 @@ class OrganizationEditionOverviewComponent extends Component {
       variables: {
         id: this.props.organization.id,
         input: inputValues,
-        commitMessage: commitMessage && commitMessage.length > 0 ? commitMessage : null,
+        commitMessage:
+          commitMessage && commitMessage.length > 0 ? commitMessage : null,
         references,
       },
       setSubmitting,
@@ -274,7 +279,6 @@ class OrganizationEditionOverviewComponent extends Component {
         {({
           submitForm,
           isSubmitting,
-          validateForm,
           setFieldValue,
           values,
         }) => (
@@ -377,20 +381,20 @@ class OrganizationEditionOverviewComponent extends Component {
               <MenuItem value="F">{t('reliability_F')}</MenuItem>
             </Field>
             {organization.workflowEnabled && (
-                <StatusField
-                    name="x_opencti_workflow_id"
-                    type="Organization"
-                    onFocus={this.handleChangeFocus.bind(this)}
-                    onChange={this.handleSubmitField.bind(this)}
-                    setFieldValue={setFieldValue}
-                    style={{ marginTop: 20 }}
-                    helpertext={
-                      <SubscriptionFocus
-                          context={context}
-                          fieldName="x_opencti_workflow_id"
-                      />
-                    }
-                />
+              <StatusField
+                name="x_opencti_workflow_id"
+                type="Organization"
+                onFocus={this.handleChangeFocus.bind(this)}
+                onChange={this.handleSubmitField.bind(this)}
+                setFieldValue={setFieldValue}
+                style={{ marginTop: 20 }}
+                helpertext={
+                  <SubscriptionFocus
+                    context={context}
+                    fieldName="x_opencti_workflow_id"
+                  />
+                }
+              />
             )}
             <CreatedByField
               name="createdBy"
@@ -416,9 +420,9 @@ class OrganizationEditionOverviewComponent extends Component {
               <CommitMessage
                 submitForm={submitForm}
                 disabled={isSubmitting}
-                validateForm={validateForm}
                 setFieldValue={setFieldValue}
-                values={values}
+                open={false}
+                values={values.references}
                 id={organization.id}
               />
             )}
@@ -435,6 +439,7 @@ OrganizationEditionOverviewComponent.propTypes = {
   t: PropTypes.func,
   organization: PropTypes.object,
   context: PropTypes.array,
+  enableReferences: PropTypes.bool,
 };
 
 const OrganizationEditionOverview = createFragmentContainer(
@@ -459,8 +464,10 @@ const OrganizationEditionOverview = createFragmentContainer(
           edges {
             node {
               id
-              definition
               definition_type
+              definition
+              x_opencti_order
+              x_opencti_color
             }
           }
         }

@@ -22,6 +22,8 @@ class SystemAnalysisComponent extends Component {
     return (
       <div className={classes.container}>
         <StixDomainObjectHeader
+          entityType={'System'}
+          disableSharing={true}
           stixDomainObject={system}
           PopoverComponent={<SystemPopover />}
           onViewAs={onViewAs.bind(this)}

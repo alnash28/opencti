@@ -3,20 +3,20 @@ import * as R from 'ramda';
 import def from './SightingObservableDefinition';
 import { STIX_SIGHTING_RELATIONSHIP } from '../../schema/stixSightingRelationship';
 import type { StixRelation, StixSighting } from '../../types/stix-sro';
-import type { Event } from '../../types/event';
 import { STIX_EXT_OCTI } from '../../types/stix-extensions';
 import { buildPeriodFromDates, computeRangeIntersection } from '../../utils/format';
-import type { BasicStoreRelation } from '../../types/store';
+import type { BasicStoreRelation, StoreObject } from '../../types/store';
 import { RELATION_OBJECT_MARKING } from '../../schema/stixMetaRelationship';
 import { computeAverage } from '../../database/utils';
-import { createRuleContent, RULE_MANAGER_USER } from '../rules';
+import { createRuleContent } from '../rules';
 import { createInferredRelation, deleteInferredRuleElement } from '../../database/middleware';
 import { listAllRelations, RelationOptions } from '../../database/middleware-loader';
-import type { StixObject } from '../../types/stix-common';
 import { RELATION_BASED_ON } from '../../schema/stixCoreRelationship';
 import { ENTITY_TYPE_INDICATOR } from '../../schema/stixDomainObject';
 import type { RuleRuntime } from '../../types/rules';
 import { ENTITY_TYPE_IDENTITY, ENTITY_TYPE_LOCATION } from '../../schema/general';
+import { executionContext, RULE_MANAGER_USER } from '../../utils/access';
+import type { AuthContext } from '../../types/user';
 
 /*
 'If **observable A** is `sighted` in **identity/location B** and '
@@ -26,9 +26,8 @@ import { ENTITY_TYPE_IDENTITY, ENTITY_TYPE_LOCATION } from '../../schema/general
 
 const sightingObservableRuleBuilder = (): RuleRuntime => {
   // Execution
-  const applyFromStixRelation = async (data: StixRelation): Promise<Array<Event>> => {
+  const applyFromStixRelation = async (context: AuthContext, data: StixRelation): Promise<void> => {
     // **indicator C** `based on` **observable A**
-    const events: Array<Event> = [];
     const createdId = data.extensions[STIX_EXT_OCTI].id;
     const fromIndicator = data.extensions[STIX_EXT_OCTI].source_ref;
     const toObservable = data.extensions[STIX_EXT_OCTI].target_ref;
@@ -57,11 +56,7 @@ const sightingObservableRuleBuilder = (): RuleRuntime => {
           last_seen: range.end,
           objectMarking: elementMarkings
         });
-        const event = await createInferredRelation(input, ruleContent);
-        // Re inject event if needed
-        if (event) {
-          events.push(event);
-        }
+        await createInferredRelation(context, input, ruleContent);
       }
     };
     const listFromArgs: RelationOptions<BasicStoreRelation> = {
@@ -69,12 +64,10 @@ const sightingObservableRuleBuilder = (): RuleRuntime => {
       toTypes: [ENTITY_TYPE_IDENTITY, ENTITY_TYPE_LOCATION],
       callback: listFromCallback
     };
-    await listAllRelations(RULE_MANAGER_USER, STIX_SIGHTING_RELATIONSHIP, listFromArgs);
-    return events;
+    await listAllRelations(context, RULE_MANAGER_USER, STIX_SIGHTING_RELATIONSHIP, listFromArgs);
   };
-  const applyFromStixSighting = async (data: StixSighting): Promise<Array<Event>> => {
+  const applyFromStixSighting = async (context: AuthContext, data: StixSighting): Promise<void> => {
     // **observable A** is `sighted` in **identity/location B**
-    const events: Array<Event> = [];
     const createdId = data.extensions[STIX_EXT_OCTI].id;
     const fromObservable = data.extensions[STIX_EXT_OCTI].sighting_of_ref;
     const toSightingIdentityOrLocation = R.head(data.extensions[STIX_EXT_OCTI].where_sighted_refs);
@@ -100,15 +93,11 @@ const sightingObservableRuleBuilder = (): RuleRuntime => {
         const input = { fromId: indicatorId, toId: toSightingIdentityOrLocation, relationship_type: STIX_SIGHTING_RELATIONSHIP };
         const ruleContent = createRuleContent(def.id, dependencies, explanation, {
           confidence: computedConfidence,
-          start_time: range.start,
-          stop_time: range.end,
+          first_seen: range.start,
+          last_seen: range.end,
           objectMarking: elementMarkings
         });
-        const event = await createInferredRelation(input, ruleContent);
-        // Re inject event if needed
-        if (event) {
-          events.push(event);
-        }
+        await createInferredRelation(context, input, ruleContent);
       }
     };
     const listFromArgs: RelationOptions<BasicStoreRelation> = {
@@ -116,25 +105,25 @@ const sightingObservableRuleBuilder = (): RuleRuntime => {
       fromTypes: [ENTITY_TYPE_INDICATOR],
       callback: listFromCallback
     };
-    await listAllRelations(RULE_MANAGER_USER, RELATION_BASED_ON, listFromArgs);
-    return events;
+    await listAllRelations(context, RULE_MANAGER_USER, RELATION_BASED_ON, listFromArgs);
   };
-  const applyUpsert = async (data: StixRelation | StixSighting): Promise<Array<Event>> => {
+  const applyUpsert = async (data: StixRelation | StixSighting): Promise<void> => {
+    const context = executionContext(def.name, RULE_MANAGER_USER);
     if (data.extensions[STIX_EXT_OCTI].type === STIX_SIGHTING_RELATIONSHIP) {
       const sighting: StixSighting = data as StixSighting;
-      return applyFromStixSighting(sighting);
+      return applyFromStixSighting(context, sighting);
     }
     const rel: StixRelation = data as StixRelation;
-    return applyFromStixRelation(rel);
+    return applyFromStixRelation(context, rel);
   };
   // Contract
-  const clean = async (element: StixObject, deletedDependencies: Array<string>): Promise<Array<Event>> => {
-    return deleteInferredRuleElement(def.id, element, deletedDependencies) as Promise<Array<Event>>;
+  const clean = async (element: StoreObject, deletedDependencies: Array<string>): Promise<void> => {
+    await deleteInferredRuleElement(def.id, element, deletedDependencies);
   };
-  const insert = async (element: StixRelation): Promise<Array<Event>> => {
+  const insert = async (element: StixRelation): Promise<void> => {
     return applyUpsert(element);
   };
-  const update = async (element: StixRelation): Promise<Array<Event>> => {
+  const update = async (element: StixRelation): Promise<void> => {
     return applyUpsert(element);
   };
   return { ...def, insert, update, clean };

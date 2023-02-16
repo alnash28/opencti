@@ -10,8 +10,6 @@ import StixDomainObjectKnowledge from '../../common/stix_domain_objects/StixDoma
 import StixCoreRelationship from '../../common/stix_core_relationships/StixCoreRelationship';
 import IndividualPopover from './IndividualPopover';
 import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
-import StixCoreObjectStixCyberObservables from '../../observations/stix_cyber_observables/StixCoreObjectStixCyberObservables';
-import EntityStixSightingRelationships from '../../events/stix_sighting_relationships/EntityStixSightingRelationships';
 import StixDomainObjectAuthorKnowledge from '../../common/stix_domain_objects/StixDomainObjectAuthorKnowledge';
 import StixSightingRelationship from '../../events/stix_sighting_relationships/StixSightingRelationship';
 
@@ -32,6 +30,8 @@ class IndividualKnowledgeComponent extends Component {
         style={{ paddingRight: viewAs === 'knowledge' ? 200 : 0 }}
       >
         <StixDomainObjectHeader
+          entityType={'Individual'}
+          disableSharing={true}
           stixDomainObject={individual}
           PopoverComponent={<IndividualPopover />}
           onViewAs={onViewAs.bind(this)}
@@ -80,27 +80,33 @@ class IndividualKnowledgeComponent extends Component {
           />
           <Route
             exact
-            path="/dashboard/entities/individuals/:individualId/knowledge/related"
+            path="/dashboard/entities/individuals/:individualId/knowledge/threats"
             render={(routeProps) => (
               <EntityStixCoreRelationships
                 entityId={individual.id}
-                relationshipTypes={['related-to']}
-                targetStixDomainObjectTypes={[
+                relationshipTypes={['targets']}
+                isRelationReversed
+                entityLink={link}
+                stixCoreObjectTypes={[
+                  'Attack-Pattern',
                   'Threat-Actor',
                   'Intrusion-Set',
                   'Campaign',
                   'Incident',
                   'Malware',
                   'Tool',
-                  'Vulnerability',
-                  'Individual',
-                  'Organization',
-                  'Sector',
-                  'Region',
-                  'Country',
-                  'City',
-                  'Position',
                 ]}
+                {...routeProps}
+              />
+            )}
+          />
+          <Route
+            exact
+            path="/dashboard/entities/individuals/:individualId/knowledge/related"
+            render={(routeProps) => (
+              <EntityStixCoreRelationships
+                entityId={individual.id}
+                relationshipTypes={['related-to']}
                 entityLink={link}
                 allDirections={true}
                 {...routeProps}
@@ -114,7 +120,7 @@ class IndividualKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={individual.id}
                 relationshipTypes={['part-of']}
-                targetStixDomainObjectTypes={['Organization']}
+                stixCoreObjectTypes={['Organization']}
                 entityLink={link}
                 isRelationReversed={false}
                 {...routeProps}
@@ -128,7 +134,7 @@ class IndividualKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={individual.id}
                 relationshipTypes={['located-at']}
-                targetStixDomainObjectTypes={['City', 'Country', 'Region']}
+                stixCoreObjectTypes={['City', 'Country', 'Region']}
                 entityLink={link}
                 isRelationReversed={false}
                 {...routeProps}
@@ -141,7 +147,8 @@ class IndividualKnowledgeComponent extends Component {
             render={(routeProps) => (
               <EntityStixCoreRelationships
                 entityId={individual.id}
-                targetStixDomainObjectTypes={['Threat-Actor']}
+                relationshipTypes={['targets']}
+                stixCoreObjectTypes={['Threat-Actor']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -154,7 +161,8 @@ class IndividualKnowledgeComponent extends Component {
             render={(routeProps) => (
               <EntityStixCoreRelationships
                 entityId={individual.id}
-                targetStixDomainObjectTypes={['Intrusion-Set']}
+                relationshipTypes={['targets']}
+                stixCoreObjectTypes={['Intrusion-Set']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -168,7 +176,7 @@ class IndividualKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={individual.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Campaign']}
+                stixCoreObjectTypes={['Campaign']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -182,7 +190,7 @@ class IndividualKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={individual.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Incident']}
+                stixCoreObjectTypes={['Incident']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -196,7 +204,7 @@ class IndividualKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={individual.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Malware']}
+                stixCoreObjectTypes={['Malware']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -210,7 +218,7 @@ class IndividualKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={individual.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Attack-Pattern']}
+                stixCoreObjectTypes={['Attack-Pattern']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -224,7 +232,7 @@ class IndividualKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={individual.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Tool']}
+                stixCoreObjectTypes={['Tool']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -235,23 +243,13 @@ class IndividualKnowledgeComponent extends Component {
             exact
             path="/dashboard/entities/individuals/:individualId/knowledge/observables"
             render={(routeProps) => (
-              <StixCoreObjectStixCyberObservables
-                stixCoreObjectId={individual.id}
-                stixCoreObjectLink={link}
-                noRightBar={true}
-                {...routeProps}
-              />
-            )}
-          />
-          <Route
-            exact
-            path="/dashboard/entities/individuals/:individualId/knowledge/sightings"
-            render={(routeProps) => (
-              <EntityStixSightingRelationships
+              <EntityStixCoreRelationships
                 entityId={individual.id}
+                relationshipTypes={['related-to']}
+                stixCoreObjectTypes={['Stix-Cyber-Observable']}
                 entityLink={link}
-                noRightBar={true}
-                isTo={true}
+                allDirections={true}
+                isRelationReversed={true}
                 {...routeProps}
               />
             )}

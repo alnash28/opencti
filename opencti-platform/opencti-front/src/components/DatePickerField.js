@@ -10,6 +10,8 @@ import { parse } from '../utils/Time';
 const dateFormatsMap = {
   'en-us': 'yyyy-MM-dd',
   'fr-fr': 'dd/MM/yyyy',
+  'es-es': 'dd/MM/yyyy',
+  'ja-jp': 'yyyy/MM/dd',
   'zg-cn': 'yyyy-MM-dd',
 };
 
@@ -35,9 +37,9 @@ const DatePickerField = (props) => {
   );
   const internalOnChange = React.useCallback(
     (date) => {
-      setFieldValue(name, date);
+      setFieldValue(name, date ?? null);
       if (typeof onChange === 'function') {
-        onChange(name, date || null);
+        onChange(name, date ?? null);
       }
     },
     [setFieldValue, onChange, name],
@@ -53,7 +55,7 @@ const DatePickerField = (props) => {
     if (typeof onSubmit === 'function') {
       onSubmit(name, value ? parse(value).toISOString() : null);
     }
-  }, [setTouched, onSubmit, name]);
+  }, [setTouched, onSubmit, name, field]);
   return (
     <DatePicker
       {...fieldToDatePicker(props)}
@@ -63,7 +65,7 @@ const DatePickerField = (props) => {
       allowKeyboardControl={true}
       onAccept={internalOnAccept}
       onChange={internalOnChange}
-      inputFormat={dateFormatsMap[intl.locale]}
+      inputFormat={dateFormatsMap[intl.locale] || 'yyyy-MM-dd'}
       renderInput={(params) => (
         <TextField
           {...params}

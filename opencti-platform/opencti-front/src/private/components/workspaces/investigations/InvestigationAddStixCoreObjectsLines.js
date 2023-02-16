@@ -81,7 +81,7 @@ export const investigationAddStixCoreObjectsLinesRelationAddMutation = graphql`
 export const investigationAddStixCoreObjectsLinesRelationDeleteMutation = graphql`
   mutation InvestigationAddStixCoreObjectsLinesRelationDeleteMutation(
     $id: ID!
-    $toId: String!
+    $toId: StixRef!
     $relationship_type: String!
   ) {
     workspaceEdit(id: $id) {
@@ -359,7 +359,10 @@ const InvestigationAddStixCoreObjectsLines = createPaginationContainer(
                 edges {
                   node {
                     id
+                    definition_type
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }
@@ -393,6 +396,10 @@ const InvestigationAddStixCoreObjectsLines = createPaginationContainer(
                 name
                 description
                 published
+              }
+              ... on Grouping {
+                name
+                description
               }
               ... on CourseOfAction {
                 name
@@ -437,6 +444,10 @@ const InvestigationAddStixCoreObjectsLines = createPaginationContainer(
                 name
                 description
               }
+              ... on AdministrativeArea {
+                name
+                description
+              }
               ... on Country {
                 name
                 description
@@ -470,6 +481,15 @@ const InvestigationAddStixCoreObjectsLines = createPaginationContainer(
                 description
                 first_seen
                 last_seen
+              }
+              ... on DataComponent {
+                name
+              }
+              ... on DataSource {
+                name
+              }
+              ... on Case {
+                name
               }
               ... on StixCyberObservable {
                 observable_value

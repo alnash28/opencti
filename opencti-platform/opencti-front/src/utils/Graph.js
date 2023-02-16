@@ -1,37 +1,45 @@
 import * as R from 'ramda';
 import SpriteText from 'three-spritetext';
 import { fromB64, toB64, truncate } from './String';
-import KillChainPhase from '../resources/images/entities/kill-chain-phase.svg';
-import MarkingDefinition from '../resources/images/entities/marking-definition.svg';
-import Label from '../resources/images/entities/label.svg';
-import ExternalReference from '../resources/images/entities/external-reference.svg';
-import AttackPattern from '../resources/images/entities/attack-pattern.svg';
-import Campaign from '../resources/images/entities/campaign.svg';
-import Note from '../resources/images/entities/note.svg';
-import ObservedData from '../resources/images/entities/observed-data.svg';
-import Opinion from '../resources/images/entities/opinion.svg';
-import Report from '../resources/images/entities/report.svg';
-import CourseOfAction from '../resources/images/entities/course-of-action.svg';
-import Individual from '../resources/images/entities/individual.svg';
-import Organization from '../resources/images/entities/organization.svg';
-import Sector from '../resources/images/entities/sector.svg';
-import System from '../resources/images/entities/system.svg';
-import Indicator from '../resources/images/entities/indicator.svg';
-import Infrastructure from '../resources/images/entities/infrastructure.svg';
-import IntrusionSet from '../resources/images/entities/intrusion-set.svg';
-import City from '../resources/images/entities/city.svg';
-import Country from '../resources/images/entities/country.svg';
-import Region from '../resources/images/entities/region.svg';
-import Position from '../resources/images/entities/position.svg';
-import Malware from '../resources/images/entities/malware.svg';
-import ThreatActor from '../resources/images/entities/threat-actor.svg';
-import Tool from '../resources/images/entities/tool.svg';
-import Vulnerability from '../resources/images/entities/vulnerability.svg';
-import Incident from '../resources/images/entities/incident.svg';
-import StixCyberObservable from '../resources/images/entities/stix-cyber-observable.svg';
-import relationship from '../resources/images/entities/relationship.svg';
+import KillChainPhase from '../static/images/entities/kill-chain-phase.svg';
+import MarkingDefinition from '../static/images/entities/marking-definition.svg';
+import Label from '../static/images/entities/label.svg';
+import ExternalReference from '../static/images/entities/external-reference.svg';
+import AttackPattern from '../static/images/entities/attack-pattern.svg';
+import Campaign from '../static/images/entities/campaign.svg';
+import Note from '../static/images/entities/note.svg';
+import ObservedData from '../static/images/entities/observed-data.svg';
+import Opinion from '../static/images/entities/opinion.svg';
+import Report from '../static/images/entities/report.svg';
+import Grouping from '../static/images/entities/grouping.svg';
+import CourseOfAction from '../static/images/entities/course-of-action.svg';
+import Individual from '../static/images/entities/individual.svg';
+import Organization from '../static/images/entities/organization.svg';
+import Sector from '../static/images/entities/sector.svg';
+import System from '../static/images/entities/system.svg';
+import Indicator from '../static/images/entities/indicator.svg';
+import Infrastructure from '../static/images/entities/infrastructure.svg';
+import IntrusionSet from '../static/images/entities/intrusion-set.svg';
+import City from '../static/images/entities/city.svg';
+import AdministrativeArea from '../static/images/entities/administrative-area.svg';
+import Country from '../static/images/entities/country.svg';
+import Region from '../static/images/entities/region.svg';
+import Position from '../static/images/entities/position.svg';
+import Malware from '../static/images/entities/malware.svg';
+import ThreatActor from '../static/images/entities/threat-actor.svg';
+import Tool from '../static/images/entities/tool.svg';
+import Vulnerability from '../static/images/entities/vulnerability.svg';
+import Incident from '../static/images/entities/incident.svg';
+import Channel from '../static/images/entities/channel.svg';
+import Narrative from '../static/images/entities/narrative.svg';
+import Language from '../static/images/entities/language.svg';
+import Event from '../static/images/entities/event.svg';
+import DataComponent from '../static/images/entities/data-component.svg';
+import DataSource from '../static/images/entities/data-source.svg';
+import Unknown from '../static/images/entities/unknown.svg';
+import StixCyberObservable from '../static/images/entities/stix-cyber-observable.svg';
+import relationship from '../static/images/entities/relationship.svg';
 import { itemColor } from './Colors';
-import themeDark from '../components/ThemeDark';
 import {
   dateFormat,
   dayEndDate,
@@ -43,20 +51,11 @@ import {
   timestamp,
 } from './Time';
 import { isDateStringNone, isNone } from '../components/i18n';
+import { fileUri } from '../relay/environment';
 
 const genImage = (src) => {
   const img = new Image();
-  if (
-    window.BASE_PATH
-    && window.BASE_PATH.length > 0
-    && window.BASE_PATH.startsWith('/')
-  ) {
-    img.src = `${window.BASE_PATH}/${src.replaceAll('../', '')}`;
-  } else if (window.BASE_PATH && window.BASE_PATH.length > 0) {
-    img.src = `/${window.BASE_PATH}/${src.replaceAll('../', '')}`;
-  } else {
-    img.src = `/${src.replaceAll('../', '')}`;
-  }
+  img.src = fileUri(src);
   return img;
 };
 
@@ -71,6 +70,7 @@ export const graphImages = {
   'Observed-Data': genImage(ObservedData),
   Opinion: genImage(Opinion),
   Report: genImage(Report),
+  Grouping: genImage(Grouping),
   'Course-Of-Action': genImage(CourseOfAction),
   Individual: genImage(Individual),
   Organization: genImage(Organization),
@@ -80,6 +80,7 @@ export const graphImages = {
   Infrastructure: genImage(Infrastructure),
   'Intrusion-Set': genImage(IntrusionSet),
   City: genImage(City),
+  AdministrativeArea: genImage(AdministrativeArea),
   Country: genImage(Country),
   Region: genImage(Region),
   Position: genImage(Position),
@@ -88,6 +89,12 @@ export const graphImages = {
   Tool: genImage(Tool),
   Vulnerability: genImage(Vulnerability),
   Incident: genImage(Incident),
+  Channel: genImage(Channel),
+  Narrative: genImage(Narrative),
+  Language: genImage(Language),
+  Event: genImage(Event),
+  'Data-Component': genImage(DataComponent),
+  'Data-Source': genImage(DataSource),
   'Autonomous-System': genImage(StixCyberObservable),
   Directory: genImage(StixCyberObservable),
   'Domain-Name': genImage(StixCyberObservable),
@@ -112,8 +119,13 @@ export const graphImages = {
   Wallet: genImage(StixCyberObservable),
   Hostname: genImage(StixCyberObservable),
   'User-Agent': genImage(StixCyberObservable),
+  'Phone-Number': genImage(StixCyberObservable),
+  'Bank-Account': genImage(StixCyberObservable),
+  'Payment-Card': genImage(StixCyberObservable),
+  'Media-Content': genImage(StixCyberObservable),
   Text: genImage(StixCyberObservable),
   relationship: genImage(relationship),
+  Unknown: genImage(Unknown),
 };
 
 export const graphLevel = {
@@ -124,6 +136,7 @@ export const graphLevel = {
   'Observed-Data': 1,
   Opinion: 1,
   Report: 1,
+  Grouping: 1,
   'Course-Of-Action': 1,
   Individual: 1,
   Organization: 1,
@@ -141,6 +154,12 @@ export const graphLevel = {
   Tool: 1,
   Vulnerability: 1,
   Incident: 1,
+  Channel: 1,
+  Narrative: 1,
+  Language: 1,
+  Event: 1,
+  'Data-Component': 1,
+  'Data-Source': 1,
   'Autonomous-System': 1,
   Directory: 1,
   'Domain-Name': 1,
@@ -166,7 +185,12 @@ export const graphLevel = {
   Hostname: 1,
   'User-Agent': 1,
   Text: 1,
+  'Phone-Number': 1,
+  'Bank-Account': 1,
+  'Payment-Card': 1,
+  'Media-Content': 1,
   relationship: 1,
+  Unknown: 1,
 };
 
 export const graphRawImages = {
@@ -180,6 +204,7 @@ export const graphRawImages = {
   'Observed-Data': ObservedData,
   Opinion,
   Report,
+  Grouping,
   'Course-Of-Action': CourseOfAction,
   Individual,
   Organization,
@@ -197,6 +222,12 @@ export const graphRawImages = {
   Tool,
   Vulnerability,
   Incident,
+  Channel,
+  Narrative,
+  Language,
+  Event,
+  'Data-Component': DataComponent,
+  'Data-Source': DataSource,
   'Autonomous-System': StixCyberObservable,
   Directory: StixCyberObservable,
   'Domain-Name': StixCyberObservable,
@@ -222,6 +253,12 @@ export const graphRawImages = {
   Hostname: StixCyberObservable,
   'User-Agent': StixCyberObservable,
   Text: StixCyberObservable,
+  'Phone-Number': StixCyberObservable,
+  'Bank-Account': StixCyberObservable,
+  'Payment-Card': StixCyberObservable,
+  'Media-Content': StixCyberObservable,
+  Unknown,
+  relationship,
 };
 
 export const encodeGraphData = (graphData) => toB64(JSON.stringify(graphData));
@@ -269,8 +306,53 @@ export const defaultType = (n, t) => {
   return t(`entity_${n.entity_type}`);
 };
 
+export const defaultValueMarking = (n) => {
+  let def = 'Unknown';
+  if (n.definition) {
+    const definition = R.toPairs(n.definition);
+    if (definition[0]) {
+      if (definition[0][1].includes(':')) {
+        // eslint-disable-next-line prefer-destructuring
+        def = definition[0][1];
+      } else {
+        def = `${definition[0][0]}:${definition[0][1]}`;
+      }
+    }
+  }
+  return def;
+};
+
+export const defaultKey = (n) => {
+  if (!n) return null;
+  if (n.hashes) {
+    return 'hashes';
+  }
+  if (n.value) {
+    return 'value';
+  }
+  if (n.name) {
+    return 'name';
+  }
+  if (n.observable_value) {
+    return 'observable_value';
+  }
+  if (n.attribute_abstract) {
+    return 'attribute_abstract';
+  }
+  if (n.opinion) {
+    return null;
+  }
+  if (n.abstract) {
+    return 'abstract';
+  }
+  return null;
+};
+
 export const defaultValue = (n, tooltip = false) => {
   if (!n) return '';
+  if (typeof n.definition === 'object') {
+    return defaultValueMarking(n);
+  }
   if (tooltip) {
     return `${n.x_mitre_id ? `[${n.x_mitre_id}] ` : ''}${
       n.name
@@ -282,6 +364,7 @@ export const defaultValue = (n, tooltip = false) => {
       || n.definition
       || n.source_name
       || n.phase_name
+      || (n.content && truncate(n.content, 30))
       || (n.hashes
         && (n.hashes.MD5 || n.hashes['SHA-1'] || n.hashes['SHA-256']))
       || (n.source_ref_name
@@ -312,6 +395,7 @@ export const defaultValue = (n, tooltip = false) => {
     || n.definition
     || n.source_name
     || n.phase_name
+    || (n.content && truncate(n.content, 30))
     || (n.hashes && (n.hashes.MD5 || n.hashes['SHA-1'] || n.hashes['SHA-256']))
     || (n.source_ref_name
       && n.target_ref_name
@@ -513,7 +597,7 @@ export const buildCorrelationData = (
     filterAdjust.selectedTimeRangeInterval,
   );
   const thisReportLinkNodes = R.filter(
-    (n) => n.reports && n.parent_types && n.reports.edges.length > 0,
+    (n) => n.reports && n.parent_types && n.reports.edges.length > 1,
     filteredObjects,
   );
   const relatedReportNodes = applyNodeFilters(
@@ -594,16 +678,166 @@ export const buildCorrelationData = (
   const nodes = R.pipe(
     R.map((n) => ({
       id: n.id,
-      val: graphLevel[n.entity_type],
+      val: graphLevel[n.entity_type] || graphLevel.Unknown,
       name: defaultValue(n, true),
       defaultDate: jsDate(defaultDate(n)),
       label: truncate(
         defaultValue(n),
         n.entity_type === 'Attack-Pattern' ? 30 : 20,
       ),
-      img: graphImages[n.entity_type],
+      img: graphImages[n.entity_type] || graphImages.Unknown,
       entity_type: n.entity_type,
-      rawImg: graphRawImages[n.entity_type],
+      rawImg: graphRawImages[n.entity_type] || graphRawImages.Unknown,
+      color: n.x_opencti_color || n.color || itemColor(n.entity_type, false),
+      parent_types: n.parent_types,
+      isObservable: !!n.observable_value,
+      markedBy: n.markedBy,
+      createdBy: n.createdBy,
+      fx: graphData[n.id] && graphData[n.id].x ? graphData[n.id].x : null,
+      fy: graphData[n.id] && graphData[n.id].y ? graphData[n.id].y : null,
+    })),
+  )(combinedNodes);
+  return {
+    nodes,
+    links,
+  };
+};
+
+export const buildCaseCorrelationData = (
+  originalObjects,
+  graphData,
+  t,
+  filterAdjust,
+) => {
+  const objects = R.map((n) => {
+    let { objectMarking } = n;
+    if (R.isNil(objectMarking) || R.isEmpty(objectMarking.edges)) {
+      objectMarking = [
+        {
+          node: {
+            id: 'abb8eb18-a02c-48e9-adae-08c92275c87e',
+            definition: t('None'),
+            definition_type: t('None'),
+          },
+        },
+      ];
+    } else {
+      objectMarking = R.map((m) => m.node, objectMarking.edges);
+    }
+    let { createdBy } = n;
+    if (R.isNil(createdBy) || R.isEmpty(createdBy)) {
+      createdBy = {
+        id: '0533fcc9-b9e8-4010-877c-174343cb24cd',
+        name: t('None'),
+      };
+    }
+    return {
+      ...n,
+      objectMarking,
+      createdBy,
+      markedBy: objectMarking,
+    };
+  }, originalObjects);
+  const filteredObjects = applyNodeFilters(
+    R.filter((o) => o && o.id && o.entity_type && o.cases, objects),
+    [...filterAdjust.stixCoreObjectsTypes, ...['Case', 'cased-in']],
+    filterAdjust.markedBy,
+    filterAdjust.createdBy,
+    [],
+    filterAdjust.selectedTimeRangeInterval,
+  );
+  const thisCaseLinkNodes = R.filter(
+    (n) => n.cases && n.parent_types && n.cases.edges.length > 1,
+    filteredObjects,
+  );
+  const relatedCaseNodes = applyNodeFilters(
+    R.pipe(
+      R.map((n) => n.cases.edges),
+      R.flatten,
+      R.map((n) => {
+        let { objectMarking } = n.node;
+        if (R.isNil(objectMarking) || R.isEmpty(objectMarking.edges)) {
+          objectMarking = [
+            {
+              node: {
+                id: 'abb8eb18-a02c-48e9-adae-08c92275c87e',
+                definition: t('None'),
+                definition_type: t('None'),
+              },
+            },
+          ];
+        } else {
+          objectMarking = R.map((m) => m.node, objectMarking.edges);
+        }
+        let { createdBy } = n.node;
+        if (R.isNil(createdBy) || R.isEmpty(createdBy)) {
+          createdBy = {
+            id: '0533fcc9-b9e8-4010-877c-174343cb24cd',
+            name: t('None'),
+          };
+        }
+        return {
+          ...n.node,
+          objectMarking,
+          createdBy,
+          markedBy: objectMarking,
+        };
+      }),
+      R.uniqBy(R.prop('id')),
+      R.map((n) => (n.defaultDate ? { ...n } : { ...n, defaultDate: jsDate(defaultDate(n)) })),
+    )(thisCaseLinkNodes),
+    [...filterAdjust.stixCoreObjectsTypes, ...['Case', 'cased-in']],
+    filterAdjust.markedBy,
+    filterAdjust.createdBy,
+    [],
+    filterAdjust.selectedTimeRangeInterval,
+    filterAdjust.keyword,
+  );
+  const links = R.pipe(
+    R.map((n) => R.map(
+      (e) => ({
+        id: R.concat(n.id, '-', e.id),
+        parent_types: ['basic-relationship', 'stix-meta-relationship'],
+        entity_type: 'basic-relationship',
+        relationship_type: 'caseed-in',
+        source: n.id,
+        target: e.id,
+        label: '',
+        name: '',
+        source_id: n.id,
+        target_id: e.id,
+        from: n.id,
+        to: n.id,
+        start_time: '',
+        stop_time: '',
+        defaultDate: jsDate(defaultDate(n)),
+        markedBy: n.markedBy,
+        createdBy: n.createdBy,
+      }),
+      R.filter(
+        (m) => m
+            && R.includes(
+              m.id,
+              R.map((o) => o.node.id, n.cases.edges),
+            ),
+      )(relatedCaseNodes),
+    )),
+    R.flatten,
+  )(thisCaseLinkNodes);
+  const combinedNodes = R.concat(thisCaseLinkNodes, relatedCaseNodes);
+  const nodes = R.pipe(
+    R.map((n) => ({
+      id: n.id,
+      val: graphLevel[n.entity_type] || graphLevel.Unknown,
+      name: defaultValue(n, true),
+      defaultDate: jsDate(defaultDate(n)),
+      label: truncate(
+        defaultValue(n),
+        n.entity_type === 'Attack-Pattern' ? 30 : 20,
+      ),
+      img: graphImages[n.entity_type] || graphImages.Unknown,
+      entity_type: n.entity_type,
+      rawImg: graphRawImages[n.entity_type] || graphRawImages.Unknown,
       color: n.x_opencti_color || n.color || itemColor(n.entity_type, false),
       parent_types: n.parent_types,
       isObservable: !!n.observable_value,
@@ -636,11 +870,12 @@ export const buildGraphData = (objects, graphData, t) => {
     R.uniqBy(R.prop('id')),
     R.map((n) => ({
       id: n.id,
-      val: graphLevel[
-        n.parent_types.includes('basic-relationship')
-          ? 'relationship'
-          : n.entity_type
-      ],
+      val:
+        graphLevel[
+          n.parent_types.includes('basic-relationship')
+            ? 'relationship'
+            : n.entity_type
+        ] || graphLevel.Unknown,
       name: `${
         n.relationship_type
           ? `<strong>${t(`relationship_${n.relationship_type}`)}</strong>\n${t(
@@ -663,17 +898,18 @@ export const buildGraphData = (objects, graphData, t) => {
           defaultValue(n),
           n.entity_type === 'Attack-Pattern' ? 30 : 20,
         ),
-      img: graphImages[
-        n.parent_types.includes('basic-relationship')
-          ? 'relationship'
-          : n.entity_type
-      ],
+      img:
+        graphImages[
+          n.parent_types.includes('basic-relationship')
+            ? 'relationship'
+            : n.entity_type
+        ] || graphImages.Unknown,
       rawImg:
         graphRawImages[
           n.parent_types.includes('basic-relationship')
             ? 'relationship'
             : n.entity_type
-        ],
+        ] || graphRawImages.Unknown,
       color: n.x_opencti_color || n.color || itemColor(n.entity_type, false),
       parent_types: n.parent_types,
       entity_type: n.entity_type,
@@ -683,6 +919,8 @@ export const buildGraphData = (objects, graphData, t) => {
       toId: n.to?.id,
       toType: n.to?.entity_type,
       isObservable: !!n.observable_value,
+      isNestedInferred:
+        (n.types?.includes('inferred') && !n.types.includes('manual')) || false,
       markedBy:
         !R.isNil(n.objectMarking) && !R.isEmpty(n.objectMarking.edges)
           ? R.map(
@@ -734,6 +972,8 @@ export const buildGraphData = (objects, graphData, t) => {
       source_id: n.from.id,
       target_id: n.to.id,
       inferred: n.is_inferred,
+      isNestedInferred:
+        (n.types?.includes('inferred') && !n.types.includes('manual')) || false,
       defaultDate: jsDate(defaultDate(n)),
       markedBy:
         !R.isNil(n.objectMarking) && !R.isEmpty(n.objectMarking.edges)
@@ -796,6 +1036,9 @@ export const buildGraphData = (objects, graphData, t) => {
         parent_types: n.parent_types,
         entity_type: n.entity_type,
         relationship_type: n.relationship_type,
+        isNestedInferred:
+          (n.types?.includes('inferred') && !n.types.includes('manual'))
+          || false,
         source: n.id,
         target: n.to.id,
         label: '',
@@ -834,6 +1077,7 @@ export const buildGraphData = (objects, graphData, t) => {
 };
 
 export const nodePaint = (
+  colors,
   {
     // eslint-disable-next-line camelcase
     label,
@@ -844,6 +1088,7 @@ export const nodePaint = (
   color,
   ctx,
   selected = false,
+  inferred = false,
 ) => {
   ctx.beginPath();
   ctx.fillStyle = color;
@@ -851,7 +1096,11 @@ export const nodePaint = (
   ctx.fill();
   if (selected) {
     ctx.lineWidth = 0.8;
-    ctx.strokeStyle = themeDark().palette.secondary.main;
+    ctx.strokeStyle = colors.selected;
+    ctx.stroke();
+  } else if (inferred) {
+    ctx.lineWidth = 0.8;
+    ctx.strokeStyle = colors.inferred;
     ctx.stroke();
   }
   const size = 8;

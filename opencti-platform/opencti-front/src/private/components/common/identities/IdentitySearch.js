@@ -1,6 +1,5 @@
 import { graphql } from 'react-relay';
 
-// eslint-disable-next-line import/prefer-default-export
 export const identitySearchIdentitiesSearchQuery = graphql`
   query IdentitySearchIdentitiesSearchQuery(
     $types: [String]
@@ -11,8 +10,26 @@ export const identitySearchIdentitiesSearchQuery = graphql`
       edges {
         node {
           id
+          standard_id
+          identity_class
           name
           entity_type
+          ... on Individual {
+            isUser
+          }
+        }
+      }
+    }
+  }
+`;
+
+export const identitySearchCreatorsSearchQuery = graphql`
+  query IdentitySearchCreatorsSearchQuery($search: String, $first: Int) {
+    creators(search: $search, first: $first) {
+      edges {
+        node {
+          id
+          name
         }
       }
     }

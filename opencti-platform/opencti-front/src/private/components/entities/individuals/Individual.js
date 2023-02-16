@@ -10,7 +10,8 @@ import IndividualEdition from './IndividualEdition';
 import IndividualPopover from './IndividualPopover';
 import StixCoreObjectOrStixCoreRelationshipLastReports from '../../analysis/reports/StixCoreObjectOrStixCoreRelationshipLastReports';
 import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
@@ -35,11 +36,14 @@ class IndividualComponent extends Component {
     return (
       <div className={classes.container}>
         <StixDomainObjectHeader
+          entityType={'Individual'}
+          disableSharing={true}
           stixDomainObject={individual}
           isOpenctiAlias={true}
           PopoverComponent={<IndividualPopover />}
           onViewAs={onViewAs.bind(this)}
           viewAs={viewAs}
+          disablePopover={individual.isUser}
         />
         <Grid
           container={true}
@@ -47,10 +51,10 @@ class IndividualComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={individual} />
+            <IndividualDetails individual={individual} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <IndividualDetails individual={individual} />
+            <StixDomainObjectOverview stixDomainObject={individual} />
           </Grid>
         </Grid>
         <Grid
@@ -90,10 +94,15 @@ class IndividualComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={individual.id}
+          defaultMarking={(individual.objectMarking?.edges ?? []).map(
+            (edge) => edge.node,
+          )}
         />
-        <Security needs={[KNOWLEDGE_KNUPDATE]}>
-          <IndividualEdition individualId={individual.id} />
-        </Security>
+        {!individual.isUser && (
+          <Security needs={[KNOWLEDGE_KNUPDATE]}>
+            <IndividualEdition individualId={individual.id} />
+          </Security>
+        )}
       </div>
     );
   }
@@ -120,6 +129,7 @@ const Individual = createFragmentContainer(IndividualComponent, {
       modified
       created_at
       updated_at
+      isUser
       createdBy {
         ... on Identity {
           id
@@ -135,7 +145,9 @@ const Individual = createFragmentContainer(IndividualComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }

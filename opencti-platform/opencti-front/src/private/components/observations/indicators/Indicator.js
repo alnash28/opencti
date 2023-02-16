@@ -8,13 +8,15 @@ import inject18n from '../../../../components/i18n';
 import IndicatorDetails from './IndicatorDetails';
 import IndicatorEdition from './IndicatorEdition';
 import StixCoreObjectOrStixCoreRelationshipLastReports from '../../analysis/reports/StixCoreObjectOrStixCoreRelationshipLastReports';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
 import StixCoreObjectLatestHistory from '../../common/stix_core_objects/StixCoreObjectLatestHistory';
-import IndicatorHeader from './IndicatorHeader';
 import SimpleStixObjectOrStixRelationshipStixCoreRelationships from '../../common/stix_core_relationships/SimpleStixObjectOrStixRelationshipStixCoreRelationships';
+import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
+import IndicatorPopover from './IndicatorPopover';
 
 const styles = () => ({
   container: {
@@ -30,21 +32,24 @@ class IndicatorComponent extends Component {
     const { classes, indicator } = this.props;
     return (
       <div className={classes.container}>
-        <IndicatorHeader indicator={indicator} />
+        <StixDomainObjectHeader
+          stixDomainObject={indicator}
+          PopoverComponent={<IndicatorPopover />}
+          noAliases={true}
+        />
         <Grid
           container={true}
           spacing={3}
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview
-              stixDomainObject={indicator}
-              withoutMarking={true}
-              withPattern={true}
-            />
+            <IndicatorDetails indicator={indicator} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <IndicatorDetails indicator={indicator} />
+            <StixDomainObjectOverview
+              stixDomainObject={indicator}
+              withPattern={true}
+            />
           </Grid>
         </Grid>
         <Grid
@@ -80,6 +85,7 @@ class IndicatorComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={indicator.id}
+          defaultMarking={(indicator.objectMarking?.edges ?? []).map((edge) => edge.node)}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <IndicatorEdition indicatorId={indicator.id} />
@@ -123,7 +129,9 @@ const Indicator = createFragmentContainer(IndicatorComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }

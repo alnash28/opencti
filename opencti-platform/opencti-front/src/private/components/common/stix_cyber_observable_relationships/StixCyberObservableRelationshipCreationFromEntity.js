@@ -277,6 +277,15 @@ const stixCyberObservableRelationshipCreationFromEntityQuery = graphql`
         name
         description
       }
+      ... on DataComponent {
+        name
+      }
+      ... on DataSource {
+        name
+      }
+      ... on Case {
+        name
+      }
       ... on StixCyberObservable {
         observable_value
       }
@@ -568,7 +577,6 @@ class StixCyberObservableRelationshipCreationFromEntity extends Component {
           </SpeedDial>
           <StixDomainObjectCreation
             display={open}
-            contextual={true}
             inputValue={search}
             paginationKey="Pagination_stixCoreObjects"
             paginationOptions={paginationOptions}

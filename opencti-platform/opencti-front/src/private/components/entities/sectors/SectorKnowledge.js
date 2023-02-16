@@ -10,8 +10,6 @@ import StixDomainObjectKnowledge from '../../common/stix_domain_objects/StixDoma
 import StixCoreRelationship from '../../common/stix_core_relationships/StixCoreRelationship';
 import SectorPopover from './SectorPopover';
 import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
-import StixCoreObjectStixCyberObservables from '../../observations/stix_cyber_observables/StixCoreObjectStixCyberObservables';
-import EntityStixSightingRelationships from '../../events/stix_sighting_relationships/EntityStixSightingRelationships';
 import StixSightingRelationship from '../../events/stix_sighting_relationships/StixSightingRelationship';
 
 const styles = () => ({
@@ -28,6 +26,8 @@ class SectorKnowledgeComponent extends Component {
     return (
       <div className={classes.container}>
         <StixDomainObjectHeader
+          entityType={'Sector'}
+          disableSharing={true}
           stixDomainObject={sector}
           PopoverComponent={<SectorPopover />}
         />
@@ -67,27 +67,33 @@ class SectorKnowledgeComponent extends Component {
           />
           <Route
             exact
-            path="/dashboard/entities/sectors/:sectorId/knowledge/related"
+            path="/dashboard/entities/sectors/:sectorId/knowledge/threats"
             render={(routeProps) => (
               <EntityStixCoreRelationships
                 entityId={sector.id}
-                relationshipTypes={['related-to']}
-                targetStixDomainObjectTypes={[
+                relationshipTypes={['targets']}
+                isRelationReversed
+                entityLink={link}
+                stixCoreObjectTypes={[
+                  'Attack-Pattern',
                   'Threat-Actor',
                   'Intrusion-Set',
                   'Campaign',
                   'Incident',
                   'Malware',
                   'Tool',
-                  'Vulnerability',
-                  'Individual',
-                  'Organization',
-                  'Sector',
-                  'Region',
-                  'Country',
-                  'City',
-                  'Position',
                 ]}
+                {...routeProps}
+              />
+            )}
+          />
+          <Route
+            exact
+            path="/dashboard/entities/sectors/:sectorId/knowledge/related"
+            render={(routeProps) => (
+              <EntityStixCoreRelationships
+                entityId={sector.id}
+                relationshipTypes={['related-to']}
                 entityLink={link}
                 allDirections={true}
                 {...routeProps}
@@ -101,7 +107,7 @@ class SectorKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={sector.id}
                 relationshipTypes={['part-of']}
-                targetStixDomainObjectTypes={['Organization']}
+                stixCoreObjectTypes={['Organization']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -115,7 +121,7 @@ class SectorKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={sector.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Threat-Actor']}
+                stixCoreObjectTypes={['Threat-Actor']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -129,7 +135,7 @@ class SectorKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={sector.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Intrusion-Set']}
+                stixCoreObjectTypes={['Intrusion-Set']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -143,7 +149,7 @@ class SectorKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={sector.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Campaign']}
+                stixCoreObjectTypes={['Campaign']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -157,7 +163,7 @@ class SectorKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={sector.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Incident']}
+                stixCoreObjectTypes={['Incident']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -171,7 +177,7 @@ class SectorKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={sector.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Malware']}
+                stixCoreObjectTypes={['Malware']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -185,7 +191,7 @@ class SectorKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={sector.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Attack-Pattern']}
+                stixCoreObjectTypes={['Attack-Pattern']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -199,7 +205,7 @@ class SectorKnowledgeComponent extends Component {
               <EntityStixCoreRelationships
                 entityId={sector.id}
                 relationshipTypes={['targets']}
-                targetStixDomainObjectTypes={['Tool']}
+                stixCoreObjectTypes={['Tool']}
                 entityLink={link}
                 isRelationReversed={true}
                 {...routeProps}
@@ -210,23 +216,13 @@ class SectorKnowledgeComponent extends Component {
             exact
             path="/dashboard/entities/sectors/:sectorId/knowledge/observables"
             render={(routeProps) => (
-              <StixCoreObjectStixCyberObservables
-                stixCoreObjectId={sector.id}
-                stixCoreObjectLink={link}
-                noRightBar={true}
-                {...routeProps}
-              />
-            )}
-          />
-          <Route
-            exact
-            path="/dashboard/entities/sectors/:threatActorId/knowledge/sightings"
-            render={(routeProps) => (
-              <EntityStixSightingRelationships
+              <EntityStixCoreRelationships
                 entityId={sector.id}
+                relationshipTypes={['related-to']}
+                stixCoreObjectTypes={['Stix-Cyber-Observable']}
                 entityLink={link}
-                noRightBar={true}
-                isTo={true}
+                allDirections={true}
+                isRelationReversed={true}
                 {...routeProps}
               />
             )}

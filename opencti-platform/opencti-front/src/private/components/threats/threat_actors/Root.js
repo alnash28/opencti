@@ -30,7 +30,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -48,16 +48,13 @@ const threatActorQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
     connectorsForImport {
       ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
-    }
-    settings {
-      platform_enable_reference
     }
   }
 `;
@@ -82,7 +79,6 @@ class RootThreatActor extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { threatActorId },
       },
@@ -90,7 +86,7 @@ class RootThreatActor extends Component {
     const link = `/dashboard/threats/threat_actors/${threatActorId}/knowledge`;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <Route path="/dashboard/threats/threat_actors/:threatActorId/knowledge">
           <StixCoreObjectKnowledgeBar
             stixCoreObjectLink={link}
@@ -102,6 +98,8 @@ class RootThreatActor extends Component {
               'incidents',
               'malwares',
               'attack_patterns',
+              'channels',
+              'narratives',
               'tools',
               'vulnerabilities',
               'observables',
@@ -125,9 +123,6 @@ class RootThreatActor extends Component {
                         <ThreatActor
                           {...routeProps}
                           threatActor={props.threatActor}
-                          enableReferences={props.settings.platform_enable_reference?.includes(
-                            'Threat-Actor',
-                          )}
                         />
                       )}
                     />
@@ -155,11 +150,9 @@ class RootThreatActor extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Threat-Actor'}
                             stixDomainObject={props.threatActor}
                             PopoverComponent={<ThreatActorPopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Threat-Actor',
-                            )}
                           />
                           <StixCoreObjectOrStixCoreRelationshipContainers
                             {...routeProps}
@@ -176,9 +169,10 @@ class RootThreatActor extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Threat-Actor'}
                             stixDomainObject={props.threatActor}
                             PopoverComponent={<ThreatActorPopover />}
-                            variant="noaliases"
+                            disableSharing={true}
                           />
                           <StixDomainObjectIndicators
                             {...routeProps}
@@ -204,10 +198,8 @@ class RootThreatActor extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Threat-Actor'}
                             stixDomainObject={props.threatActor}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Threat-Actor',
-                            )}
                             PopoverComponent={<ThreatActorPopover />}
                           />
                           <FileManager
@@ -226,11 +218,9 @@ class RootThreatActor extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Threat-Actor'}
                             stixDomainObject={props.threatActor}
                             PopoverComponent={<ThreatActorPopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Threat-Actor',
-                            )}
                           />
                           <StixCoreObjectHistory
                             {...routeProps}
@@ -255,7 +245,6 @@ class RootThreatActor extends Component {
 RootThreatActor.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootThreatActor);

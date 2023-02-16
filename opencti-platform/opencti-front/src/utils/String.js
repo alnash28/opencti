@@ -1,4 +1,7 @@
 import * as R from 'ramda';
+import React from 'react';
+import Tooltip from '@mui/material/Tooltip';
+import { APP_BASE_PATH } from '../relay/environment';
 
 export const truncate = (str, limit) => {
   if (str === undefined || str === null || str.length <= limit) {
@@ -26,7 +29,10 @@ export const adaptFieldValue = (value) => {
 
 export const pascalize = (s) => s.replace(/(\w)(\w*)/g, (g0, g1, g2) => g1.toUpperCase() + g2.toLowerCase());
 
-export const convertStixType = (s) => {
+export const convertFromStixType = (s) => {
+  if (!s) {
+    return s;
+  }
   let type = pascalize(s);
   if (type.includes('Opencti')) {
     type = type.replaceAll('Opencti', 'OpenCTI');
@@ -38,6 +44,22 @@ export const convertStixType = (s) => {
     return 'StixFile';
   }
   return type;
+};
+
+export const convertToStixType = (type) => {
+  if (!type) {
+    return type;
+  }
+  if (type === 'StixFile') {
+    return 'file';
+  }
+  if (['Sector', 'Organization', 'Individual', 'System'].includes(type)) {
+    return 'identity';
+  }
+  if (['Region', 'Country', 'City', 'Position'].includes(type)) {
+    return 'location';
+  }
+  return type.toLowerCase();
 };
 
 export const isValidStixBundle = (bundle) => {
@@ -52,3 +74,39 @@ export const isValidStixBundle = (bundle) => {
 export const toB64 = (str) => window.btoa(unescape(encodeURIComponent(str)));
 
 export const fromB64 = (str) => decodeURIComponent(escape(window.atob(str)));
+
+export const uniqWithByFields = R.curry((fields, data) => R.uniqWith(R.allPass(R.map(R.eqProps)(fields)))(data));
+
+export const renderObservableValue = (observable) => {
+  switch (observable.entity_type) {
+    case 'IPv4-Addr':
+    case 'IPv6-Addr':
+      if ((observable.countries?.edges ?? []).length > 0) {
+        const country = R.head(observable.countries.edges).node;
+        const flag = R.head(
+          (country.x_opencti_aliases ?? []).filter((n) => n.length === 2),
+        );
+        if (flag) {
+          return (
+            <div>
+              <div style={{ float: 'left', paddingTop: 2 }}>
+                <Tooltip title={country.name}>
+                  <img
+                    style={{ width: 20 }}
+                    src={`${APP_BASE_PATH}/static/flags/4x3/${flag.toLowerCase()}.svg`}
+                    alt={country.name}
+                  />
+                </Tooltip>
+              </div>
+              <div style={{ float: 'left', marginLeft: 10 }}>
+                {observable.observable_value}
+              </div>
+            </div>
+          );
+        }
+      }
+      return observable.observable_value;
+    default:
+      return observable.observable_value;
+  }
+};

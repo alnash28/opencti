@@ -10,7 +10,8 @@ import CampaignEdition from './CampaignEdition';
 import CampaignPopover from './CampaignPopover';
 import StixCoreObjectOrStixCoreRelationshipLastReports from '../../analysis/reports/StixCoreObjectOrStixCoreRelationshipLastReports';
 import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
@@ -28,13 +29,13 @@ const styles = () => ({
 
 class CampaignComponent extends Component {
   render() {
-    const { classes, campaign, enableReferences } = this.props;
+    const { classes, campaign } = this.props;
     return (
       <div className={classes.container}>
         <StixDomainObjectHeader
+          entityType={'Campaign'}
           stixDomainObject={campaign}
           PopoverComponent={<CampaignPopover />}
-          enableReferences={enableReferences}
         />
         <Grid
           container={true}
@@ -42,10 +43,10 @@ class CampaignComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={campaign} />
+            <CampaignDetails campaign={campaign} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <CampaignDetails campaign={campaign} />
+            <StixDomainObjectOverview stixDomainObject={campaign} />
           </Grid>
         </Grid>
         <Grid
@@ -81,6 +82,7 @@ class CampaignComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={campaign.id}
+          defaultMarking={(campaign.objectMarking?.edges ?? []).map((edge) => edge.node)}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <CampaignEdition campaignId={campaign.id} />
@@ -125,7 +127,9 @@ const Campaign = createFragmentContainer(CampaignComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }

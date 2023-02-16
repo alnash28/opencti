@@ -1,12 +1,12 @@
-import * as R from 'ramda';
 import { ABSTRACT_STIX_CORE_RELATIONSHIP, buildRefRelationKey, schemaTypes } from './general';
 import {
-  RELATION_CREATED_BY, RELATION_EXTERNAL_REFERENCE,
-  RELATION_OBJECT,
+  RELATION_CREATED_BY,
+  RELATION_KILL_CHAIN_PHASE,
   RELATION_OBJECT_LABEL,
   RELATION_OBJECT_MARKING
 } from './stixMetaRelationship';
 
+// region Standard STIX core
 export const RELATION_DELIVERS = 'delivers';
 export const RELATION_TARGETS = 'targets';
 export const RELATION_USES = 'uses';
@@ -42,12 +42,20 @@ export const RELATION_DERIVED_FROM = 'derived-from';
 export const RELATION_DUPLICATE_OF = 'duplicate-of';
 export const RELATION_BELONGS_TO = 'belongs-to';
 export const RELATION_RESOLVES_TO = 'resolves-to';
+// endregion
+
+// region Extended relationships
 export const RELATION_PART_OF = 'part-of'; // Extension (OpenCTI)
 export const RELATION_COOPERATES_WITH = 'cooperates-with'; // Extension (OpenCTI)
 export const RELATION_PARTICIPATES_IN = 'participates-in'; // Extension (OpenCTI)
+export const RELATION_PUBLISHES = 'publishes'; // Extension (OpenCTI)
+export const RELATION_AMPLIFIES = 'amplifies'; // Extension (OpenCTI)
+export const RELATION_SUBNARRATIVE_OF = 'subnarrative-of'; // Extension (OpenCTI)
 export const RELATION_SUBTECHNIQUE_OF = 'subtechnique-of'; // Extension (MITRE)
 export const RELATION_REVOKED_BY = 'revoked-by'; // Extension (MITRE)
 export const RELATION_DETECTS = 'detects'; // Extension (MITRE)
+// endregion
+
 export const STIX_CORE_RELATIONSHIPS = [
   RELATION_DELIVERS,
   RELATION_TARGETS,
@@ -90,22 +98,24 @@ export const STIX_CORE_RELATIONSHIPS = [
   RELATION_BELONGS_TO,
   RELATION_RESOLVES_TO,
   RELATION_DETECTS,
+  RELATION_PUBLISHES,
+  RELATION_AMPLIFIES,
+  RELATION_SUBNARRATIVE_OF,
 ];
+
 schemaTypes.register(ABSTRACT_STIX_CORE_RELATIONSHIP, STIX_CORE_RELATIONSHIPS);
-export const isStixCoreRelationship = (type: string): boolean => R.includes(type, STIX_CORE_RELATIONSHIPS) || type === ABSTRACT_STIX_CORE_RELATIONSHIP;
-// endregion
+export const isStixCoreRelationship = (type: string): boolean => [...STIX_CORE_RELATIONSHIPS, ABSTRACT_STIX_CORE_RELATIONSHIP].includes(type);
 
 export const stixCoreRelationshipOptions = {
   StixCoreRelationshipsFilter: {
+    creator: 'creator_id',
     createdBy: buildRefRelationKey(RELATION_CREATED_BY),
     markedBy: buildRefRelationKey(RELATION_OBJECT_MARKING),
     labelledBy: buildRefRelationKey(RELATION_OBJECT_LABEL),
-    objectContains: buildRefRelationKey(RELATION_OBJECT),
-    containedBy: buildRefRelationKey(RELATION_OBJECT),
-    hasExternalReference: buildRefRelationKey(RELATION_EXTERNAL_REFERENCE),
+    killChainPhase: buildRefRelationKey(RELATION_KILL_CHAIN_PHASE),
   },
+  StixCoreRelationshipsOrdering: {}
 };
-
 export const stixCoreRelationshipsAttributes = [
   'internal_id',
   'standard_id',
@@ -136,4 +146,4 @@ export const stixCoreRelationshipsAttributes = [
   'x_opencti_workflow_id',
 ];
 schemaTypes.registerAttributes(ABSTRACT_STIX_CORE_RELATIONSHIP, stixCoreRelationshipsAttributes);
-R.map((type) => schemaTypes.registerAttributes(type, stixCoreRelationshipsAttributes), STIX_CORE_RELATIONSHIPS);
+STIX_CORE_RELATIONSHIPS.map((type) => schemaTypes.registerAttributes(type, stixCoreRelationshipsAttributes));

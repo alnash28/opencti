@@ -18,6 +18,10 @@ const styles = () => ({
     padding: 15,
     borderRadius: 6,
   },
+  avatar: {
+    width: 40,
+    height: 40,
+  },
 });
 
 class StixCoreObjectHistoryLinesComponent extends Component {
@@ -86,7 +90,7 @@ export const stixCoreObjectHistoryLinesQuery = graphql`
     $first: Int
     $orderBy: LogsOrdering
     $orderMode: OrderingMode
-    $filters: [LogsFiltering]
+    $filters: [LogsFiltering!]
     $filterMode: FilterMode
     $search: String
   ) {

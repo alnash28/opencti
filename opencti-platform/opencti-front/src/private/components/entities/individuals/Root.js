@@ -22,6 +22,7 @@ import {
   saveViewParameters,
 } from '../../../../utils/ListParameters';
 import StixCoreObjectKnowledgeBar from '../../common/stix_core_objects/StixCoreObjectKnowledgeBar';
+import EntityStixSightingRelationships from '../../events/stix_sighting_relationships/EntityStixSightingRelationships';
 
 const subscription = graphql`
   subscription RootIndividualsSubscription($id: ID!) {
@@ -33,7 +34,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -49,13 +50,13 @@ const individualQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
+    }
+    connectorsForImport {
+      ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
-    }
-    settings {
-      platform_enable_reference
     }
   }
 `;
@@ -107,7 +108,6 @@ class RootIndividual extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { individualId },
       },
@@ -116,7 +116,7 @@ class RootIndividual extends Component {
     const link = `/dashboard/entities/individuals/${individualId}/knowledge`;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <Route path="/dashboard/entities/individuals/:individualId/knowledge">
           {viewAs === 'knowledge' && (
             <StixCoreObjectKnowledgeBar
@@ -124,6 +124,7 @@ class RootIndividual extends Component {
               availableSections={[
                 'organizations',
                 'locations',
+                'threats',
                 'threat_actors',
                 'intrusion_sets',
                 'campaigns',
@@ -132,7 +133,6 @@ class RootIndividual extends Component {
                 'attack_patterns',
                 'tools',
                 'observables',
-                'sightings',
               ]}
             />
           )}
@@ -191,10 +191,11 @@ class RootIndividual extends Component {
                     />
                     <Route
                       exact
-                      path="/dashboard/entities/individuals/:individualId/files"
+                      path="/dashboard/entities/individuals/:individualId/sightings"
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            disableSharing={true}
                             stixDomainObject={props.individual}
                             PopoverComponent={<IndividualPopover />}
                             onViewAs={this.handleChangeViewAs.bind(this)}
@@ -202,10 +203,32 @@ class RootIndividual extends Component {
                               'Individual',
                             )}
                           />
+                          <EntityStixSightingRelationships
+                            entityId={props.individual.id}
+                            entityLink={link}
+                            noPadding={true}
+                            isTo={true}
+                            {...routeProps}
+                          />
+                        </React.Fragment>
+                      )}
+                    />
+                    <Route
+                      exact
+                      path="/dashboard/entities/individuals/:individualId/files"
+                      render={(routeProps) => (
+                        <React.Fragment>
+                          <StixDomainObjectHeader
+                            entityType={'Individual'}
+                            disableSharing={true}
+                            stixDomainObject={props.individual}
+                            PopoverComponent={<IndividualPopover />}
+                            onViewAs={this.handleChangeViewAs.bind(this)}
+                          />
                           <FileManager
                             {...routeProps}
                             id={individualId}
-                            connectorsImport={[]}
+                            connectorsImport={props.connectorsForImport}
                             connectorsExport={props.connectorsForExport}
                             entity={props.individual}
                           />
@@ -218,6 +241,8 @@ class RootIndividual extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Individual'}
+                            disableSharing={true}
                             stixDomainObject={props.individual}
                             PopoverComponent={<IndividualPopover />}
                           />
@@ -244,7 +269,6 @@ class RootIndividual extends Component {
 RootIndividual.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootIndividual);

@@ -7,11 +7,7 @@ import CardContent from '@mui/material/CardContent';
 import Grid from '@mui/material/Grid';
 import withStyles from '@mui/styles/withStyles';
 import { HexagonMultipleOutline, ShieldSearch } from 'mdi-material-ui';
-import {
-  DescriptionOutlined,
-  DeviceHubOutlined,
-  SettingsOutlined,
-} from '@mui/icons-material';
+import { DescriptionOutlined, DeviceHubOutlined, SettingsOutlined } from '@mui/icons-material';
 import Tabs from '@mui/material/Tabs';
 import Tab from '@mui/material/Tab';
 import * as R from 'ramda';
@@ -30,19 +26,21 @@ import inject18n from '../../../../components/i18n';
 import ItemNumberDifference from '../../../../components/ItemNumberDifference';
 import { resolveLink } from '../../../../utils/Entity';
 import StixCoreObjectReportsHorizontalBars from '../../analysis/reports/StixCoreObjectReportsHorizontalBars';
-import StixCoreObjectStixCoreRelationshipsCloud from '../stix_core_relationships/StixCoreObjectStixCoreRelationshipsCloud';
+import StixCoreObjectStixCoreRelationshipsCloud
+  from '../stix_core_relationships/StixCoreObjectStixCoreRelationshipsCloud';
 import StixDomainObjectGlobalKillChain from './StixDomainObjectGlobalKillChain';
 import StixDomainObjectTimeline from './StixDomainObjectTimeline';
 import Loader from '../../../../components/Loader';
 import { stixDomainObjectThreatKnowledgeStixRelationshipsQuery } from './StixDomainObjectThreatKnowledgeQuery';
 import ExportButtons from '../../../../components/ExportButtons';
-import Filters, { isUniqFilter } from '../lists/Filters';
+import { isUniqFilter } from '../../../../utils/filters/filtersUtils';
 import {
   buildViewParamsFromUrlAndStorage,
   convertFilters,
   saveViewParameters,
 } from '../../../../utils/ListParameters';
 import { truncate } from '../../../../utils/String';
+import Filters from '../lists/Filters';
 
 const styles = (theme) => ({
   container: {
@@ -119,14 +117,22 @@ const stixDomainObjectThreatKnowledgeReportsNumberQuery = graphql`
 
 const stixDomainObjectThreatKnowledgeStixCoreRelationshipsNumberQuery = graphql`
   query StixDomainObjectThreatKnowledgeStixCoreRelationshipsNumberQuery(
-    $type: String
-    $fromId: String
+    $elementId: [String]
+    $elementWithTargetTypes: [String]
+    $relationship_type: [String]
+    $fromId: [String]
+    $fromTypes: [String]
+    $toId: [String]
     $toTypes: [String]
     $endDate: DateTime
   ) {
     stixCoreRelationshipsNumber(
-      type: $type
+      elementId: $elementId
+      elementWithTargetTypes: $elementWithTargetTypes
+      relationship_type: $relationship_type
       fromId: $fromId
+      fromTypes: $fromTypes
+      toId: $toId
       toTypes: $toTypes
       endDate: $endDate
     ) {
@@ -344,8 +350,8 @@ class StixDomainObjectThreatKnowledge extends Component {
                   stixDomainObjectThreatKnowledgeStixCoreRelationshipsNumberQuery
                 }
                 variables={{
-                  fromId: stixDomainObjectId,
-                  toTypes: displayObservablesStats
+                  toId: stixDomainObjectId,
+                  fromTypes: displayObservablesStats
                     ? ['Stix-Cyber-Observable']
                     : 'Indicator',
                   endDate: monthsAgo(1),
@@ -399,7 +405,7 @@ class StixDomainObjectThreatKnowledge extends Component {
                   stixDomainObjectThreatKnowledgeStixCoreRelationshipsNumberQuery
                 }
                 variables={{
-                  fromId: stixDomainObjectId,
+                  elementId: stixDomainObjectId,
                   endDate: monthsAgo(1),
                 }}
                 render={({ props }) => {
@@ -487,6 +493,7 @@ class StixDomainObjectThreatKnowledge extends Component {
                   t(`filter_${currentFilter[0]}`),
                   20,
                 )}`;
+                const localFilterMode = currentFilter[0].endsWith('not_eq') ? t('AND') : t('OR');
                 const values = (
                   <span>
                     {R.map(
@@ -496,7 +503,7 @@ class StixDomainObjectThreatKnowledge extends Component {
                             ? truncate(o.value, 15)
                             : t('No label')}{' '}
                           {R.last(currentFilter[1]).value !== o.value && (
-                            <code>OR</code>
+                            <code>{localFilterMode}</code>
                           )}{' '}
                         </span>
                       ),

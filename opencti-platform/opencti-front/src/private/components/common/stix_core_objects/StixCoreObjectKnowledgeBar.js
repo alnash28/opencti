@@ -13,7 +13,6 @@ import {
   VisibilityOutlined,
   WifiTetheringOutlined,
   BugReportOutlined,
-  PublicOutlined,
   AccountBalanceOutlined,
   DomainOutlined,
   FlagOutlined,
@@ -21,6 +20,10 @@ import {
   LinkOutlined,
   WebAssetOutlined,
   TerminalOutlined,
+  SurroundSoundOutlined,
+  PublicOutlined,
+  MapOutlined,
+  SpeakerNotesOutlined,
 } from '@mui/icons-material';
 import {
   Gauge,
@@ -36,6 +39,9 @@ import {
   SourceFork,
   CityVariantOutline,
   ServerNetwork,
+  FlaskOutline,
+  LaptopAccount,
+  GlobeModel,
 } from 'mdi-material-ui';
 import inject18n from '../../../../components/i18n';
 
@@ -79,18 +85,6 @@ class StixCoreObjectKnowledgeBar extends Component {
             </ListItemIcon>
             <ListItemText primary={t('Overview')} />
           </MenuItem>
-          <MenuItem
-            component={Link}
-            to={`${stixCoreObjectLink}/related`}
-            selected={location.pathname === `${stixCoreObjectLink}/related`}
-            dense={false}
-            classes={{ root: classes.item }}
-          >
-            <ListItemIcon style={{ minWidth: 35 }}>
-              <LinkOutlined />
-            </ListItemIcon>
-            <ListItemText primary={t('Related entities')} />
-          </MenuItem>
           {isInAvailableSection(['sectors', 'organizations', 'individuals']) ? (
             <MenuList
               style={{ paddingBottom: 0 }}
@@ -115,6 +109,52 @@ class StixCoreObjectKnowledgeBar extends Component {
                     <DomainOutlined />
                   </ListItemIcon>
                   <ListItemText primary={t('Sectors')} />
+                </MenuItem>
+              )}
+              {includes('regions', availableSections) && (
+                <MenuItem
+                  component={Link}
+                  to={`${stixCoreObjectLink}/regions`}
+                  selected={
+                    location.pathname === `${stixCoreObjectLink}/regions`
+                  }
+                  dense={false}
+                  classes={{ root: classes.item }}
+                >
+                  <ListItemIcon style={{ minWidth: 35 }}>
+                    <PublicOutlined />
+                  </ListItemIcon>
+                  <ListItemText primary={t('Regions')} />
+                </MenuItem>
+              )}
+              {includes('countries', availableSections) && (
+                <MenuItem
+                  component={Link}
+                  to={`${stixCoreObjectLink}/countries`}
+                  selected={
+                    location.pathname === `${stixCoreObjectLink}/countries`
+                  }
+                  dense={false}
+                  classes={{ root: classes.item }}
+                >
+                  <ListItemIcon style={{ minWidth: 35 }}>
+                    <FlagOutlined />
+                  </ListItemIcon>
+                  <ListItemText primary={t('Countries')} />
+                </MenuItem>
+              )}
+              {includes('areas', availableSections) && (
+                <MenuItem
+                  component={Link}
+                  to={`${stixCoreObjectLink}/areas`}
+                  selected={location.pathname === `${stixCoreObjectLink}/areas`}
+                  dense={false}
+                  classes={{ root: classes.item }}
+                >
+                  <ListItemIcon style={{ minWidth: 35 }}>
+                    <MapOutlined />
+                  </ListItemIcon>
+                  <ListItemText primary={t('Areas')} />
                 </MenuItem>
               )}
               {includes('cities', availableSections) && (
@@ -165,22 +205,6 @@ class StixCoreObjectKnowledgeBar extends Component {
                   <ListItemText primary={t('Individuals')} />
                 </MenuItem>
               )}
-              {includes('countries', availableSections) && (
-                <MenuItem
-                  component={Link}
-                  to={`${stixCoreObjectLink}/countries`}
-                  selected={
-                    location.pathname === `${stixCoreObjectLink}/countries`
-                  }
-                  dense={false}
-                  classes={{ root: classes.item }}
-                >
-                  <ListItemIcon style={{ minWidth: 35 }}>
-                    <FlagOutlined />
-                  </ListItemIcon>
-                  <ListItemText primary={t('Countries')} />
-                </MenuItem>
-              )}
               {includes('locations', availableSections) && (
                 <MenuItem
                   component={Link}
@@ -192,7 +216,7 @@ class StixCoreObjectKnowledgeBar extends Component {
                   classes={{ root: classes.item }}
                 >
                   <ListItemIcon style={{ minWidth: 35 }}>
-                    <FlagOutlined />
+                    <GlobeModel />
                   </ListItemIcon>
                   <ListItemText primary={t('Locations')} />
                 </MenuItem>
@@ -232,6 +256,52 @@ class StixCoreObjectKnowledgeBar extends Component {
                   <ListItemText primary={t('Sectors')} />
                 </MenuItem>
               )}
+              {includes('regions', availableSections) && (
+                <MenuItem
+                  component={Link}
+                  to={`${stixCoreObjectLink}/regions`}
+                  selected={
+                    location.pathname === `${stixCoreObjectLink}/regions`
+                  }
+                  dense={false}
+                  classes={{ root: classes.item }}
+                >
+                  <ListItemIcon style={{ minWidth: 35 }}>
+                    <PublicOutlined />
+                  </ListItemIcon>
+                  <ListItemText primary={t('Regions')} />
+                </MenuItem>
+              )}
+              {includes('countries', availableSections) && (
+                <MenuItem
+                  component={Link}
+                  to={`${stixCoreObjectLink}/countries`}
+                  selected={
+                    location.pathname === `${stixCoreObjectLink}/countries`
+                  }
+                  dense={false}
+                  classes={{ root: classes.item }}
+                >
+                  <ListItemIcon style={{ minWidth: 35 }}>
+                    <FlagOutlined />
+                  </ListItemIcon>
+                  <ListItemText primary={t('Countries')} />
+                </MenuItem>
+              )}
+              {includes('areas', availableSections) && (
+                <MenuItem
+                  component={Link}
+                  to={`${stixCoreObjectLink}/areas`}
+                  selected={location.pathname === `${stixCoreObjectLink}/areas`}
+                  dense={false}
+                  classes={{ root: classes.item }}
+                >
+                  <ListItemIcon style={{ minWidth: 35 }}>
+                    <MapOutlined />
+                  </ListItemIcon>
+                  <ListItemText primary={t('Areas')} />
+                </MenuItem>
+              )}
               {includes('cities', availableSections) && (
                 <MenuItem
                   component={Link}
@@ -246,6 +316,22 @@ class StixCoreObjectKnowledgeBar extends Component {
                     <CityVariantOutline />
                   </ListItemIcon>
                   <ListItemText primary={t('Cities')} />
+                </MenuItem>
+              )}
+              {includes('locations', availableSections) && (
+                <MenuItem
+                  component={Link}
+                  to={`${stixCoreObjectLink}/locations`}
+                  selected={
+                    location.pathname === `${stixCoreObjectLink}/locations`
+                  }
+                  dense={false}
+                  classes={{ root: classes.item }}
+                >
+                  <ListItemIcon style={{ minWidth: 35 }}>
+                    <GlobeModel />
+                  </ListItemIcon>
+                  <ListItemText primary={t('Locations')} />
                 </MenuItem>
               )}
               {includes('organizations', availableSections) && (
@@ -280,38 +366,6 @@ class StixCoreObjectKnowledgeBar extends Component {
                   <ListItemText primary={t('Individuals')} />
                 </MenuItem>
               )}
-              {includes('countries', availableSections) && (
-                <MenuItem
-                  component={Link}
-                  to={`${stixCoreObjectLink}/countries`}
-                  selected={
-                    location.pathname === `${stixCoreObjectLink}/countries`
-                  }
-                  dense={false}
-                  classes={{ root: classes.item }}
-                >
-                  <ListItemIcon style={{ minWidth: 35 }}>
-                    <FlagOutlined />
-                  </ListItemIcon>
-                  <ListItemText primary={t('Countries')} />
-                </MenuItem>
-              )}
-              {includes('locations', availableSections) && (
-                <MenuItem
-                  component={Link}
-                  to={`${stixCoreObjectLink}/locations`}
-                  selected={
-                    location.pathname === `${stixCoreObjectLink}/locations`
-                  }
-                  dense={false}
-                  classes={{ root: classes.item }}
-                >
-                  <ListItemIcon style={{ minWidth: 35 }}>
-                    <FlagOutlined />
-                  </ListItemIcon>
-                  <ListItemText primary={t('Locations')} />
-                </MenuItem>
-              )}
               {includes('used_tools', availableSections) && (
                 <MenuItem
                   component={Link}
@@ -332,6 +386,7 @@ class StixCoreObjectKnowledgeBar extends Component {
           )}
         </MenuList>
         {isInAvailableSection([
+          'targets',
           'attribution',
           'victimology',
           'intrusion_sets',
@@ -346,6 +401,20 @@ class StixCoreObjectKnowledgeBar extends Component {
               </ListSubheader>
             }
           >
+            {includes('threats', availableSections) && (
+              <MenuItem
+                component={Link}
+                to={`${stixCoreObjectLink}/threats`}
+                selected={location.pathname === `${stixCoreObjectLink}/threats`}
+                dense={false}
+                classes={{ root: classes.item }}
+              >
+                <ListItemIcon style={{ minWidth: 35 }}>
+                  <FlaskOutline />
+                </ListItemIcon>
+                <ListItemText primary={t('All threats')} />
+              </MenuItem>
+            )}
             {includes('attribution', availableSections) && (
               <MenuItem
                 component={Link}
@@ -389,7 +458,7 @@ class StixCoreObjectKnowledgeBar extends Component {
                 classes={{ root: classes.item }}
               >
                 <ListItemIcon style={{ minWidth: 35 }}>
-                  <PublicOutlined />
+                  <LaptopAccount />
                 </ListItemIcon>
                 <ListItemText primary={t('Threat actors')} />
               </MenuItem>
@@ -432,10 +501,10 @@ class StixCoreObjectKnowledgeBar extends Component {
           )}
         {isInAvailableSection([
           'variants',
-          'attack_patterns',
           'malwares',
           'tools',
           'vulnerabilities',
+          'channels',
         ]) && (
           <MenuList
             style={{ paddingBottom: 0 }}
@@ -462,22 +531,6 @@ class StixCoreObjectKnowledgeBar extends Component {
                 <ListItemText primary={t('Variants')} />
               </MenuItem>
             )}
-            {includes('attack_patterns', availableSections) && (
-              <MenuItem
-                component={Link}
-                to={`${stixCoreObjectLink}/attack_patterns`}
-                selected={
-                  location.pathname === `${stixCoreObjectLink}/attack_patterns`
-                }
-                dense={false}
-                classes={{ root: classes.item }}
-              >
-                <ListItemIcon style={{ minWidth: 35 }}>
-                  <LockPattern />
-                </ListItemIcon>
-                <ListItemText primary={t('Attack patterns')} />
-              </MenuItem>
-            )}
             {includes('malwares', availableSections) && (
               <MenuItem
                 component={Link}
@@ -492,6 +545,22 @@ class StixCoreObjectKnowledgeBar extends Component {
                   <Biohazard />
                 </ListItemIcon>
                 <ListItemText primary={t('Malwares')} />
+              </MenuItem>
+            )}
+            {includes('channels', availableSections) && (
+              <MenuItem
+                component={Link}
+                to={`${stixCoreObjectLink}/channels`}
+                selected={
+                  location.pathname === `${stixCoreObjectLink}/channels`
+                }
+                dense={false}
+                classes={{ root: classes.item }}
+              >
+                <ListItemIcon style={{ minWidth: 35 }}>
+                  <SurroundSoundOutlined />
+                </ListItemIcon>
+                <ListItemText primary={t('Channels')} />
               </MenuItem>
             )}
             {includes('tools', availableSections) && (
@@ -526,7 +595,51 @@ class StixCoreObjectKnowledgeBar extends Component {
             )}
           </MenuList>
         )}
-        {isInAvailableSection(['observables', 'indicators', 'observables']) ? (
+        {isInAvailableSection(['attack_patterns', 'narratives']) && (
+          <MenuList
+            style={{ paddingBottom: 0 }}
+            component="nav"
+            subheader={
+              <ListSubheader style={{ height: 35 }}>
+                {t('Techniques')}
+              </ListSubheader>
+            }
+          >
+            {includes('attack_patterns', availableSections) && (
+              <MenuItem
+                component={Link}
+                to={`${stixCoreObjectLink}/attack_patterns`}
+                selected={
+                  location.pathname === `${stixCoreObjectLink}/attack_patterns`
+                }
+                dense={false}
+                classes={{ root: classes.item }}
+              >
+                <ListItemIcon style={{ minWidth: 35 }}>
+                  <LockPattern />
+                </ListItemIcon>
+                <ListItemText primary={t('Attack patterns')} />
+              </MenuItem>
+            )}
+            {includes('narratives', availableSections) && (
+              <MenuItem
+                component={Link}
+                to={`${stixCoreObjectLink}/narratives`}
+                selected={
+                  location.pathname === `${stixCoreObjectLink}/narratives`
+                }
+                dense={false}
+                classes={{ root: classes.item }}
+              >
+                <ListItemIcon style={{ minWidth: 35 }}>
+                  <SpeakerNotesOutlined />
+                </ListItemIcon>
+                <ListItemText primary={t('Narratives')} />
+              </MenuItem>
+            )}
+          </MenuList>
+        )}
+        {isInAvailableSection(['observables', 'indicators', 'observables']) && (
           <MenuList
             style={{ paddingBottom: 0 }}
             component="nav"
@@ -536,7 +649,7 @@ class StixCoreObjectKnowledgeBar extends Component {
               </ListSubheader>
             }
           >
-            {includes('observables', availableSections) ? (
+            {includes('observables', availableSections) && (
               <MenuItem
                 component={Link}
                 to={`${stixCoreObjectLink}/observables`}
@@ -551,10 +664,8 @@ class StixCoreObjectKnowledgeBar extends Component {
                 </ListItemIcon>
                 <ListItemText primary={t('Observables')} />
               </MenuItem>
-            ) : (
-              ''
             )}
-            {includes('indicators', availableSections) ? (
+            {includes('indicators', availableSections) && (
               <MenuItem
                 component={Link}
                 to={`${stixCoreObjectLink}/indicators`}
@@ -569,10 +680,8 @@ class StixCoreObjectKnowledgeBar extends Component {
                 </ListItemIcon>
                 <ListItemText primary={t('Indicators')} />
               </MenuItem>
-            ) : (
-              ''
             )}
-            {includes('infrastructures', availableSections) ? (
+            {includes('infrastructures', availableSections) && (
               <MenuItem
                 component={Link}
                 to={`${stixCoreObjectLink}/infrastructures`}
@@ -587,14 +696,10 @@ class StixCoreObjectKnowledgeBar extends Component {
                 </ListItemIcon>
                 <ListItemText primary={t('Infrastructures')} />
               </MenuItem>
-            ) : (
-              ''
             )}
           </MenuList>
-        ) : (
-          ''
         )}
-        {isInAvailableSection(['incidents', 'observed_data', 'sightings']) ? (
+        {isInAvailableSection(['incidents', 'observed_data', 'sightings']) && (
           <MenuList
             style={{ paddingBottom: 0 }}
             component="nav"
@@ -604,7 +709,7 @@ class StixCoreObjectKnowledgeBar extends Component {
               </ListSubheader>
             }
           >
-            {includes('incidents', availableSections) ? (
+            {includes('incidents', availableSections) && (
               <MenuItem
                 component={Link}
                 to={`${stixCoreObjectLink}/incidents`}
@@ -619,10 +724,8 @@ class StixCoreObjectKnowledgeBar extends Component {
                 </ListItemIcon>
                 <ListItemText primary={t('Incidents')} />
               </MenuItem>
-            ) : (
-              ''
             )}
-            {includes('observed_data', availableSections) ? (
+            {includes('observed_data', availableSections) && (
               <MenuItem
                 component={Link}
                 to={`${stixCoreObjectLink}/observed_data`}
@@ -637,10 +740,8 @@ class StixCoreObjectKnowledgeBar extends Component {
                 </ListItemIcon>
                 <ListItemText primary={t('Observed data')} />
               </MenuItem>
-            ) : (
-              ''
             )}
-            {includes('sightings', availableSections) ? (
+            {includes('sightings', availableSections) && (
               <MenuItem
                 component={Link}
                 to={`${stixCoreObjectLink}/sightings`}
@@ -655,13 +756,29 @@ class StixCoreObjectKnowledgeBar extends Component {
                 </ListItemIcon>
                 <ListItemText primary={t('Sightings')} />
               </MenuItem>
-            ) : (
-              ''
             )}
           </MenuList>
-        ) : (
-          ''
         )}
+        <MenuList
+          style={{ paddingBottom: 0 }}
+          component="nav"
+          subheader={
+            <ListSubheader style={{ height: 35 }}>{t('Other')}</ListSubheader>
+          }
+        >
+          <MenuItem
+            component={Link}
+            to={`${stixCoreObjectLink}/related`}
+            selected={location.pathname === `${stixCoreObjectLink}/related`}
+            dense={false}
+            classes={{ root: classes.item }}
+          >
+            <ListItemIcon style={{ minWidth: 35 }}>
+              <LinkOutlined />
+            </ListItemIcon>
+            <ListItemText primary={t('Related entities')} />
+          </MenuItem>
+        </MenuList>
       </Drawer>
     );
   }

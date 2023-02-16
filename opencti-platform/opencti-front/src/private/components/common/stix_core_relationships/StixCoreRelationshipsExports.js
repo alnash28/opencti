@@ -17,34 +17,28 @@ Transition.displayName = 'TransitionSlide';
 const styles = (theme) => ({
   drawerPaper: {
     minHeight: '100vh',
-    width: 310,
-    padding: '0 0 20px 0',
-    overflowX: 'hidden',
-    zIndex: 1200,
+    width: '50%',
+    position: 'fixed',
+    transition: theme.transitions.create('width', {
+      easing: theme.transitions.easing.sharp,
+      duration: theme.transitions.duration.enteringScreen,
+    }),
+    padding: 0,
   },
-  toolbar: theme.mixins.toolbar,
 });
 
 class StixCoreRelationshipsExports extends Component {
   render() {
-    const {
-      classes,
-      paginationOptions,
-      open,
-      handleToggle,
-      context,
-    } = this.props;
+    const { classes, paginationOptions, open, handleToggle, context } = this.props;
     return (
       <Drawer
-        variant="persistent"
         open={open}
         anchor="right"
-        elevation={1}
         sx={{ zIndex: 1202 }}
+        elevation={1}
         classes={{ paper: classes.drawerPaper }}
         onClose={handleToggle.bind(this)}
       >
-        <div className={classes.toolbar} />
         <QueryRenderer
           query={stixCoreRelationshipsExportsContentQuery}
           variables={{ count: 25, type: 'stix-core-relationship', context }}
@@ -53,7 +47,7 @@ class StixCoreRelationshipsExports extends Component {
               handleToggle={handleToggle.bind(this)}
               data={props}
               paginationOptions={paginationOptions}
-              exportEntityType='stix-core-relationship'
+              exportEntityType="stix-core-relationship"
               isOpen={open}
               context={context}
             />

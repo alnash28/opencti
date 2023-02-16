@@ -5,36 +5,44 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuid } from 'uuid';
 import { delEditContext, delUserContext, notify, setEditContext } from '../database/redis';
 import { AuthenticationFailure, ForbiddenAccess, FunctionalError } from '../config/errors';
-import { BUS_TOPICS, logApp, logAudit, OPENCTI_SESSION } from '../config/conf';
+import { BUS_TOPICS, logApp, logAudit, OPENCTI_SESSION, PLATFORM_VERSION } from '../config/conf';
 import {
   batchListThroughGetTo,
   createEntity,
   createRelation,
   deleteElementById,
   deleteRelationsByFromAndTo,
+  listThroughGetFrom,
   listThroughGetTo,
   patchAttribute,
-  storeLoadById,
   updateAttribute,
 } from '../database/middleware';
-import { listEntities } from '../database/middleware-loader';
-import { ENTITY_TYPE_CAPABILITY, ENTITY_TYPE_GROUP, ENTITY_TYPE_ROLE, ENTITY_TYPE_USER, } from '../schema/internalObject';
+import { listEntities, storeLoadById } from '../database/middleware-loader';
+import {
+  ENTITY_TYPE_CAPABILITY,
+  ENTITY_TYPE_GROUP,
+  ENTITY_TYPE_ROLE,
+  ENTITY_TYPE_SETTINGS,
+  ENTITY_TYPE_USER,
+} from '../schema/internalObject';
 import {
   isInternalRelationship,
   RELATION_ACCESSES_TO,
   RELATION_HAS_CAPABILITY,
   RELATION_HAS_ROLE,
   RELATION_MEMBER_OF,
+  RELATION_PARTICIPATE_TO,
 } from '../schema/internalRelationship';
-import { ABSTRACT_INTERNAL_RELATIONSHIP, OPENCTI_ADMIN_UUID, OPENCTI_SYSTEM_UUID } from '../schema/general';
+import { ABSTRACT_INTERNAL_RELATIONSHIP, OPENCTI_ADMIN_UUID } from '../schema/general';
 import { findAll as allMarkings } from './markingDefinition';
 import { findAll as findGroups } from './group';
 import { generateStandardId } from '../schema/identifier';
-import { elLoadBy } from '../database/engine';
+import { elFindByIds, elLoadBy } from '../database/engine';
 import { now } from '../utils/format';
-import { applicationSession } from '../database/session';
+import { findSessionsForUsers, killUserSessions, markSessionForRefresh } from '../database/session';
 import {
   convertRelationToAction,
+  IMPERSONATE_ACTION,
   LOGIN_ACTION,
   LOGOUT_ACTION,
   ROLE_DELETION,
@@ -42,18 +50,43 @@ import {
   USER_DELETION,
 } from '../config/audit';
 import { buildPagination, isEmptyField, isNotEmptyField } from '../database/utils';
-import { BYPASS, SYSTEM_USER } from '../utils/access';
+import {
+  BYPASS,
+  executionContext,
+  INTERNAL_USERS,
+  isBypassUser,
+  isUserHasCapability,
+  KNOWLEDGE_ORGANIZATION_RESTRICT,
+  SETTINGS_SET_ACCESSES,
+  SYSTEM_USER
+} from '../utils/access';
 import { ENTITY_TYPE_MARKING_DEFINITION } from '../schema/stixMetaObject';
+import { ENTITY_TYPE_IDENTITY_INDIVIDUAL, ENTITY_TYPE_IDENTITY_ORGANIZATION } from '../schema/stixDomainObject';
+import { getEntityFromCache } from '../database/cache';
 
 const BEARER = 'Bearer ';
 const BASIC = 'Basic ';
+const AUTH_BEARER = 'Bearer';
+const AUTH_BASIC = 'BasicAuth';
 export const STREAMAPI = 'STREAMAPI';
 export const TAXIIAPI = 'TAXIIAPI';
 export const ROLE_DEFAULT = 'Default';
+const PLATFORM_ORGANIZATION = 'settings_platform_organization';
+
+const roleSessionRefresh = async (context, user, roleId) => {
+  const members = await listThroughGetFrom(context, user, [roleId], RELATION_HAS_ROLE, ENTITY_TYPE_USER);
+  const sessions = await findSessionsForUsers(members.map((e) => e.internal_id));
+  await Promise.all(sessions.map((s) => markSessionForRefresh(s.id)));
+};
+
+export const userSessionRefresh = async (userId) => {
+  const sessions = await findSessionsForUsers([userId]);
+  await Promise.all(sessions.map((s) => markSessionForRefresh(s.id)));
+};
 
 export const userWithOrigin = (req, user) => {
   // /!\ This metadata information is used in different ways
-  // - In audit logs to identified the user
+  // - In audit logs to identify the user
   // - In stream message to also identifier the user
   // - In logging system to know the level of the error message
   const origin = {
@@ -91,21 +124,33 @@ const extractTokenFromBasicAuth = async (authorization) => {
   return null;
 };
 
-export const findById = async (user, userId) => {
-  const data = await storeLoadById(user, userId, ENTITY_TYPE_USER);
-  return data ? R.dissoc('password', data) : data;
+export const findById = async (context, user, userId) => {
+  const data = await storeLoadById(context, user, userId, ENTITY_TYPE_USER);
+  const withoutPassword = data ? R.dissoc('password', data) : data;
+  return buildCompleteUser(context, withoutPassword);
 };
 
-export const findAll = (user, args) => {
-  return listEntities(user, [ENTITY_TYPE_USER], args);
+export const findAll = (context, user, args) => {
+  return listEntities(context, user, [ENTITY_TYPE_USER], args);
 };
 
-export const batchGroups = async (user, userId, opts = {}) => {
-  return batchListThroughGetTo(user, userId, RELATION_MEMBER_OF, ENTITY_TYPE_GROUP, opts);
+export const batchGroups = async (context, user, userId, opts = {}) => {
+  return batchListThroughGetTo(context, user, userId, RELATION_MEMBER_OF, ENTITY_TYPE_GROUP, opts);
 };
 
-export const batchRoles = async (user, userId) => {
-  return batchListThroughGetTo(user, userId, RELATION_HAS_ROLE, ENTITY_TYPE_ROLE, { paginate: false });
+export const batchCreators = async (context, user, userIds) => {
+  const internalUserIds = Object.keys(INTERNAL_USERS);
+  const userToFinds = R.uniq(userIds.filter((u) => isNotEmptyField(u)).filter((u) => !internalUserIds.includes(u)));
+  const users = await elFindByIds(context, user, userToFinds, { toMap: true });
+  return userIds.map((id) => INTERNAL_USERS[id] || users[id] || SYSTEM_USER);
+};
+
+export const batchOrganizations = async (context, user, userId, opts = {}) => {
+  return batchListThroughGetTo(context, user, userId, RELATION_PARTICIPATE_TO, ENTITY_TYPE_IDENTITY_ORGANIZATION, opts);
+};
+
+export const batchRoles = async (context, user, userId) => {
+  return batchListThroughGetTo(context, user, userId, RELATION_HAS_ROLE, ENTITY_TYPE_ROLE, { paginate: false });
 };
 
 export const computeAvailableMarkings = (markings, all) => {
@@ -125,153 +170,110 @@ export const computeAvailableMarkings = (markings, all) => {
   return R.uniqBy((m) => m.id, computedMarkings);
 };
 
-export const getUserAndGlobalMarkings = async (userId, capabilities) => {
-  const userGroups = await listThroughGetTo(SYSTEM_USER, userId, RELATION_MEMBER_OF, ENTITY_TYPE_GROUP);
+const getUserAndGlobalMarkings = async (context, userId, userGroups, capabilities) => {
   const groupIds = userGroups.map((r) => r.id);
   const userCapabilities = map((c) => c.name, capabilities);
   const shouldBypass = userCapabilities.includes(BYPASS) || userId === OPENCTI_ADMIN_UUID;
-  const allMarkingsPromise = allMarkings(SYSTEM_USER).then((data) => R.map((i) => i.node, data.edges));
+  const allMarkingsPromise = allMarkings(context, SYSTEM_USER).then((data) => R.map((i) => i.node, data.edges));
   let userMarkingsPromise;
   if (shouldBypass) {
     userMarkingsPromise = allMarkingsPromise;
   } else {
-    userMarkingsPromise = listThroughGetTo(SYSTEM_USER, groupIds, RELATION_ACCESSES_TO, ENTITY_TYPE_MARKING_DEFINITION);
+    userMarkingsPromise = listThroughGetTo(context, SYSTEM_USER, groupIds, RELATION_ACCESSES_TO, ENTITY_TYPE_MARKING_DEFINITION);
   }
   const [userMarkings, markings] = await Promise.all([userMarkingsPromise, allMarkingsPromise]);
   const computedMarkings = computeAvailableMarkings(userMarkings, markings);
   return { user: computedMarkings, all: markings };
 };
 
-export const getMarkings = async (userId, capabilities) => {
-  const marking = await getUserAndGlobalMarkings(userId, capabilities);
-  return marking.user;
-};
-
-export const getCapabilities = async (userId) => {
-  const roles = await listThroughGetTo(SYSTEM_USER, userId, RELATION_HAS_ROLE, ENTITY_TYPE_ROLE);
+export const getCapabilities = async (context, userId, isUserPlatform) => {
+  const roles = await listThroughGetTo(context, SYSTEM_USER, userId, RELATION_HAS_ROLE, ENTITY_TYPE_ROLE);
   const roleIds = roles.map((r) => r.id);
-  const capabilities = await listThroughGetTo(SYSTEM_USER, roleIds, RELATION_HAS_CAPABILITY, ENTITY_TYPE_CAPABILITY);
+  const capabilities = await listThroughGetTo(context, SYSTEM_USER, roleIds, RELATION_HAS_CAPABILITY, ENTITY_TYPE_CAPABILITY);
   if (userId === OPENCTI_ADMIN_UUID && !R.find(R.propEq('name', BYPASS))(capabilities)) {
     const id = generateStandardId(ENTITY_TYPE_CAPABILITY, { name: BYPASS });
     capabilities.push({ id, standard_id: id, internal_id: id, name: BYPASS });
+    return capabilities;
   }
-  return capabilities;
+  return isUserPlatform ? capabilities : capabilities.filter((c) => c.name !== KNOWLEDGE_ORGANIZATION_RESTRICT);
 };
 
-export const batchRoleCapabilities = async (user, roleId) => {
-  return batchListThroughGetTo(user, roleId, RELATION_HAS_CAPABILITY, ENTITY_TYPE_CAPABILITY, { paginate: false });
+export const batchRoleCapabilities = async (context, user, roleId) => {
+  return batchListThroughGetTo(context, user, roleId, RELATION_HAS_CAPABILITY, ENTITY_TYPE_CAPABILITY, { paginate: false });
 };
 
-export const findRoleById = (user, roleId) => {
-  return storeLoadById(user, roleId, ENTITY_TYPE_ROLE);
+export const findRoleById = (context, user, roleId) => {
+  return storeLoadById(context, user, roleId, ENTITY_TYPE_ROLE);
 };
 
-export const findRoles = (user, args) => {
-  return listEntities(user, [ENTITY_TYPE_ROLE], args);
+export const findRoles = (context, user, args) => {
+  return listEntities(context, user, [ENTITY_TYPE_ROLE], args);
 };
 
-// region session management
-export const findSessions = () => {
-  const { store } = applicationSession();
-  return new Promise((accept) => {
-    store.all((err, result) => {
-      const sessionsPerUser = R.groupBy(
-        (s) => s.user.id,
-        R.filter((n) => n.user, result)
-      );
-      const sessions = Object.entries(sessionsPerUser).map(([k, v]) => {
-        return {
-          user_id: k,
-          sessions: v.map((s) => ({ id: s.id, created: s.user.session_creation })),
-        };
-      });
-      accept(sessions);
-    });
-  });
-};
-
-export const findUserSessions = async (userId) => {
-  const sessions = await findSessions();
-  const userSessions = sessions.filter((s) => s.user_id === userId);
-  if (userSessions.length > 0) {
-    return R.head(userSessions).sessions;
-  }
-  return [];
-};
-
-export const fetchSessionTtl = (session) => {
-  const { store } = applicationSession();
-  return new Promise((accept) => {
-    store.expiration(session.id, (err, ttl) => {
-      accept(ttl);
-    });
-  });
-};
-
-export const killSession = (id) => {
-  const { store } = applicationSession();
-  return new Promise((accept) => {
-    store.destroy(id, () => {
-      accept(id);
-    });
-  });
-};
-
-export const killUserSessions = async (userId) => {
-  const sessions = await findUserSessions(userId);
-  const sessionsIds = sessions.map((s) => s.id);
-  for (let index = 0; index < sessionsIds.length; index += 1) {
-    const sessionId = sessionsIds[index];
-    await killSession(sessionId);
-  }
-  return sessionsIds;
-};
-// endregion
-
-export const findCapabilities = (user, args) => {
+export const findCapabilities = (context, user, args) => {
   const finalArgs = R.assoc('orderBy', 'attribute_order', args);
-  return listEntities(user, [ENTITY_TYPE_CAPABILITY], finalArgs);
+  return listEntities(context, user, [ENTITY_TYPE_CAPABILITY], finalArgs);
 };
 
-export const roleDelete = async (user, roleId) => {
-  const del = await deleteElementById(user, roleId, ENTITY_TYPE_ROLE);
+export const roleDelete = async (context, user, roleId) => {
+  await roleSessionRefresh(context, user, roleId);
+  await deleteElementById(context, user, roleId, ENTITY_TYPE_ROLE);
   logAudit.info(user, ROLE_DELETION, { id: roleId });
-  return del;
+  return roleId;
 };
 
-export const roleCleanContext = async (user, roleId) => {
+export const roleCleanContext = async (context, user, roleId) => {
   await delEditContext(user, roleId);
-  return storeLoadById(user, roleId, ENTITY_TYPE_ROLE).then((role) => notify(BUS_TOPICS[ENTITY_TYPE_ROLE].EDIT_TOPIC, role, user));
+  return storeLoadById(context, user, roleId, ENTITY_TYPE_ROLE).then((role) => {
+    return notify(BUS_TOPICS[ENTITY_TYPE_ROLE].EDIT_TOPIC, role, user);
+  });
 };
 
-export const roleEditContext = async (user, roleId, input) => {
+export const roleEditContext = async (context, user, roleId, input) => {
   await setEditContext(user, roleId, input);
-  return storeLoadById(user, roleId, ENTITY_TYPE_ROLE).then((role) => notify(BUS_TOPICS[ENTITY_TYPE_ROLE].EDIT_TOPIC, role, user));
+  return storeLoadById(context, user, roleId, ENTITY_TYPE_ROLE).then((role) => {
+    return notify(BUS_TOPICS[ENTITY_TYPE_ROLE].EDIT_TOPIC, role, user);
+  });
 };
 
-const assignRoleToUser = async (user, userId, roleName) => {
+const assignRoleToUser = async (context, user, userId, roleName) => {
   const generateToId = generateStandardId(ENTITY_TYPE_ROLE, { name: roleName });
   const assignInput = {
     fromId: userId,
     toId: generateToId,
     relationship_type: RELATION_HAS_ROLE,
   };
-  return createRelation(user, assignInput);
+  return createRelation(context, user, assignInput);
 };
 
-const assignGroupToUser = async (user, userId, groupName) => {
+export const assignOrganizationToUser = async (context, user, userId, organizationId) => {
+  const assignInput = { fromId: userId, toId: organizationId, relationship_type: RELATION_PARTICIPATE_TO };
+  await createRelation(context, user, assignInput);
+  await userSessionRefresh(userId);
+  return user;
+};
+
+export const assignOrganizationNameToUser = async (context, user, userId, organizationName) => {
+  const organization = { name: organizationName, identity_class: 'organization' };
+  const generateToId = generateStandardId(ENTITY_TYPE_IDENTITY_ORGANIZATION, organization);
+  return assignOrganizationToUser(context, user, userId, generateToId);
+};
+
+const assignGroupToUser = async (context, user, userId, groupName) => {
   const generateToId = generateStandardId(ENTITY_TYPE_GROUP, { name: groupName });
   const assignInput = {
     fromId: userId,
     toId: generateToId,
     relationship_type: RELATION_MEMBER_OF,
   };
-  return createRelation(user, assignInput);
+  const rel = await createRelation(context, user, assignInput);
+  await userSessionRefresh(userId);
+  return rel;
 };
 
-export const addUser = async (user, newUser) => {
+export const addUser = async (context, user, newUser) => {
   const userEmail = newUser.user_email.toLowerCase();
-  const existingUser = await elLoadBy(SYSTEM_USER, 'user_email', userEmail, ENTITY_TYPE_USER);
+  const existingUser = await elLoadBy(context, SYSTEM_USER, 'user_email', userEmail, ENTITY_TYPE_USER);
   if (existingUser) {
     throw FunctionalError('User already exists', { email: userEmail });
   }
@@ -285,10 +287,10 @@ export const addUser = async (user, newUser) => {
     R.assoc('external', newUser.external ? newUser.external : false),
     R.dissoc('roles')
   )(newUser);
-  const userCreated = await createEntity(user, userToCreate, ENTITY_TYPE_USER);
+  const userCreated = await createEntity(context, user, userToCreate, ENTITY_TYPE_USER);
   // Link to the roles
-  let userRoles = newUser.roles || []; // Expected roles name
-  const defaultRoles = await findRoles(user, { filters: [{ key: 'default_assignation', values: [true] }] });
+  let userRoles = newUser.roles ?? []; // Expected roles name
+  const defaultRoles = await findRoles(context, user, { filters: [{ key: 'default_assignation', values: [true] }] });
   if (defaultRoles && defaultRoles.edges.length > 0) {
     userRoles = R.pipe(
       R.map((n) => n.node.name),
@@ -296,28 +298,32 @@ export const addUser = async (user, newUser) => {
       R.flatten
     )(defaultRoles.edges);
   }
-  await Promise.all(R.map((role) => assignRoleToUser(user, userCreated.id, role), userRoles));
+  await Promise.all(R.map((role) => assignRoleToUser(context, user, userCreated.id, role), userRoles));
+  // Link to organizations
+  const userOrganizations = newUser.objectOrganization ?? [];
+  await Promise.all(R.map((organization) => assignOrganizationToUser(context, user, userCreated.id, organization), userOrganizations));
   // Assign default groups to user
-  const defaultGroups = await findGroups(user, { filters: [{ key: 'default_assignation', values: [true] }] });
+  const defaultGroups = await findGroups(context, user, { filters: [{ key: 'default_assignation', values: [true] }] });
   const relationGroups = defaultGroups.edges.map((e) => ({
     fromId: userCreated.id,
     toId: e.node.internal_id,
     relationship_type: RELATION_MEMBER_OF,
   }));
-  await Promise.all(relationGroups.map((relation) => createRelation(user, relation)));
+  await Promise.all(relationGroups.map((relation) => createRelation(context, user, relation)));
   // Audit log
   const groups = defaultGroups.edges.map((g) => ({ id: g.node.id, name: g.node.name }));
   logAudit.info(user, USER_CREATION, { user: userEmail, roles: userRoles, groups });
   return notify(BUS_TOPICS[ENTITY_TYPE_USER].ADDED_TOPIC, userCreated, user);
 };
 
-export const roleEditField = async (user, roleId, input) => {
-  const { element } = await updateAttribute(user, roleId, ENTITY_TYPE_ROLE, input);
+export const roleEditField = async (context, user, roleId, input) => {
+  const { element } = await updateAttribute(context, user, roleId, ENTITY_TYPE_ROLE, input);
+  await roleSessionRefresh(context, user, roleId);
   return notify(BUS_TOPICS[ENTITY_TYPE_ROLE].EDIT_TOPIC, element, user);
 };
 
-export const roleAddRelation = async (user, roleId, input) => {
-  const role = await storeLoadById(user, roleId, ENTITY_TYPE_ROLE);
+export const roleAddRelation = async (context, user, roleId, input) => {
+  const role = await storeLoadById(context, user, roleId, ENTITY_TYPE_ROLE);
   if (!role) {
     throw FunctionalError(`Cannot add the relation, ${ENTITY_TYPE_ROLE} cannot be found.`);
   }
@@ -325,57 +331,57 @@ export const roleAddRelation = async (user, roleId, input) => {
     throw FunctionalError(`Only ${ABSTRACT_INTERNAL_RELATIONSHIP} can be added through this method.`);
   }
   const finalInput = R.assoc('fromId', roleId, input);
-  return createRelation(user, finalInput).then((relationData) => {
-    notify(BUS_TOPICS[ENTITY_TYPE_ROLE].EDIT_TOPIC, relationData, user);
-    return relationData;
-  });
+  const relationData = await createRelation(context, user, finalInput);
+  await roleSessionRefresh(context, user, roleId);
+  return notify(BUS_TOPICS[ENTITY_TYPE_ROLE].EDIT_TOPIC, relationData, user);
 };
 
-export const roleDeleteRelation = async (user, roleId, toId, relationshipType) => {
-  const role = await storeLoadById(user, roleId, ENTITY_TYPE_ROLE);
+export const roleDeleteRelation = async (context, user, roleId, toId, relationshipType) => {
+  const role = await storeLoadById(context, user, roleId, ENTITY_TYPE_ROLE);
   if (!role) {
     throw FunctionalError('Cannot delete the relation, Role cannot be found.');
   }
   if (!isInternalRelationship(relationshipType)) {
     throw FunctionalError(`Only ${ABSTRACT_INTERNAL_RELATIONSHIP} can be deleted through this method.`);
   }
-  await deleteRelationsByFromAndTo(user, roleId, toId, relationshipType, ABSTRACT_INTERNAL_RELATIONSHIP);
+  await deleteRelationsByFromAndTo(context, user, roleId, toId, relationshipType, ABSTRACT_INTERNAL_RELATIONSHIP);
+  await roleSessionRefresh(context, user, roleId);
   return notify(BUS_TOPICS[ENTITY_TYPE_ROLE].EDIT_TOPIC, role, user);
 };
 
 // User related
-export const userEditField = async (user, userId, inputs) => {
+export const userEditField = async (context, user, userId, inputs) => {
   for (let index = 0; index < inputs.length; index += 1) {
     const input = inputs[index];
     if (input.key === 'password') {
       input.value = [bcrypt.hashSync(R.head(input.value).toString())];
     }
   }
-  const { element } = await updateAttribute(user, userId, ENTITY_TYPE_USER, inputs);
+  const { element } = await updateAttribute(context, user, userId, ENTITY_TYPE_USER, inputs);
   return notify(BUS_TOPICS[ENTITY_TYPE_USER].EDIT_TOPIC, element, user);
 };
 
-export const deleteBookmark = async (user, id) => {
-  const currentUser = await storeLoadById(user, user.id, ENTITY_TYPE_USER);
+export const deleteBookmark = async (context, user, id) => {
+  const currentUser = await storeLoadById(context, user, user.id, ENTITY_TYPE_USER);
   const currentBookmarks = currentUser.bookmarks ? currentUser.bookmarks : [];
   const newBookmarks = R.filter((n) => n.id !== id, currentBookmarks);
-  await patchAttribute(user, user.id, ENTITY_TYPE_USER, { bookmarks: newBookmarks });
+  await patchAttribute(context, user, user.id, ENTITY_TYPE_USER, { bookmarks: newBookmarks });
   return id;
 };
 
-export const bookmarks = async (user, types) => {
-  const currentUser = await storeLoadById(user, user.id, ENTITY_TYPE_USER);
+export const bookmarks = async (context, user, types) => {
+  const currentUser = await storeLoadById(context, user, user.id, ENTITY_TYPE_USER);
   const bookmarkList = types && types.length > 0
     ? R.filter((n) => R.includes(n.type, types), currentUser.bookmarks || [])
     : currentUser.bookmarks || [];
   const filteredBookmarks = [];
   // eslint-disable-next-line no-restricted-syntax
   for (const bookmark of bookmarkList) {
-    const loadedBookmark = await storeLoadById(user, bookmark.id, bookmark.type);
+    const loadedBookmark = await storeLoadById(context, user, bookmark.id, bookmark.type);
     if (isNotEmptyField(loadedBookmark)) {
       filteredBookmarks.push(loadedBookmark);
     } else {
-      await deleteBookmark(user, bookmark.id);
+      await deleteBookmark(context, user, bookmark.id);
     }
   }
   return buildPagination(
@@ -386,18 +392,18 @@ export const bookmarks = async (user, types) => {
   );
 };
 
-export const addBookmark = async (user, id, type) => {
-  const currentUser = await storeLoadById(user, user.id, ENTITY_TYPE_USER);
+export const addBookmark = async (context, user, id, type) => {
+  const currentUser = await storeLoadById(context, user, user.id, ENTITY_TYPE_USER);
   const currentBookmarks = currentUser.bookmarks ? currentUser.bookmarks : [];
   const newBookmarks = R.append(
     { id, type },
     R.filter((n) => n.id !== id, currentBookmarks)
   );
-  await patchAttribute(user, user.id, ENTITY_TYPE_USER, { bookmarks: newBookmarks });
-  return storeLoadById(user, id, type);
+  await patchAttribute(context, user, user.id, ENTITY_TYPE_USER, { bookmarks: newBookmarks });
+  return storeLoadById(context, user, id, type);
 };
 
-export const meEditField = (user, userId, inputs, password = null) => {
+export const meEditField = (context, user, userId, inputs, password = null) => {
   const input = R.head(inputs);
   const { key } = input;
   if (key === 'password') {
@@ -411,17 +417,18 @@ export const meEditField = (user, userId, inputs, password = null) => {
   if (key === 'api_token') {
     throw ForbiddenAccess();
   }
-  return userEditField(user, userId, inputs);
+  return userEditField(context, user, userId, inputs);
 };
 
-export const userDelete = async (user, userId) => {
-  await deleteElementById(user, userId, ENTITY_TYPE_USER);
+export const userDelete = async (context, user, userId) => {
+  await deleteElementById(context, user, userId, ENTITY_TYPE_USER);
   logAudit.info(user, USER_DELETION, { user: userId });
+  await killUserSessions(userId);
   return userId;
 };
 
-export const userAddRelation = async (user, userId, input) => {
-  const userData = await storeLoadById(user, userId, ENTITY_TYPE_USER);
+export const userAddRelation = async (context, user, userId, input) => {
+  const userData = await storeLoadById(context, user, userId, ENTITY_TYPE_USER);
   if (!userData) {
     throw FunctionalError(`Cannot add the relation, ${ENTITY_TYPE_USER} cannot be found.`);
   }
@@ -429,84 +436,134 @@ export const userAddRelation = async (user, userId, input) => {
     throw FunctionalError(`Only ${ABSTRACT_INTERNAL_RELATIONSHIP} can be added through this method.`);
   }
   const finalInput = R.assoc('fromId', userId, input);
-  const relationData = await createRelation(user, finalInput);
+  const relationData = await createRelation(context, user, finalInput);
   const operation = convertRelationToAction(input.relationship_type);
   logAudit.info(user, operation, { from: userId, to: input.toId, type: input.relationship_type });
+  await userSessionRefresh(userId);
   return notify(BUS_TOPICS[ENTITY_TYPE_USER].EDIT_TOPIC, relationData, user);
 };
 
-export const userDeleteRelation = async (user, targetUser, toId, relationshipType) => {
+export const userDeleteRelation = async (context, user, targetUser, toId, relationshipType) => {
   if (!isInternalRelationship(relationshipType)) {
     throw FunctionalError(`Only ${ABSTRACT_INTERNAL_RELATIONSHIP} can be deleted through this method.`);
   }
-  await deleteRelationsByFromAndTo(user, targetUser.id, toId, relationshipType, ABSTRACT_INTERNAL_RELATIONSHIP);
+  await deleteRelationsByFromAndTo(context, user, targetUser.id, toId, relationshipType, ABSTRACT_INTERNAL_RELATIONSHIP);
   const operation = convertRelationToAction(relationshipType, false);
   logAudit.info(user, operation, { from: targetUser.id, to: toId, type: relationshipType });
+  await userSessionRefresh(targetUser.id);
   return notify(BUS_TOPICS[ENTITY_TYPE_USER].EDIT_TOPIC, targetUser, user);
 };
 
-export const userIdDeleteRelation = async (user, userId, toId, relationshipType) => {
-  const userData = await storeLoadById(user, userId, ENTITY_TYPE_USER);
+export const userIdDeleteRelation = async (context, user, userId, toId, relationshipType) => {
+  const userData = await storeLoadById(context, user, userId, ENTITY_TYPE_USER);
   if (!userData) {
     throw FunctionalError('Cannot delete the relation, User cannot be found.');
   }
   if (!isInternalRelationship(relationshipType)) {
     throw FunctionalError(`Only ${ABSTRACT_INTERNAL_RELATIONSHIP} can be deleted through this method.`);
   }
-  return userDeleteRelation(user, userData, toId, relationshipType);
+  return userDeleteRelation(context, user, userData, toId, relationshipType);
 };
 
-export const loginFromProvider = async (userInfo, providerRoles = [], providerGroups = []) => {
+export const userDeleteOrganizationRelation = async (context, user, userId, toId) => {
+  const targetUser = await storeLoadById(context, user, userId, ENTITY_TYPE_USER);
+  if (!targetUser) {
+    throw FunctionalError('Cannot delete the relation, User cannot be found.');
+  }
+  await deleteRelationsByFromAndTo(context, user, userId, toId, RELATION_PARTICIPATE_TO, ABSTRACT_INTERNAL_RELATIONSHIP);
+  const operation = convertRelationToAction(RELATION_PARTICIPATE_TO, false);
+  logAudit.info(user, operation, { from: userId, to: toId, type: RELATION_PARTICIPATE_TO });
+  await userSessionRefresh(userId);
+  return notify(BUS_TOPICS[ENTITY_TYPE_USER].EDIT_TOPIC, targetUser, user);
+};
+
+export const loginFromProvider = async (userInfo, opts = {}) => {
+  const { providerRoles = [], providerGroups = [], providerOrganizations = [] } = opts;
+  const context = executionContext('login_provider');
+  const settings = await getEntityFromCache(context, SYSTEM_USER, ENTITY_TYPE_SETTINGS);
+  const listOpts = { paginate: false };
   const { email, name: providedName, firstname, lastname } = userInfo;
   if (isEmptyField(email)) {
     throw Error('User email not provided');
   }
   const name = isEmptyField(providedName) ? email : providedName;
-  const user = await elLoadBy(SYSTEM_USER, 'user_email', email, ENTITY_TYPE_USER);
+  const user = await elLoadBy(context, SYSTEM_USER, 'user_email', email, ENTITY_TYPE_USER);
   if (!user) {
-    // If user doesnt exists, create it. Providers are trusted
+    // If user doesn't exist, create it. Providers are trusted
     const newUser = { name, firstname, lastname, user_email: email.toLowerCase(), external: true };
-    return addUser(SYSTEM_USER, newUser).then(() => {
+    return addUser(context, SYSTEM_USER, newUser).then(() => {
       // After user creation, reapply login to manage roles and groups
-      return loginFromProvider(userInfo, providerRoles, providerGroups);
+      return loginFromProvider(userInfo, opts);
     });
   }
   // Update the basic information
   const patch = { name, firstname, lastname, external: true };
-  await patchAttribute(SYSTEM_USER, user.id, ENTITY_TYPE_USER, patch);
-  // Update the roles
+  await patchAttribute(context, SYSTEM_USER, user.id, ENTITY_TYPE_USER, patch);
+  // region Update the roles
   // If roles are specified here, that overwrite the default assignation
   if (providerRoles.length > 0) {
     // 01 - Delete all roles from the user
-    const opts = { paginate: false };
-    const userRoles = await listThroughGetTo(SYSTEM_USER, user.id, RELATION_HAS_ROLE, ENTITY_TYPE_ROLE, opts);
-    for (let index = 0; index < userRoles.length; index += 1) {
+    const userRoles = await listThroughGetTo(context, SYSTEM_USER, user.id, RELATION_HAS_ROLE, ENTITY_TYPE_ROLE, listOpts);
+    const deleteRoles = userRoles.filter((o) => !providerRoles.includes(o.name));
+    for (let index = 0; index < deleteRoles.length; index += 1) {
       const userRole = userRoles[index];
-      await userDeleteRelation(SYSTEM_USER, user, userRole.id, RELATION_HAS_ROLE);
+      await userDeleteRelation(context, SYSTEM_USER, user, userRole.id, RELATION_HAS_ROLE);
     }
     // 02 - Create roles from providers
-    const rolesCreation = R.map((role) => assignRoleToUser(SYSTEM_USER, user.id, role), providerRoles);
-    await Promise.all(rolesCreation);
+    const createRoles = providerRoles.filter((n) => !userRoles.map((o) => o.name).includes(n));
+    if (createRoles.length > 0) {
+      const rolesCreation = createRoles.map((role) => assignRoleToUser(context, SYSTEM_USER, user.id, role));
+      await Promise.all(rolesCreation);
+    }
   }
-  // Update the groups
+  // endregion
+  // region Update the groups
   // If groups are specified here, that overwrite the default assignation
   if (providerGroups.length > 0) {
     // 01 - Delete all groups from the user
-    const opts = { paginate: false };
-    const userGroups = await listThroughGetTo(SYSTEM_USER, user.id, RELATION_MEMBER_OF, ENTITY_TYPE_GROUP, opts);
-    for (let index = 0; index < userGroups.length; index += 1) {
+    const userGroups = await listThroughGetTo(context, SYSTEM_USER, user.id, RELATION_MEMBER_OF, ENTITY_TYPE_GROUP, listOpts);
+    const deleteGroups = userGroups.filter((o) => !providerGroups.includes(o.name));
+    for (let index = 0; index < deleteGroups.length; index += 1) {
       const userGroup = userGroups[index];
-      await userDeleteRelation(SYSTEM_USER, user, userGroup.id, RELATION_MEMBER_OF);
+      await userDeleteRelation(context, SYSTEM_USER, user, userGroup.id, RELATION_MEMBER_OF);
     }
     // 02 - Create groups from providers
-    const groupsCreation = R.map((group) => assignGroupToUser(SYSTEM_USER, user.id, group), providerGroups);
-    await Promise.all(groupsCreation);
+    const createGroups = providerGroups.filter((n) => !userGroups.map((o) => o.name).includes(n));
+    if (createGroups.length > 0) {
+      const groupsCreation = createGroups.map((group) => assignGroupToUser(context, SYSTEM_USER, user.id, group));
+      await Promise.all(groupsCreation);
+    }
   }
+  // endregion
+  // region Update the organizations
+  // If organizations are specified here, that overwrite the default assignation
+  if (providerOrganizations.length > 0) {
+    // 01 - Delete all organizations no longer assign to the user
+    const userOrganizations = await listThroughGetTo(context, SYSTEM_USER, user.id, RELATION_PARTICIPATE_TO, ENTITY_TYPE_IDENTITY_ORGANIZATION, listOpts);
+    const deleteOrganizations = userOrganizations.filter((o) => !providerOrganizations.includes(o.name));
+    for (let index = 0; index < deleteOrganizations.length; index += 1) {
+      const userOrganization = deleteOrganizations[index];
+      await userDeleteRelation(context, SYSTEM_USER, user, userOrganization.id, RELATION_PARTICIPATE_TO);
+    }
+    // 02 - Create organizations if needed
+    const createOrganizations = providerOrganizations.filter((n) => !userOrganizations.map((o) => o.name).includes(n));
+    if (createOrganizations.length > 0) {
+      const organizationsCreation = createOrganizations.map((orga) => {
+        if (orga === PLATFORM_ORGANIZATION && settings.platform_organization) {
+          return assignOrganizationToUser(context, SYSTEM_USER, user.id, settings.platform_organization);
+        }
+        return assignOrganizationNameToUser(context, SYSTEM_USER, user.id, orga);
+      });
+      await Promise.all(organizationsCreation);
+    }
+  }
+  // endregion
   return user;
 };
 
 export const login = async (email, password) => {
-  const user = await elLoadBy(SYSTEM_USER, 'user_email', email, ENTITY_TYPE_USER);
+  const context = executionContext('login');
+  const user = await elLoadBy(context, SYSTEM_USER, 'user_email', email, ENTITY_TYPE_USER);
   if (!user) throw AuthenticationFailure();
   const dbPassword = user.password;
   const match = bcrypt.compareSync(password, dbPassword);
@@ -520,24 +577,26 @@ export const otpUserGeneration = (user) => {
   return { secret, uri };
 };
 
-export const otpUserActivation = async (user, { secret, code }) => {
+export const otpUserActivation = async (context, user, { secret, code }) => {
   const isValidated = authenticator.check(code, secret);
   if (isValidated) {
     const uri = authenticator.keyuri(user.user_email, 'OpenCTI', secret);
     const patch = { otp_activated: true, otp_secret: secret, otp_qr: uri };
-    const { element } = await patchAttribute(user, user.id, ENTITY_TYPE_USER, patch);
+    const { element } = await patchAttribute(context, user, user.id, ENTITY_TYPE_USER, patch);
+    context.req.session.user.otp_validated = isValidated;
+    context.req.session.user.otp_activated = true;
     return element;
   }
   throw AuthenticationFailure();
 };
 
-export const otpUserDeactivation = async (user, id) => {
+export const otpUserDeactivation = async (context, user, id) => {
   const patch = { otp_activated: false, otp_secret: '', otp_qr: '' };
-  const { element } = await patchAttribute(user, id, ENTITY_TYPE_USER, patch);
+  const { element } = await patchAttribute(context, user, id, ENTITY_TYPE_USER, patch);
   return element;
 };
 
-export const otpUserLogin = (req, user, { code }) => {
+export const otpUserLogin = async (req, user, { code }) => {
   if (!user.otp_activated) {
     throw AuthenticationFailure();
   }
@@ -549,7 +608,7 @@ export const otpUserLogin = (req, user, { code }) => {
   return isValidated;
 };
 
-export const logout = async (user, req, res) => {
+export const logout = async (context, user, req, res) => {
   await delUserContext(user);
   return new Promise((resolve, reject) => {
     res.clearCookie(OPENCTI_SESSION);
@@ -564,20 +623,28 @@ export const logout = async (user, req, res) => {
   });
 };
 
-const buildSessionUser = (user) => {
+const buildSessionUser = (origin, impersonate, provider, settings) => {
+  const user = impersonate ?? origin;
   return {
     id: user.id,
+    individual_id: user.individual_id,
     session_creation: now(),
     session_password: user.password,
     api_token: user.api_token,
     internal_id: user.internal_id,
     user_email: user.user_email,
-    otp_activated: user.otp_activated,
-    otp_validated: !user.otp_activated,
+    otp_activated: user.otp_activated || provider === AUTH_BEARER,
+    otp_validated: user.otp_validated || (!user.otp_activated && !settings.otp_mandatory) || provider === AUTH_BEARER, // 2FA is implicitly validated when login from token
     otp_secret: user.otp_secret,
+    otp_mandatory: settings.otp_mandatory,
     name: user.name,
     external: user.external,
+    login_provider: provider,
+    impersonate: impersonate !== undefined,
     capabilities: user.capabilities.map((c) => ({ id: c.id, internal_id: c.internal_id, name: c.name })),
+    organizations: user.organizations,
+    allowed_organizations: user.allowed_organizations,
+    inside_platform_organization: user.inside_platform_organization,
     allowed_marking: user.allowed_marking.map((m) => ({
       id: m.id,
       standard_id: m.standard_id,
@@ -590,59 +657,106 @@ const buildSessionUser = (user) => {
       internal_id: m.internal_id,
       definition_type: m.definition_type,
     })),
+    session_version: PLATFORM_VERSION
   };
 };
 
-const buildCompleteUser = async (client) => {
-  if (!client) return undefined;
-  const capabilities = await getCapabilities(client.id);
-  const marking = await getUserAndGlobalMarkings(client.id, capabilities);
-  return { ...client, capabilities, allowed_marking: marking.user, all_marking: marking.all };
-};
-
-export const resolveUserById = async (id) => {
-  if (id === OPENCTI_SYSTEM_UUID) {
-    return SYSTEM_USER;
+const buildCompleteUser = async (context, client) => {
+  if (!client) {
+    return undefined;
   }
-  const client = await storeLoadById(SYSTEM_USER, id, ENTITY_TYPE_USER);
-  return buildCompleteUser(client);
+  const batchOpts = { batched: false, paginate: false };
+  const args = { filters: [{ key: 'contact_information', values: [client.user_email] }], connectionFormat: false };
+  const individualsPromise = listEntities(context, SYSTEM_USER, [ENTITY_TYPE_IDENTITY_INDIVIDUAL], args);
+  const organizationsPromise = batchOrganizations(context, SYSTEM_USER, client.id, { ...batchOpts, withInferences: false });
+  const userGroupsPromise = listThroughGetTo(context, SYSTEM_USER, client.id, RELATION_MEMBER_OF, ENTITY_TYPE_GROUP);
+  const settings = await getEntityFromCache(context, SYSTEM_USER, ENTITY_TYPE_SETTINGS);
+  const allowed_organizations = await batchOrganizations(context, SYSTEM_USER, client.id, batchOpts);
+  const userOrganizations = allowed_organizations.map((m) => m.internal_id);
+  const isUserPlatform = settings.platform_organization ? userOrganizations.includes(settings.platform_organization) : true;
+  const capabilities = await getCapabilities(context, client.id, isUserPlatform);
+  const [individuals, organizations, groups] = await Promise.all([individualsPromise, organizationsPromise, userGroupsPromise]);
+  const marking = await getUserAndGlobalMarkings(context, client.id, groups, capabilities);
+  const individualId = individuals.length > 0 ? R.head(individuals).id : undefined;
+  return {
+    ...client,
+    capabilities,
+    groups,
+    organizations,
+    allowed_organizations,
+    individual_id: individualId,
+    inside_platform_organization: isUserPlatform,
+    allowed_marking: marking.user,
+    all_marking: marking.all,
+  };
 };
 
-const resolveUserByToken = async (tokenValue) => {
-  const client = await elLoadBy(SYSTEM_USER, 'api_token', tokenValue, ENTITY_TYPE_USER);
-  return buildCompleteUser(client);
+export const resolveUserById = async (context, id) => {
+  if (INTERNAL_USERS[id]) return INTERNAL_USERS[id];
+  const client = await storeLoadById(context, SYSTEM_USER, id, ENTITY_TYPE_USER);
+  return buildCompleteUser(context, client);
 };
 
-export const userRenewToken = async (user, userId) => {
+const resolveUserByToken = async (context, tokenValue) => {
+  const client = await elLoadBy(context, SYSTEM_USER, 'api_token', tokenValue, ENTITY_TYPE_USER);
+  return buildCompleteUser(context, client);
+};
+
+export const userRenewToken = async (context, user, userId) => {
   const patch = { api_token: uuid() };
-  await patchAttribute(user, userId, ENTITY_TYPE_USER, patch);
-  return storeLoadById(user, userId, ENTITY_TYPE_USER);
+  await patchAttribute(context, user, userId, ENTITY_TYPE_USER, patch);
+  return storeLoadById(context, user, userId, ENTITY_TYPE_USER);
 };
 
-export const authenticateUser = async (req, user, provider, token = '') => {
-  // Build the user session with only required fields
-  const completeUser = await buildCompleteUser(user);
-  logAudit.info(userWithOrigin(req, user), LOGIN_ACTION, { provider });
-  req.session.user = buildSessionUser(completeUser);
+export const internalAuthenticateUser = async (context, req, user, provider, token) => {
+  let impersonate;
+  const logged = await buildCompleteUser(context, user);
+  const applicantId = req.headers['opencti-applicant-id'];
+  if (isNotEmptyField(applicantId) && logged.id !== applicantId) {
+    if (isBypassUser(logged)) {
+      const applicantUser = await resolveUserById(context, applicantId);
+      if (isEmptyField(applicantUser)) {
+        logApp.warn(`User ${applicantId} cant be impersonate (not exists)`);
+      } else {
+        logAudit.info(applicantUser, IMPERSONATE_ACTION, { from: user.id, to: applicantUser.id });
+        impersonate = applicantUser;
+      }
+    } else {
+      logAudit.error(user, IMPERSONATE_ACTION, { to: applicantId });
+    }
+  }
+  const settings = await getEntityFromCache(context, SYSTEM_USER, ENTITY_TYPE_SETTINGS);
+  const sessionUser = buildSessionUser(logged, impersonate, provider, settings);
+  const hasSetAccessCapability = isUserHasCapability(logged, SETTINGS_SET_ACCESSES);
+  if (!hasSetAccessCapability && settings.platform_organization && logged.organizations.length === 0) {
+    throw AuthenticationFailure('You can\'t login without an organization');
+  }
+  req.session.user = sessionUser;
   req.session.session_provider = { provider, token };
-  return completeUser;
+  req.session.session_refresh = false;
+  return sessionUser;
 };
 
-const AUTH_BEARER = 'Bearer';
-const AUTH_BASIC = 'BasicAuth';
-export const authenticateUserFromRequest = async (req, res) => {
+export const authenticateUser = async (context, req, user, provider, token = '') => {
+  // Build the user session with only required fields
+  logAudit.info(userWithOrigin(req, user), LOGIN_ACTION, { provider });
+  return internalAuthenticateUser(context, req, user, provider, token);
+};
+
+export const authenticateUserFromRequest = async (context, req, res) => {
   const auth = req.session?.user;
   // If user already have a session
   if (auth) {
     // User already identified, we need to enforce the session validity
     const { provider, token } = req.session.session_provider;
-    // For bearer, validate that the bearer is the same than the session
+    // For bearer, validate that the bearer is the same as the session
     if (provider === AUTH_BEARER) {
       const currentToken = extractTokenFromBearer(req.headers.authorization);
       if (currentToken !== token) {
-        // Session doesnt match, kill the current session and try to re auth
-        await logout(auth, req, res);
-        return authenticateUserFromRequest(req, res);
+        logAudit.info(userWithOrigin(req, auth), 'LOGIN_BEARER_CHANGE', { provider });
+        // Session doesn't match, kill the current session and try to re auth
+        await logout(context, auth, req, res);
+        return await authenticateUserFromRequest(context, req, res);
       }
     }
     // For basic auth, validate that user and password match the session
@@ -653,12 +767,32 @@ export const authenticateUserFromRequest = async (req, res) => {
       const passwordCompare = isNotEmptyField(password) && isNotEmptyField(sessionPassword);
       const samePassword = passwordCompare && bcrypt.compareSync(password, sessionPassword);
       if (!sameUsername || !samePassword) {
-        // Session doesnt match, kill the current session and try to re auth
-        await logout(auth, req, res);
-        return authenticateUserFromRequest(req, res);
+        logAudit.info(userWithOrigin(req, auth), 'LOGIN_BASIC_CHANGE', { provider });
+        // Session doesn't match, kill the current session and try to re auth
+        await logout(context, auth, req, res);
+        return await authenticateUserFromRequest(context, req, res);
       }
     }
-    // Other providers doesnt need specific validation, session management is enough
+    // Other providers doesn't need specific validation, session management is enough
+    // For impersonate auth, the applicant id must match the session
+    const applicantId = req.headers['opencti-applicant-id'];
+    const isNotSameUser = auth.id !== applicantId;
+    const isImpersonateChange = auth.impersonate && isNotSameUser;
+    const isNowImpersonate = isNotSameUser && !auth.impersonate && isBypassUser(auth) && applicantId;
+    if (isImpersonateChange || isNowImpersonate) {
+      logAudit.info(userWithOrigin(req, auth), 'LOGIN_IMPERSONATE_CHANGE', { provider });
+      // Impersonate doesn't match, kill the current session and try to re auth
+      await logout(context, auth, req, res);
+      return await authenticateUserFromRequest(context, req, res);
+    }
+    // If session is marked for refresh, reload the user data in the session
+    // If session is old by a past application version, make a refresh
+    if (auth.session_version !== PLATFORM_VERSION || req.session.session_refresh) {
+      logAudit.info(userWithOrigin(req, auth), 'SESSION_REFRESH', { provider });
+      const { session_provider } = req.session;
+      const { provider: userProvider, token: userToken } = session_provider;
+      return await internalAuthenticateUser(context, req, auth, userProvider, userToken);
+    }
     // If everything ok, return the authenticated user.
     return auth;
   }
@@ -673,11 +807,10 @@ export const authenticateUserFromRequest = async (req, res) => {
   // Get user from the token if found
   if (tokenUUID) {
     try {
-      const user = await resolveUserByToken(tokenUUID);
+      const user = await resolveUserByToken(context, tokenUUID);
       if (user) {
-        await authenticateUser(req, user, loginProvider, tokenUUID);
+        return await authenticateUser(context, req, user, loginProvider, tokenUUID);
       }
-      return user;
     } catch (err) {
       logApp.error(`[OPENCTI] Authentication error ${tokenUUID}`, { error: err });
     }
@@ -686,8 +819,8 @@ export const authenticateUserFromRequest = async (req, res) => {
   return undefined;
 };
 
-export const initAdmin = async (email, password, tokenValue) => {
-  const existingAdmin = await findById(SYSTEM_USER, OPENCTI_ADMIN_UUID);
+export const initAdmin = async (context, email, password, tokenValue) => {
+  const existingAdmin = await findById(context, SYSTEM_USER, OPENCTI_ADMIN_UUID);
   if (existingAdmin) {
     // If admin user exists, just patch the fields
     const patch = {
@@ -696,7 +829,7 @@ export const initAdmin = async (email, password, tokenValue) => {
       api_token: tokenValue,
       external: true,
     };
-    await patchAttribute(SYSTEM_USER, existingAdmin.id, ENTITY_TYPE_USER, patch);
+    await patchAttribute(context, SYSTEM_USER, existingAdmin.id, ENTITY_TYPE_USER, patch);
   } else {
     const userToCreate = {
       internal_id: OPENCTI_ADMIN_UUID,
@@ -709,18 +842,18 @@ export const initAdmin = async (email, password, tokenValue) => {
       api_token: tokenValue,
       password,
     };
-    await addUser(SYSTEM_USER, userToCreate);
+    await addUser(context, SYSTEM_USER, userToCreate);
   }
 };
 
 // region context
-export const userCleanContext = async (user, userId) => {
+export const userCleanContext = async (context, user, userId) => {
   await delEditContext(user, userId);
-  return storeLoadById(user, userId, ENTITY_TYPE_USER).then((userToReturn) => notify(BUS_TOPICS[ENTITY_TYPE_USER].EDIT_TOPIC, userToReturn, user));
+  return storeLoadById(context, user, userId, ENTITY_TYPE_USER).then((userToReturn) => notify(BUS_TOPICS[ENTITY_TYPE_USER].EDIT_TOPIC, userToReturn, user));
 };
 
-export const userEditContext = async (user, userId, input) => {
+export const userEditContext = async (context, user, userId, input) => {
   await setEditContext(user, userId, input);
-  return storeLoadById(user, userId, ENTITY_TYPE_USER).then((userToReturn) => notify(BUS_TOPICS[ENTITY_TYPE_USER].EDIT_TOPIC, userToReturn, user));
+  return storeLoadById(context, user, userId, ENTITY_TYPE_USER).then((userToReturn) => notify(BUS_TOPICS[ENTITY_TYPE_USER].EDIT_TOPIC, userToReturn, user));
 };
 // endregion

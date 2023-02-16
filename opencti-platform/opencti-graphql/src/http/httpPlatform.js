@@ -5,14 +5,13 @@ import { URL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import bodyParser from 'body-parser';
-import prometheus from 'express-prometheus-middleware';
 import compression from 'compression';
 import helmet from 'helmet';
 import nconf from 'nconf';
 import showdown from 'showdown';
 import rateLimit from 'express-rate-limit';
 import contentDisposition from 'content-disposition';
-import { basePath, booleanConf, DEV_MODE, formatPath, logApp, logAudit } from '../config/conf';
+import { basePath, booleanConf, DEV_MODE, logApp, logAudit } from '../config/conf';
 import passport, { empty, isStrategyActivated, STRATEGY_CERT } from '../config/providers';
 import { authenticateUser, authenticateUserFromRequest, loginFromProvider, userWithOrigin } from '../domain/user';
 import { downloadFile, getFileContent, loadFile } from '../database/file-storage';
@@ -20,6 +19,9 @@ import createSeeMiddleware from '../graphql/sseMiddleware';
 import initTaxiiApi from './httpTaxii';
 import { LOGIN_ACTION } from '../config/audit';
 import initHttpRollingFeeds from './httpRollingFeed';
+import { executionContext, SYSTEM_USER } from '../utils/access';
+import { ENTITY_TYPE_SETTINGS } from '../schema/internalObject';
+import { getEntityFromCache } from '../database/cache';
 
 const setCookieError = (res, message) => {
   res.cookie('opencti_flash', message || 'Unknown error', {
@@ -86,25 +88,15 @@ const createApp = async (app) => {
   }
   app.use(securityMiddleware);
   app.use(compression({}));
-  // -- Telemetry
-  const exposePrometheusMetrics = booleanConf('app:telemetry:prometheus:enabled', false);
-  if (exposePrometheusMetrics) {
-    const metricsPath = nconf.get('app:telemetry:prometheus:metrics_path') || '/prometheus/metrics';
-    const fullMetricsPath = `${basePath}${formatPath(metricsPath)}`;
-    logApp.info(`Adding prometheus middleware (for metrics) on path: ${fullMetricsPath}`);
-    app.use(
-      prometheus({
-        metricsPath: fullMetricsPath,
-        collectDefaultMetrics: true,
-        requestDurationBuckets: [0.1, 0.5, 1, 1.5],
-        requestLengthBuckets: [512, 1024, 5120, 10240, 51200, 102400],
-        responseLengthBuckets: [512, 1024, 5120, 10240, 51200, 102400],
-      })
-    );
-  }
 
+  // -- Serv playground resources
+  app.use(`${basePath}/static/@apollographql/graphql-playground-react@1.7.42/build/static`, express.static('static/playground'));
+
+  // -- Serv flags resources
+  app.use(`${basePath}/static/flags`, express.static('static/flags'));
+
+  // -- Serv frontend static resources
   app.use(`${basePath}/static`, express.static(path.join(__dirname, '../public/static')));
-  app.use(`${basePath}/media`, express.static(path.join(__dirname, '../public/static/media')));
 
   const requestSizeLimit = nconf.get('app:max_payload_body_size') || '10mb';
   app.use(bodyParser.json({ limit: requestSizeLimit }));
@@ -121,13 +113,14 @@ const createApp = async (app) => {
   // -- File download
   app.get(`${basePath}/storage/get/:file(*)`, async (req, res, next) => {
     try {
-      const auth = await authenticateUserFromRequest(req, res);
+      const executeContext = executionContext('storage_get');
+      const auth = await authenticateUserFromRequest(executeContext, req, res);
       if (!auth) {
         res.sendStatus(403);
         return;
       }
       const { file } = req.params;
-      const stream = await downloadFile(file);
+      const stream = await downloadFile(executeContext, file);
       res.attachment(file);
       stream.pipe(res);
     } catch (e) {
@@ -139,13 +132,14 @@ const createApp = async (app) => {
   // -- File view
   app.get(`${basePath}/storage/view/:file(*)`, async (req, res, next) => {
     try {
-      const auth = await authenticateUserFromRequest(req, res);
+      const executeContext = executionContext('storage_view');
+      const auth = await authenticateUserFromRequest(executeContext, req, res);
       if (!auth) {
         res.sendStatus(403);
         return;
       }
       const { file } = req.params;
-      const data = await loadFile(auth, file);
+      const data = await loadFile(executeContext, auth, file);
       res.set('Content-disposition', contentDisposition(data.name, { type: 'inline' }));
       res.set({ 'Content-Security-Policy': 'sandbox' });
       res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
@@ -155,7 +149,7 @@ const createApp = async (app) => {
       } else {
         res.set('Content-type', data.metaData.mimetype);
       }
-      const stream = await downloadFile(file);
+      const stream = await downloadFile(executeContext, file);
       stream.pipe(res);
     } catch (e) {
       setCookieError(res, e?.message);
@@ -166,13 +160,14 @@ const createApp = async (app) => {
   // -- Pdf view
   app.get(`${basePath}/storage/html/:file(*)`, async (req, res, next) => {
     try {
-      const auth = await authenticateUserFromRequest(req, res);
+      const executeContext = executionContext('storage_html');
+      const auth = await authenticateUserFromRequest(executeContext, req, res);
       if (!auth) {
         res.sendStatus(403);
         return;
       }
       const { file } = req.params;
-      const data = await loadFile(auth, file);
+      const data = await loadFile(executeContext, auth, file);
       if (data.metaData.mimetype === 'text/markdown') {
         const markDownData = await getFileContent(file);
         const converter = new showdown.Converter();
@@ -192,6 +187,7 @@ const createApp = async (app) => {
   // -- Client HTTPS Cert login custom strategy
   app.get(`${basePath}/auth/cert`, (req, res, next) => {
     try {
+      const context = executionContext('cert_strategy');
       const redirect = extractRefererPathFromReq(req);
       const isActivated = isStrategyActivated(STRATEGY_CERT);
       if (!isActivated) {
@@ -208,7 +204,7 @@ const createApp = async (app) => {
             const userInfo = { email: emailAddress, name: empty(CN) ? emailAddress : CN };
             loginFromProvider(userInfo)
               .then(async (user) => {
-                await authenticateUser(req, user, 'cert');
+                await authenticateUser(context, req, user, 'cert');
                 res.redirect(redirect);
               })
               .catch((err) => {
@@ -244,26 +240,45 @@ const createApp = async (app) => {
 
   // -- Passport callback
   const urlencodedParser = bodyParser.urlencoded({ extended: true });
-  app.all(`${basePath}/auth/:provider/callback`, urlencodedParser, passport.initialize({}), (req, res, next) => {
-    const { provider } = req.params;
+  app.all(`${basePath}/auth/:provider/callback`, urlencodedParser, passport.initialize({}), async (req, res, next) => {
     const { referer } = req.session;
-    passport.authenticate(provider, {}, async (err, user) => {
-      if (err || !user) {
-        logAudit.error(userWithOrigin(req, {}), LOGIN_ACTION, { provider, error: err?.message });
-        setCookieError(res, err?.message);
-        return res.redirect(referer ?? '/');
-      }
-      // noinspection UnnecessaryLocalVariableJS
-      await authenticateUser(req, user, provider);
-      req.session.referer = null;
-      return res.redirect(referer ?? '/');
-    })(req, res, next);
+    const { provider } = req.params;
+    const callbackLogin = () => new Promise((accept, reject) => {
+      passport.authenticate(provider, {}, (err, user) => {
+        if (err || !user) {
+          reject(err);
+        } else {
+          accept(user);
+        }
+      })(req, res, next);
+    });
+    try {
+      const context = executionContext(`${provider}_strategy`);
+      const logged = await callbackLogin();
+      await authenticateUser(context, req, logged, provider);
+    } catch (err) {
+      logAudit.error(userWithOrigin(req, {}), LOGIN_ACTION, { provider, error: err?.message });
+      setCookieError(res, 'Invalid authentication, please ask your administrator');
+    } finally {
+      res.redirect(referer ?? '/');
+    }
   });
 
   // Other routes - Render index.html
-  app.get('*', (req, res) => {
+  app.get('*', async (req, res) => {
+    const context = executionContext('app_loading');
+    const settings = await getEntityFromCache(context, SYSTEM_USER, ENTITY_TYPE_SETTINGS);
     const data = readFileSync(`${__dirname}/../public/index.html`, 'utf8');
-    const withOptionValued = data.replace(/%BASE_PATH%/g, basePath);
+    const title = await settings?.platform_title ?? 'Cyber threat intelligence platform';
+    const description = 'OpenCTI is an open source platform allowing organizations'
+      + ' to manage their cyber threat intelligence knowledge and observables.';
+    const settingFavicon = settings?.platform_favicon;
+    const withOptionValued = data
+      .replace(/%BASE_PATH%/g, basePath)
+      .replace(/%APP_TITLE%/g, title)
+      .replace(/%APP_DESCRIPTION%/g, description)
+      .replace(/%APP_FAVICON%/g, settingFavicon ?? `${basePath}/static/ext/favicon.png`)
+      .replace(/%APP_MANIFEST%/g, `${basePath}/static/ext/manifest.json`);
     res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
     res.set('Expires', '-1');
     res.set('Pragma', 'no-cache');

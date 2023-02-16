@@ -10,7 +10,8 @@ import InfrastructureEdition from './InfrastructureEdition';
 import InfrastructurePopover from './InfrastructurePopover';
 import StixCoreObjectOrStixCoreRelationshipLastReports from '../../analysis/reports/StixCoreObjectOrStixCoreRelationshipLastReports';
 import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
@@ -41,10 +42,10 @@ class InfrastructureComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={infrastructure} />
+            <InfrastructureDetails infrastructure={infrastructure} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <InfrastructureDetails infrastructure={infrastructure} />
+            <StixDomainObjectOverview stixDomainObject={infrastructure} />
           </Grid>
         </Grid>
         <Grid
@@ -82,6 +83,7 @@ class InfrastructureComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={infrastructure.id}
+          defaultMarking={(infrastructure.objectMarking?.edges ?? []).map((edge) => edge.node)}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <InfrastructureEdition infrastructureId={infrastructure.id} />
@@ -125,7 +127,9 @@ const Infrastructure = createFragmentContainer(InfrastructureComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }

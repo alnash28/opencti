@@ -16,6 +16,7 @@ import {
   DeleteForeverOutlined,
   SecurityOutlined,
   ReceiptOutlined,
+  AccountBalanceOutlined,
 } from '@mui/icons-material';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
@@ -57,9 +58,9 @@ const styles = (theme) => ({
     margin: 0,
     padding: '0 200px 0 0',
   },
-  killAllSessionsButton: {
+  floatingButton: {
     float: 'left',
-    marginTop: -15,
+    margin: '-8px 0 0 5px',
   },
   editButton: {
     position: 'fixed',
@@ -130,7 +131,7 @@ export const userUserSessionsKillMutation = graphql`
 export const userOtpDeactivationMutation = graphql`
   mutation UserOtpDeactivationMutation($id: ID!) {
     otpUserDeactivation(id: $id) {
-      ...User_user
+      ...ProfileOverview_me
     }
   }
 `;
@@ -273,22 +274,39 @@ class UserComponent extends Component {
             </Typography>
             <Paper classes={{ root: classes.paper }} variant="outlined">
               <Grid container={true} spacing={3}>
-                <Grid item={true} xs={6}>
-                  <Typography variant="h3" gutterBottom={true}>
+                <Grid item={true} xs={8}>
+                  <Typography
+                    variant="h3"
+                    gutterBottom={true}
+                    style={{ marginBottom: 7 }}
+                  >
                     {t('Email address')}
                   </Typography>
                   <pre style={{ margin: 0 }}>{user.user_email}</pre>
                 </Grid>
-                <Grid item={true} xs={6}>
-                  <Typography variant="h3" gutterBottom={true}>
-                    {t('2FA Status')}
+                <Grid item={true} xs={4}>
+                  <Typography
+                    variant="h3"
+                    gutterBottom={true}
+                    style={{ float: 'left' }}
+                  >
+                    {t('2FA state')}
                   </Typography>
-                  { user.otp_activated ? <span>Activated</span> : <span>Disable</span>}
-                  { user.otp_activated && <IconButton color="secondary" onClick={this.otpUserDeactivation.bind(this)}
-                                  aria-label="Delete all" size="large">
-                        <DeleteForeverOutlined fontSize="small"/>
-                      </IconButton>
-                  }
+                  {user.otp_activated && (
+                    <IconButton
+                      classes={{ root: classes.floatingButton }}
+                      color="secondary"
+                      onClick={this.otpUserDeactivation.bind(this)}
+                      aria-label="Delete all"
+                      size="small"
+                    >
+                      <DeleteForeverOutlined fontSize="small" />
+                    </IconButton>
+                  )}
+                  <div className="clearfix" />
+                  <pre style={{ margin: 0 }}>
+                    {user.otp_activated ? t('Enabled') : t('Disabled')}
+                  </pre>
                 </Grid>
                 <Grid item={true} xs={12}>
                   <Typography variant="h3" gutterBottom={true}>
@@ -357,7 +375,27 @@ class UserComponent extends Component {
                     ))}
                   </List>
                 </Grid>
-                <Grid item={true} xs={12}>
+                <Grid item={true} xs={6}>
+                  <Typography variant="h3" gutterBottom={true}>
+                    {t('Organizations')}
+                  </Typography>
+                  <List>
+                    {user.objectOrganization.edges.map((organizationEdge) => (
+                      <ListItem
+                        key={organizationEdge.node.id}
+                        dense={true}
+                        divider={true}
+                        button={false}
+                      >
+                        <ListItemIcon>
+                          <AccountBalanceOutlined color="primary" />
+                        </ListItemIcon>
+                        <ListItemText primary={organizationEdge.node.name} />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Grid>
+                <Grid item={true} xs={6}>
                   <Typography
                     variant="h3"
                     gutterBottom={true}
@@ -369,8 +407,8 @@ class UserComponent extends Component {
                     color="secondary"
                     aria-label="Delete all"
                     onClick={this.handleOpenKillSessions.bind(this)}
-                    classes={{ root: classes.killAllSessionsButton }}
-                    size="large"
+                    classes={{ root: classes.floatingButton }}
+                    size="small"
                   >
                     <DeleteForeverOutlined fontSize="small" />
                   </IconButton>
@@ -615,6 +653,14 @@ const User = createRefetchContainer(
               id
               name
               description
+            }
+          }
+        }
+        objectOrganization {
+          edges {
+            node {
+              id
+              name
             }
           }
         }

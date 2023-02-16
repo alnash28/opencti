@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { compose, pathOr, pipe, map } from 'ramda';
+import { compose, pathOr, pipe, map, sortWith, ascend, path } from 'ramda';
 import withStyles from '@mui/styles/withStyles';
 import { CenterFocusStrong } from '@mui/icons-material';
 import { Field } from 'formik';
@@ -25,9 +25,12 @@ export const objectMarkingFieldAllowedMarkingsQuery = graphql`
     me {
       allowed_marking {
         id
+        entity_type
+        standard_id
         definition_type
         definition
         x_opencti_color
+        x_opencti_order
       }
     }
   }
@@ -44,6 +47,7 @@ class ObjectMarkingField extends Component {
             label: n.definition,
             value: n.id,
             color: n.x_opencti_color,
+            entity: n,
           }),
           defaultMarkingDefinitions,
         )
@@ -61,6 +65,7 @@ class ObjectMarkingField extends Component {
             label: n.definition,
             value: n.id,
             color: n.x_opencti_color,
+            entity: n,
           })),
         )(data);
         this.setState({ markingDefinitions });
@@ -83,7 +88,13 @@ class ObjectMarkingField extends Component {
           onFocus: this.searchMarkingDefinitions.bind(this),
         }}
         noOptionsText={t('No available options')}
-        options={this.state.markingDefinitions}
+        options={sortWith(
+          [
+            ascend(path(['entity', 'definition_type'])),
+            ascend(path(['entity', 'x_opencti_order'])),
+          ],
+          this.state.markingDefinitions,
+        )}
         onInputChange={this.searchMarkingDefinitions.bind(this)}
         onChange={typeof onChange === 'function' ? onChange.bind(this) : null}
         renderOption={(props, option) => (

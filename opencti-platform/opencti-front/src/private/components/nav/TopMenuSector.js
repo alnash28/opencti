@@ -6,10 +6,8 @@ import withStyles from '@mui/styles/withStyles';
 import Button from '@mui/material/Button';
 import { ArrowForwardIosOutlined, DomainOutlined } from '@mui/icons-material';
 import inject18n from '../../../components/i18n';
-import Security, {
-  KNOWLEDGE_KNGETEXPORT,
-  KNOWLEDGE_KNUPLOAD,
-} from '../../../utils/Security';
+import Security from '../../../utils/Security';
+import { KNOWLEDGE_KNGETEXPORT, KNOWLEDGE_KNUPLOAD } from '../../../utils/hooks/useGranted';
 
 const styles = (theme) => ({
   buttonHome: {
@@ -120,6 +118,26 @@ class TopMenuSector extends Component {
           classes={{ root: classes.button }}
         >
           {t('Analysis')}
+        </Button>
+        <Button
+          component={Link}
+          to={`/dashboard/entities/sectors/${sectorId}/sightings`}
+          variant={
+            location.pathname
+            === `/dashboard/entities/sectors/${sectorId}/sightings`
+              ? 'contained'
+              : 'text'
+          }
+          size="small"
+          color={
+            location.pathname
+            === `/dashboard/entities/sectors/${sectorId}/sightings`
+              ? 'secondary'
+              : 'primary'
+          }
+          classes={{ root: classes.button }}
+        >
+          {t('Sightings')}
         </Button>
         <Security needs={[KNOWLEDGE_KNUPLOAD, KNOWLEDGE_KNGETEXPORT]}>
           <Button

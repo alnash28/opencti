@@ -13,8 +13,10 @@ import {
   convertFilters,
   saveViewParameters,
 } from '../../../utils/ListParameters';
-import { isUniqFilter } from '../common/lists/Filters';
-import { UserContext } from '../../../utils/Security';
+import { isUniqFilter } from '../../../utils/filters/filtersUtils';
+import { UserContext } from '../../../utils/hooks/useAuth';
+import ToolBar from './ToolBar';
+import ExportContextProvider from '../../../utils/ExportContextProvider';
 
 class Relationships extends Component {
   constructor(props) {
@@ -31,6 +33,9 @@ class Relationships extends Component {
       view: R.propOr('lines', 'view', params),
       filters: R.propOr({}, 'filters', params),
       numberOfElements: { number: 0, symbol: '' },
+      selectedElements: null,
+      deSelectedElements: null,
+      selectAll: false,
       openExports: false,
     };
   }
@@ -58,6 +63,14 @@ class Relationships extends Component {
 
   handleToggleExports() {
     this.setState({ openExports: !this.state.openExports });
+  }
+
+  handleClearSelectedElements() {
+    this.setState({
+      selectAll: false,
+      selectedElements: null,
+      deSelectedElements: null,
+    });
   }
 
   handleAddFilter(key, id, value, event = null) {
@@ -99,6 +112,71 @@ class Relationships extends Component {
     this.setState({ numberOfElements });
   }
 
+  handleToggleSelectEntity(entity, _, forceRemove = []) {
+    const { selectedElements, deSelectedElements, selectAll } = this.state;
+    if (Array.isArray(entity)) {
+      const currentIds = R.values(selectedElements).map((n) => n.id);
+      const givenIds = entity.map((n) => n.id);
+      const addedIds = givenIds.filter((n) => !currentIds.includes(n));
+      let newSelectedElements = {
+        ...selectedElements,
+        ...R.indexBy(
+          R.prop('id'),
+          entity.filter((n) => addedIds.includes(n.id)),
+        ),
+      };
+      if (forceRemove.length > 0) {
+        newSelectedElements = R.omit(
+          forceRemove.map((n) => n.id),
+          newSelectedElements,
+        );
+      }
+      this.setState({
+        selectAll: false,
+        selectedElements: newSelectedElements,
+        deSelectedElements: null,
+      });
+    } else if (entity.id in (selectedElements || {})) {
+      const newSelectedElements = R.omit([entity.id], selectedElements);
+      this.setState({
+        selectAll: false,
+        selectedElements: newSelectedElements,
+      });
+    } else if (selectAll && entity.id in (deSelectedElements || {})) {
+      const newDeSelectedElements = R.omit([entity.id], deSelectedElements);
+      this.setState({
+        deSelectedElements: newDeSelectedElements,
+      });
+    } else if (selectAll) {
+      const newDeSelectedElements = R.assoc(
+        entity.id,
+        entity,
+        deSelectedElements || {},
+      );
+      this.setState({
+        deSelectedElements: newDeSelectedElements,
+      });
+    } else {
+      const newSelectedElements = R.assoc(
+        entity.id,
+        entity,
+        selectedElements || {},
+      );
+      this.setState({
+        selectAll: false,
+        selectedElements: newSelectedElements,
+      });
+    }
+  }
+
+  handleToggleSelectAll() {
+    this.setState({
+      selectAll: !this.state.selectAll,
+      selectedElements: null,
+      deSelectedElements: null,
+    });
+  }
+
   // eslint-disable-next-line class-methods-use-this
   buildColumns(helper) {
     const isRuntimeSort = helper.isRuntimeFieldEnable();
@@ -114,7 +192,7 @@ class Relationships extends Component {
         isSortable: false,
       },
       relationship_type: {
-        label: 'Relationship type',
+        label: 'Type',
         width: '10%',
         isSortable: true,
       },
@@ -128,19 +206,25 @@ class Relationships extends Component {
         width: '18%',
         isSortable: false,
       },
+      createdBy: {
+        label: 'Author',
+        width: '7%',
+        isSortable: isRuntimeSort,
+      },
+      creator: {
+        label: 'Creator',
+        width: '7%',
+        isSortable: true,
+      },
       created_at: {
         label: 'Creation date',
         width: '10%',
         isSortable: true,
       },
-      createdBy: {
-        label: 'Author',
-        width: '15%',
-        isSortable: isRuntimeSort,
-      },
       objectMarking: {
         label: 'Marking',
         isSortable: isRuntimeSort,
+        width: '8%',
       },
     };
   }
@@ -153,7 +237,15 @@ class Relationships extends Component {
       filters,
       numberOfElements,
       openExports,
+      selectedElements,
+      deSelectedElements,
+      selectAll,
     } = this.state;
+    let numberOfSelectedElements = Object.keys(selectedElements || {}).length;
+    if (selectAll) {
+      numberOfSelectedElements = numberOfElements.original
+        - Object.keys(deSelectedElements || {}).length;
+    }
     return (
       <UserContext.Consumer>
         {({ helper }) => (
@@ -168,9 +260,14 @@ class Relationships extends Component {
               handleRemoveFilter={this.handleRemoveFilter.bind(this)}
               handleChangeView={this.handleChangeView.bind(this)}
               handleToggleExports={this.handleToggleExports.bind(this)}
+              handleToggleSelectAll={this.handleToggleSelectAll.bind(this)}
               openExports={openExports}
+              selectAll={selectAll}
               exportEntityType="stix-core-relationship"
               disableCards={true}
+              secondaryAction={true}
+              iconExtension={true}
+              noPadding={true}
               keyword={searchTerm}
               filters={filters}
               paginationOptions={paginationOptions}
@@ -185,6 +282,7 @@ class Relationships extends Component {
                 'created_start_date',
                 'created_end_date',
                 'createdBy',
+                'creator',
               ]}
             >
               <QueryRenderer
@@ -197,11 +295,35 @@ class Relationships extends Component {
                     dataColumns={this.buildColumns(helper)}
                     initialLoading={props === null}
                     onLabelClick={this.handleAddFilter.bind(this)}
+                    selectedElements={selectedElements}
+                    deSelectedElements={deSelectedElements}
+                    onToggleEntity={this.handleToggleSelectEntity.bind(this)}
+                    selectAll={selectAll}
                     setNumberOfElements={this.setNumberOfElements.bind(this)}
                   />
                 )}
               />
             </ListLines>
+            <ToolBar
+              selectedElements={selectedElements}
+              deSelectedElements={deSelectedElements}
+              numberOfSelectedElements={numberOfSelectedElements}
+              selectAll={selectAll}
+              filters={R.assoc(
+                'entity_type',
+                [
+                  {
+                    id: 'stix-core-relationship',
+                    value: 'stix-core-relationship',
+                  },
+                ],
+                filters,
+              )}
+              search={searchTerm}
+              handleClearSelectedElements={this.handleClearSelectedElements.bind(
+                this,
+              )}
+            />
           </div>
         )}
       </UserContext.Consumer>
@@ -229,7 +351,11 @@ class Relationships extends Component {
       orderMode: orderAsc ? 'asc' : 'desc',
     };
     return (
-      <div>{view === 'lines' ? this.renderLines(paginationOptions) : ''}</div>
+      <ExportContextProvider>
+      <div>
+        {view === 'lines' ? this.renderLines(paginationOptions) : ''}
+      </div>
+      </ExportContextProvider>
     );
   }
 }

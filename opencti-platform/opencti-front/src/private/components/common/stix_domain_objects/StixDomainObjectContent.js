@@ -13,6 +13,8 @@ import Editor from 'ckeditor5-custom-build/build/ckeditor';
 import 'ckeditor5-custom-build/build/translations/fr';
 import 'ckeditor5-custom-build/build/translations/zh-cn';
 import { pdfjs, Document, Page } from 'react-pdf';
+import 'react-pdf/dist/esm/Page/TextLayer.css';
+import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
@@ -23,15 +25,20 @@ import inject18n from '../../../../components/i18n';
 import StixDomainObjectContentFiles, {
   stixDomainObjectContentFilesUploadStixDomainObjectMutation,
 } from './StixDomainObjectContentFiles';
-import { APP_BASE_PATH, commitMutation } from '../../../../relay/environment';
+import {
+  APP_BASE_PATH,
+  commitMutation,
+  MESSAGING$,
+} from '../../../../relay/environment';
 import {
   buildViewParamsFromUrlAndStorage,
   saveViewParameters,
 } from '../../../../utils/ListParameters';
 import Loader from '../../../../components/Loader';
 import StixDomainObjectContentBar from './StixDomainObjectContentBar';
+import { isEmptyField } from '../../../../utils/utils';
 
-pdfjs.GlobalWorkerOptions.workerSrc = `${APP_BASE_PATH}/static/pdf.worker.min.js`;
+pdfjs.GlobalWorkerOptions.workerSrc = `${APP_BASE_PATH}/static/ext/pdf.worker.js`;
 
 const SAVE$ = new Subject().pipe(debounce(() => timer(2000)));
 
@@ -46,6 +53,33 @@ const styles = () => ({
     margin: '15px 0 0 0',
     overflow: 'scroll',
     whiteSpace: 'nowrap',
+    minWidth: 'calc(100vw - 455px)',
+    minHeight: 'calc(100vh - 240px)',
+    width: 'calc(100vw - 455px)',
+    height: 'calc(100vh - 240px)',
+    maxWidth: 'calc(100vw - 455px)',
+    maxHeight: 'calc(100vh - 240px)',
+    display: 'flex',
+    justifyContent: 'center',
+  },
+  adjustedContainer: {
+    margin: '15px 0 0 0',
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
+    minWidth: 'calc(100vw - 465px)',
+    minHeight: 'calc(100vh - 240px)',
+    width: 'calc(100vw - 465px)',
+    height: 'calc(100vh - 240px)',
+    maxWidth: 'calc(100vw - 465px)',
+    maxHeight: 'calc(100vh - 240px)',
+    display: 'flex',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  documentContainerNavOpen: {
+    margin: '15px 0 0 0',
+    overflow: 'scroll',
+    whiteSpace: 'nowrap',
     minWidth: 'calc(100vw - 580px)',
     minHeight: 'calc(100vh - 240px)',
     width: 'calc(100vw - 580px)',
@@ -54,9 +88,8 @@ const styles = () => ({
     maxHeight: 'calc(100vh - 240px)',
     display: 'flex',
     justifyContent: 'center',
-    position: 'relative',
   },
-  adjustedContainer: {
+  adjustedContainerNavOpen: {
     margin: '15px 0 0 0',
     overflow: 'hidden',
     whiteSpace: 'nowrap',
@@ -77,11 +110,6 @@ const styles = () => ({
     padding: '0 0 15px 0',
     borderRadius: 6,
   },
-  pdfViewer: {
-    margin: '0 auto',
-    textAlign: 'center',
-    position: 'relative',
-  },
 });
 
 const stixDomainObjectContentUploadExternalReferenceMutation = graphql`
@@ -90,7 +118,7 @@ const stixDomainObjectContentUploadExternalReferenceMutation = graphql`
     $file: Upload!
   ) {
     stixDomainObjectEdit(id: $id) {
-      importPush(file: $file) {
+      importPush(file: $file, noTriggerImport: true) {
         id
         name
         uploadStatus
@@ -127,6 +155,7 @@ const getFiles = (stixDomainObject) => {
     R.map((n) => n.node.importFiles.edges),
     R.flatten,
     R.map((n) => n.node),
+    R.filter((i) => isEmptyField(i.metaData.external_reference_id)),
   )(R.pathOr([], ['externalReferences', 'edges'], stixDomainObject));
   return R.pipe(
     R.filter((n) => ['application/pdf', 'text/plain', 'text/html', 'text/markdown'].includes(
@@ -153,6 +182,8 @@ class StixDomainObjectContentComponent extends Component {
       markdownSelectedTab: 'write',
       initialContent: props.t('Write something awesome...'),
       currentContent: props.t('Write something awesome...'),
+      navOpen: localStorage.getItem('navOpen') === 'true',
+      readOnly: true,
     };
   }
 
@@ -180,7 +211,9 @@ class StixDomainObjectContentComponent extends Component {
       if (currentFileType === 'application/pdf') {
         return this.setState({ isLoading: false });
       }
-      const url = `${APP_BASE_PATH}/storage/view/${currentFileId}`;
+      const url = `${APP_BASE_PATH}/storage/view/${encodeURIComponent(
+        currentFileId,
+      )}`;
       return Axios.get(url).then((res) => {
         const content = res.data;
         return this.setState({
@@ -192,25 +225,19 @@ class StixDomainObjectContentComponent extends Component {
     });
   }
 
-  componentWillMount() {
-    if (this.props.theme.palette.type === 'dark') {
-      // eslint-disable-next-line global-require
-      require('../../../../resources/css/CKEditorDark.css');
-    } else {
-      // eslint-disable-next-line global-require
-      require('../../../../resources/css/CKEditorLight.css');
-    }
-  }
-
   componentDidMount() {
     this.subscription = SAVE$.subscribe({
       next: () => this.saveFile(),
+    });
+    this.subscriptionToggle = MESSAGING$.toggleNav.subscribe({
+      next: () => this.setState({ navOpen: localStorage.getItem('navOpen') === 'true' }),
     });
     this.loadFileContent();
   }
 
   componentWillUnmount() {
     this.subscription.unsubscribe();
+    this.subscriptionToggle.unsubscribe();
   }
 
   handleSelectFile(fileId) {
@@ -277,6 +304,10 @@ class StixDomainObjectContentComponent extends Component {
     });
   }
 
+  handleSwitchReadOnly() {
+    this.setState({ readOnly: !this.state.readOnly });
+  }
+
   onTextFieldChange(event) {
     this.setState({ currentContent: event.target.value });
     SAVE$.next({ action: 'SaveFile' });
@@ -307,22 +338,35 @@ class StixDomainObjectContentComponent extends Component {
     Promise.all(
       R.pipe(
         R.toPairs,
-        R.map((n) => Axios.get(n[1], { responseType: 'arraybuffer' })
-          .then((response) => {
-            if (
-              ['image/jpeg', 'image/png'].includes(
-                response.headers['content-type'],
-              )
-            ) {
-              return {
-                ref: n[0],
-                mime: response.headers['content-type'],
-                data: Buffer.from(response.data, 'binary').toString('base64'),
-              };
-            }
-            return null;
-          })
-          .catch(() => null)),
+        R.map((n) => {
+          if (n[1].includes('data:')) {
+            const split = n[1].split(',');
+            const mime = split[0].split(';')[0].split(':')[1];
+            const data = split[1];
+            return {
+              ref: n[0],
+              mime,
+              data,
+            };
+          }
+          return Axios.get(n[1], { responseType: 'arraybuffer' })
+            .then((response) => {
+              if (
+                ['image/jpeg', 'image/png'].includes(
+                  response.headers['content-type'],
+                )
+              ) {
+                return {
+                  ref: n[0],
+                  mime: response.headers['content-type'],
+                  data: Buffer.from(response.data, 'binary').toString('base64'),
+                };
+              }
+              return null;
+            })
+            .catch(() => null);
+        }),
+        R.filter((n) => n !== null),
       )(ret.images),
     ).then((result) => {
       const imagesIndex = R.indexBy(R.prop('ref'), result);
@@ -349,10 +393,10 @@ class StixDomainObjectContentComponent extends Component {
       const url = `${protocol}//${hostname}:${port || ''}`;
       const fonts = {
         Roboto: {
-          normal: `${url}${APP_BASE_PATH}/static/Roboto-Regular.ttf`,
-          bold: `${url}${APP_BASE_PATH}/static/Roboto-Bold.ttf`,
-          italics: `${url}${APP_BASE_PATH}/static/Roboto-Italic.ttf`,
-          bolditalics: `${url}${APP_BASE_PATH}/static/Roboto-BoldItalic.ttf`,
+          normal: `${url}${APP_BASE_PATH}/static/ext/Roboto-Regular.ttf`,
+          bold: `${url}${APP_BASE_PATH}/static/ext/Roboto-Bold.ttf`,
+          italics: `${url}${APP_BASE_PATH}/static/ext/Roboto-Italic.ttf`,
+          bolditalics: `${url}${APP_BASE_PATH}/static/ext/Roboto-BoldItalic.ttf`,
         },
       };
       const fragment = currentFileId.split('/');
@@ -369,10 +413,14 @@ class StixDomainObjectContentComponent extends Component {
       isLoading,
       currentContent,
       markdownSelectedTab,
+      navOpen,
+      readOnly,
     } = this.state;
     const files = getFiles(stixDomainObject);
-    const currentUrl = currentFileId && `${APP_BASE_PATH}/storage/view/${currentFileId}`;
-    const currentGetUrl = currentFileId && `${APP_BASE_PATH}/storage/get/${currentFileId}`;
+    const currentUrl = currentFileId
+      && `${APP_BASE_PATH}/storage/view/${encodeURIComponent(currentFileId)}`;
+    const currentGetUrl = currentFileId
+      && `${APP_BASE_PATH}/storage/get/${encodeURIComponent(currentFileId)}`;
     const currentFile = currentFileId && R.head(R.filter((n) => n.id === currentFileId, files));
     const currentFileType = currentFile && currentFile.metaData.mimetype;
     const { innerHeight } = window;
@@ -391,6 +439,7 @@ class StixDomainObjectContentComponent extends Component {
             <StixDomainObjectContentBar
               directDownload={currentGetUrl}
               handleDownloadPdf={this.handleDownloadPdf.bind(this)}
+              navOpen={navOpen}
             />
             <div
               className={classes.editorContainer}
@@ -418,6 +467,9 @@ class StixDomainObjectContentComponent extends Component {
             <StixDomainObjectContentBar
               directDownload={currentGetUrl}
               handleDownloadPdf={this.handleDownloadPdf.bind(this)}
+              handleSwitchReadOnly={this.handleSwitchReadOnly.bind(this)}
+              readOnly={readOnly}
+              navOpen={navOpen}
             />
             <div
               className={classes.editorContainer}
@@ -428,12 +480,16 @@ class StixDomainObjectContentComponent extends Component {
                 config={{
                   width: '100%',
                   language: 'en',
+                  image: {
+                    resizeUnit: 'px',
+                  },
                 }}
                 data={currentContent}
                 onChange={(event, editor) => {
                   this.onHtmlFieldChange(editor.getData());
                 }}
                 onBlur={this.saveFile.bind(this)}
+                disabled={readOnly}
               />
             </div>
           </div>
@@ -443,6 +499,7 @@ class StixDomainObjectContentComponent extends Component {
             <StixDomainObjectContentBar
               directDownload={currentGetUrl}
               handleDownloadPdf={this.handleDownloadPdf.bind(this)}
+              navOpen={navOpen}
             />
             <div
               className={classes.editorContainer}
@@ -486,10 +543,16 @@ class StixDomainObjectContentComponent extends Component {
               handleZoomOut={this.handleZoomOut.bind(this)}
               directDownload={currentGetUrl}
               currentZoom={this.state.pdfViewerZoom}
+              navOpen={navOpen}
             />
-            <div className={classes.documentContainer}>
+            <div
+              className={
+                navOpen
+                  ? classes.documentContainerNavOpen
+                  : classes.documentContainer
+              }
+            >
               <Document
-                className={classes.pdfViewer}
                 onLoadSuccess={this.onDocumentLoadSuccess.bind(this)}
                 loading={<Loader variant="inElement" />}
                 file={currentUrl}
@@ -497,7 +560,6 @@ class StixDomainObjectContentComponent extends Component {
                 {Array.from(new Array(totalPdfPageNumber), (el, index) => (
                   <Page
                     key={`page_${index + 1}`}
-                    style={{ position: 'absolute', top: '50%', left: '50%' }}
                     pageNumber={index + 1}
                     height={height}
                     scale={this.state.pdfViewerZoom}
@@ -508,7 +570,13 @@ class StixDomainObjectContentComponent extends Component {
           </div>
         )}
         {!currentFile && (
-          <div className={classes.adjustedContainer}>
+          <div
+            className={
+              navOpen
+                ? classes.adjustedContainerNavOpen
+                : classes.adjustedContainer
+            }
+          >
             <div
               style={{
                 display: 'table',
@@ -597,6 +665,7 @@ const StixDomainObjectContent = createRefetchContainer(
                     metaData {
                       mimetype
                       list_filters
+                      external_reference_id
                       messages {
                         timestamp
                         message

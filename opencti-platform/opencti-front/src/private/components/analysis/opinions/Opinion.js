@@ -10,7 +10,8 @@ import OpinionDetails from './OpinionDetails';
 import OpinionEdition from './OpinionEdition';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../external_references/StixCoreObjectExternalReferences';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectLatestHistory from '../../common/stix_core_objects/StixCoreObjectLatestHistory';
 import OpinionPopover from './OpinionPopover';
 import ContainerStixObjectsOrStixRelationships from '../../common/containers/ContainerStixObjectsOrStixRelationships';
@@ -39,10 +40,10 @@ class OpinionComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={opinion} />
+            <OpinionDetails opinion={opinion} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <ContainerStixObjectsOrStixRelationships container={opinion} />
+            <StixDomainObjectOverview stixDomainObject={opinion} />
           </Grid>
         </Grid>
         <Grid
@@ -52,7 +53,10 @@ class OpinionComponent extends Component {
           style={{ marginTop: 25 }}
         >
           <Grid item={true} xs={12}>
-            <OpinionDetails opinion={opinion} />
+            <ContainerStixObjectsOrStixRelationships
+              container={opinion}
+              isSupportParticipation={true}
+            />
           </Grid>
         </Grid>
         <Grid
@@ -65,7 +69,10 @@ class OpinionComponent extends Component {
             <StixCoreObjectExternalReferences stixCoreObjectId={opinion.id} />
           </Grid>
           <Grid item={true} xs={6}>
-            <StixCoreObjectLatestHistory stixCoreObjectId={opinion.id} />
+            <StixCoreObjectLatestHistory
+              stixCoreObjectId={opinion.id}
+              isSupportParticipation={true}
+            />
           </Grid>
         </Grid>
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
@@ -105,6 +112,17 @@ const Opinion = createFragmentContainer(OpinionComponent, {
       creator {
         id
         name
+      }
+      objectMarking {
+        edges {
+          node {
+            id
+            definition_type
+            definition
+            x_opencti_order
+            x_opencti_color
+          }
+        }
       }
       objectLabel {
         edges {

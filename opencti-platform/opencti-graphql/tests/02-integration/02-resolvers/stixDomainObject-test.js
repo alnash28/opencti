@@ -1,3 +1,4 @@
+import { expect, it, describe } from 'vitest';
 import gql from 'graphql-tag';
 import { queryAsAdmin } from '../../utils/testQuery';
 
@@ -163,12 +164,12 @@ describe('StixDomainObject resolver standard behavior', () => {
       }
     `;
     const queryResult = await queryAsAdmin({ query: NUMBER_QUERY });
-    expect(queryResult.data.stixDomainObjectsNumber.total).toEqual(29);
+    expect(queryResult.data.stixDomainObjectsNumber.total).toEqual(31);
   });
   it('should timeseries stixDomainObjects to be accurate', async () => {
     const TIMESERIES_QUERY = gql`
       query stixDomainObjectsTimeSeries(
-        $type: String
+        $types: [String]
         $field: String!
         $operation: StatsOperation!
         $startDate: DateTime!
@@ -176,7 +177,7 @@ describe('StixDomainObject resolver standard behavior', () => {
         $interval: String!
       ) {
         stixDomainObjectsTimeSeries(
-          type: $type
+          types: $types
           field: $field
           operation: $operation
           startDate: $startDate
@@ -295,7 +296,7 @@ describe('StixDomainObject resolver standard behavior', () => {
   });
   it('should delete relation in stixDomainObject', async () => {
     const RELATION_DELETE_QUERY = gql`
-      mutation StixDomainObjectEdit($id: ID!, $toId: String!, $relationship_type: String!) {
+      mutation StixDomainObjectEdit($id: ID!, $toId: StixRef!, $relationship_type: String!) {
         stixDomainObjectEdit(id: $id) {
           relationDelete(toId: $toId, relationship_type: $relationship_type) {
             id

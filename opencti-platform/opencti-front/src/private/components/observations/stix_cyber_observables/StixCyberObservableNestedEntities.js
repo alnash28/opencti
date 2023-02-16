@@ -12,7 +12,8 @@ import ListItemText from '@mui/material/ListItemText';
 import ListItemSecondaryAction from '@mui/material/ListItemSecondaryAction';
 import inject18n from '../../../../components/i18n';
 import StixCyberObservableRelationCreationFromEntity from '../../common/stix_cyber_observable_relationships/StixCyberObservableRelationshipCreationFromEntity';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import SearchInput from '../../../../components/SearchInput';
 import { QueryRenderer } from '../../../../relay/environment';
 import StixCyberObservableNestedEntitiesLines, {
@@ -70,20 +71,26 @@ const inlineStylesHeaders = {
   },
   relationship_type: {
     float: 'left',
-    width: '15%',
+    width: '10%',
     fontSize: 12,
     fontWeight: '700',
     cursor: 'pointer',
   },
   entity_type: {
     float: 'left',
-    width: '20%',
+    width: '10%',
     fontSize: 12,
     fontWeight: '700',
   },
   name: {
     float: 'left',
-    width: '35%',
+    width: '22%',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  creator: {
+    float: 'left',
+    width: '12%',
     fontSize: 12,
     fontWeight: '700',
   },
@@ -202,9 +209,10 @@ class StixCyberObservableNestedEntities extends Component {
               <ListItemText
                 primary={
                   <div>
-                    {this.SortHeader('relationship_type', 'Relationship', true)}
+                    {this.SortHeader('relationship_type', 'Attribute', true)}
                     {this.SortHeader('entity_type', 'Entity type', false)}
                     {this.SortHeader('name', 'Name', false)}
+                    {this.SortHeader('creator', 'Creator', false)}
                     {this.SortHeader('start_time', 'First obs.', true)}
                     {this.SortHeader('stop_time', 'Last obs.', true)}
                   </div>

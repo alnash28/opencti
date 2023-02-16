@@ -20,6 +20,9 @@ import { MULTIPLE_STIX_CYBER_OBSERVABLE_RELATIONSHIPS_INPUTS } from './stixCyber
 import type { StixArtifact, StixFile, StixX509Certificate } from '../types/stix-sco';
 import type { HashInput } from '../generated/graphql';
 
+export const SENSITIVE_HASHES = ['SSDEEP', 'SDHASH'];
+export const FUZZY_HASH_ALGORITHMS = ['SSDEEP', 'SDHASH', 'TLSH', 'LZJD'];
+
 export const jsonAttributes = ['bookmarks', 'connector_state', 'feed_attributes'];
 export const multipleAttributes = [
   IDS_STIX,
@@ -55,9 +58,9 @@ export const multipleAttributes = [
   'options',
   'entities_ids',
   'x_opencti_files',
-  'platform_enable_reference',
   'feed_types',
-  'platform_hidden_types',
+  'descriptions',
+  'note_types',
   // meta
   INPUT_OBJECTS,
   INPUT_MARKINGS,
@@ -68,7 +71,7 @@ export const multipleAttributes = [
   ...MULTIPLE_STIX_CYBER_OBSERVABLE_RELATIONSHIPS_INPUTS,
 ];
 export const noReferenceAttributes = ['x_opencti_graph_data'];
-export const runtimeAttributes = ['observable_value', 'createdBy', 'objectMarking'];
+export const runtimeAttributes = ['observable_value', 'createdBy', 'objectMarking', 'creator'];
 export const statsDateAttributes = [
   'created_at',
   'first_seen',
@@ -161,39 +164,52 @@ export const booleanAttributes = [
   'can_escalate_privs',
   'is_disabled',
   'is_self_signed',
-  'platform_enable_references',
   'auto_new_marking',
   'listen_deletion',
   'no_dependencies',
   'ssl_verify',
   'include_header',
   'otp_activated',
+  'aslr_enabled',
+  'dep_enabled',
+  'otp_mandatory',
 ];
-export const numericOrBooleanAttributes = [...numericAttributes, ...booleanAttributes];
-export const dictAttributes: { [k: string]: { key: string, value: string } } = { hashes: { key: 'algorithm', value: 'hash' } };
+export const dictAttributes = ['hashes', 'startup_info'];
+export const numericOrBooleanAttributes = () => [...numericAttributes, ...booleanAttributes];
 
 export const isJsonAttribute = (key: string): boolean => jsonAttributes.includes(key);
-export const isDictionaryAttribute = (key: string): boolean => dictAttributes[key] !== undefined;
+export const isDictionaryAttribute = (key: string): boolean => dictAttributes.includes(key);
 export const isBooleanAttribute = (key: string): boolean => booleanAttributes.includes(key);
 export const isNumericAttribute = (key: string): boolean => numericAttributes.includes(key);
 export const isDateAttribute = (key: string): boolean => dateAttributes.includes(key);
 export const isMultipleAttribute = (key: string): boolean => key.startsWith(RULE_PREFIX) || multipleAttributes.includes(key);
 export const isRuntimeAttribute = (key: string): boolean => runtimeAttributes.includes(key);
 
+// Extract all not fuzzy algorithm values from a hash object
+export const extractNotFuzzyHashValues = (hashes: Record<string, string>): Array<string> => {
+  return Object.entries(hashes)
+    .filter(([hashKey]) => !FUZZY_HASH_ALGORITHMS.includes(hashKey.toUpperCase()))
+    .map(([, hashValue]) => hashValue)
+    .filter((hashValue) => hashValue);
+};
+
 // Must be call as soon as possible in the according resolvers
 export const inputHashesToStix = (data: Array<HashInput>) => {
   const inputs = Array.isArray(data) ? data : [data];
   const convertedInputs = inputs.map((d) => {
-    return [d.algorithm.toUpperCase(), d.hash.toLowerCase()] as KeyValuePair<string, string>;
+    const hashAlgorithm = d.algorithm.toUpperCase().trim();
+    const hashValue = SENSITIVE_HASHES.includes(hashAlgorithm) ? d.hash : d.hash.toLowerCase();
+    return [hashAlgorithm, hashValue.trim()] as KeyValuePair<string, string>;
   });
   return R.fromPairs(convertedInputs);
 };
+
 // Must only be call in generic resolvers for data output
 export const stixHashesToInput = (instance: StixArtifact | StixFile | StixX509Certificate): Array<HashInput> => {
   const attributeValue = instance.hashes ?? {};
   const entries = Object.entries(attributeValue);
   return entries.map(([lab, val]) => {
-    return { algorithm: lab.toUpperCase(), hash: val.toLowerCase() };
+    return { algorithm: lab.toUpperCase().trim(), hash: val.trim() };
   });
 };
 

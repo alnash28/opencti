@@ -1,14 +1,21 @@
 import * as R from 'ramda';
 import { Promise } from 'bluebird';
 import { READ_INDEX_STIX_DOMAIN_OBJECTS, READ_RELATIONSHIPS_INDICES } from '../database/utils';
-import { BULK_TIMEOUT, searchClient, elBulk, elList, ES_MAX_CONCURRENCY, MAX_SPLIT } from '../database/engine';
+import {
+  BULK_TIMEOUT,
+  elBulk,
+  elList,
+  elUpdateByQueryForMigration,
+  ES_MAX_CONCURRENCY,
+  MAX_SPLIT
+} from '../database/engine';
 import { generateStandardId } from '../schema/identifier';
 import { logApp } from '../config/conf';
 import { ENTITY_TYPE_INCIDENT } from '../schema/stixDomainObject';
-import { DatabaseError } from '../config/errors';
-import { SYSTEM_USER } from '../utils/access';
+import { executionContext, SYSTEM_USER } from '../utils/access';
 
 export const up = async (next) => {
+  const context = executionContext('migration');
   const start = new Date().getTime();
   logApp.info('[MIGRATION] Rewriting IDs and types of Incidents');
   const bulkOperations = [];
@@ -32,7 +39,7 @@ export const up = async (next) => {
   };
   // Old type
   const opts = { types: ['X-OpenCTI-Incident'], callback };
-  await elList(SYSTEM_USER, READ_INDEX_STIX_DOMAIN_OBJECTS, opts);
+  await elList(context, SYSTEM_USER, READ_INDEX_STIX_DOMAIN_OBJECTS, opts);
   // Apply operations.
   let currentProcessing = 0;
   const groupsOfOperations = R.splitEvery(MAX_SPLIT, bulkOperations);
@@ -60,32 +67,26 @@ export const up = async (next) => {
       }
       connection.types = values;
   }`;
-  logApp.info('[MIGRATION] Migrating all relationships connections');
   const startMigrateRelationships = new Date().getTime();
-  await searchClient()
-    .updateByQuery({
-      index: READ_RELATIONSHIPS_INDICES,
-      refresh: true,
-      body: {
-        script: { source, params: { type: 'X-OpenCTI-Incident', target: 'Incident' } },
+  const updateQuery = {
+    script: { source, params: { type: 'X-OpenCTI-Incident', target: 'Incident' } },
+    query: {
+      nested: {
+        path: 'connections',
         query: {
-          nested: {
-            path: 'connections',
-            query: {
-              bool: {
-                must: [{ match_phrase: { 'connections.types': 'X-OpenCTI-Incident' } }],
-              },
-            },
+          bool: {
+            must: [{ match_phrase: { 'connections.types': 'X-OpenCTI-Incident' } }],
           },
         },
       },
-    })
-    .catch((err) => {
-      throw DatabaseError('Error updating elastic', { error: err });
-    });
-  logApp.info(
-    `[MIGRATION] Migrating all relationships connections done in ${new Date() - startMigrateRelationships} ms`
+    },
+  };
+  await elUpdateByQueryForMigration(
+    '[MIGRATION] Migrating relationships connections',
+    READ_RELATIONSHIPS_INDICES,
+    updateQuery
   );
+  logApp.info(`[MIGRATION] Migrating all relationships connections done in ${new Date() - startMigrateRelationships} ms`);
   next();
 };
 

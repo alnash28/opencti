@@ -27,9 +27,8 @@ import inject18n from '../../../../components/i18n';
 import { FIVE_SECONDS } from '../../../../utils/Time';
 import { truncate } from '../../../../utils/String';
 import { commitMutation, MESSAGING$ } from '../../../../relay/environment';
-import Security, {
-  KNOWLEDGE_KNUPDATE_KNDELETE,
-} from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE_KNDELETE } from '../../../../utils/hooks/useGranted';
 
 const interval$ = interval(FIVE_SECONDS);
 
@@ -241,6 +240,7 @@ class TasksListComponent extends Component {
                               t(`filter_${currentFilter[0]}`),
                               20,
                             )}`;
+                            const localFilterMode = currentFilter[0].endsWith('not_eq') ? t('AND') : t('OR');
                             const values = (
                               <span>
                                 {R.map(
@@ -250,7 +250,7 @@ class TasksListComponent extends Component {
                                         ? truncate(o.value, 15)
                                         : t('No label')}{' '}
                                       {R.last(currentFilter[1]).value
-                                        !== o.value && <code>OR</code>}{' '}
+                                        !== o.value && <code>{localFilterMode}</code>}{' '}
                                     </span>
                                   ),
                                   currentFilter[1],

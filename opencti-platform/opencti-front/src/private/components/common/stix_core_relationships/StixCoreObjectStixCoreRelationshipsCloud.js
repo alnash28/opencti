@@ -10,7 +10,8 @@ import { SettingsInputComponent } from '@mui/icons-material';
 import Grid from '@mui/material/Grid';
 import { QueryRenderer } from '../../../../relay/environment';
 import inject18n from '../../../../components/i18n';
-import Security, { EXPLORE_EXUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { EXPLORE_EXUPDATE } from '../../../../utils/hooks/useGranted';
 import Loader from '../../../../components/Loader';
 import { hexToRGB, itemColor } from '../../../../utils/Colors';
 
@@ -44,19 +45,25 @@ const styles = () => ({
 
 const stixCoreObjectStixCoreRelationshipsCloudDistributionQuery = graphql`
   query StixCoreObjectStixCoreRelationshipsCloudDistributionQuery(
-    $fromId: String!
+    $elementId: [String]
+    $elementWithTargetTypes: [String]
+    $fromId: [String]
+    $toId: [String]
+    $fromTypes: [String]
     $toTypes: [String]
-    $relationship_type: String
+    $relationship_type: [String]
     $startDate: DateTime
     $endDate: DateTime
     $field: String!
     $operation: StatsOperation!
     $limit: Int
-    $isTo: Boolean
-    $noDirection: Boolean
   ) {
     stixCoreRelationshipsDistribution(
+      elementId: $elementId
+      elementWithTargetTypes: $elementWithTargetTypes
       fromId: $fromId
+      toId: $toId
+      fromTypes: $fromTypes
       toTypes: $toTypes
       relationship_type: $relationship_type
       startDate: $startDate
@@ -64,8 +71,6 @@ const stixCoreObjectStixCoreRelationshipsCloudDistributionQuery = graphql`
       field: $field
       operation: $operation
       limit: $limit
-      isTo: $isTo
-      noDirection: $noDirection
     ) {
       label
       value
@@ -89,11 +94,22 @@ class StixCoreObjectStixCoreRelationshipsCloud extends Component {
       noDirection,
     } = this.props;
     const stixCoreRelationshipsDistributionVariables = {
-      fromId: stixCoreObjectId,
-      toTypes: stixCoreObjectType ? [stixCoreObjectType] : null,
+      elementId: noDirection ? stixCoreObjectId : null,
+      elementWithTargetTypes:
+        noDirection && stixCoreObjectType ? [stixCoreObjectType] : null,
+      fromId: !isTo && !noDirection ? stixCoreObjectId : null,
+      toId: isTo && !noDirection ? stixCoreObjectId : null,
+      relationship_type: relationshipType,
+      toTypes:
+        !isTo && !noDirection && stixCoreObjectType
+          ? [stixCoreObjectType]
+          : null,
+      fromTypes:
+        isTo && !noDirection && stixCoreObjectType
+          ? [stixCoreObjectType]
+          : null,
       startDate: startDate || null,
       endDate: endDate || null,
-      relationship_type: relationshipType,
       field,
       operation: 'count',
       limit: 9,

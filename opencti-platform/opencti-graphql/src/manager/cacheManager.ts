@@ -1,82 +1,147 @@
+import * as R from 'ramda';
+import { Promise as Bluebird } from 'bluebird';
 import { logApp, TOPIC_PREFIX } from '../config/conf';
-import { pubsub } from '../database/redis';
-import { connectors } from '../database/repository';
+import { pubSubSubscription } from '../database/redis';
+import { connectors as findConnectors } from '../database/repository';
 import {
   ENTITY_TYPE_CONNECTOR,
   ENTITY_TYPE_RULE,
+  ENTITY_TYPE_SETTINGS,
   ENTITY_TYPE_STATUS,
-  ENTITY_TYPE_STATUS_TEMPLATE
+  ENTITY_TYPE_STATUS_TEMPLATE,
+  ENTITY_TYPE_STREAM_COLLECTION,
+  ENTITY_TYPE_USER
 } from '../schema/internalObject';
-import { SYSTEM_USER } from '../utils/access';
-import { UnsupportedError } from '../config/errors';
-import type { BasicStoreEntity, BasicWorkflowStatusEntity, BasicWorkflowTemplateEntity } from '../types/store';
-import { EntityOptions, listEntities } from '../database/middleware-loader';
+import { executionContext, SYSTEM_USER } from '../utils/access';
+import type {
+  BasicStoreEntity,
+  BasicStreamEntity,
+  BasicTriggerEntity,
+  BasicWorkflowStatusEntity,
+  BasicWorkflowTemplateEntity
+} from '../types/store';
+import { EntityOptions, internalFindByIds, listAllEntities } from '../database/middleware-loader';
+import { ENTITY_TYPE_MARKING_DEFINITION } from '../schema/stixMetaObject';
+import { resetCacheForEntity, writeCacheForEntity } from '../database/cache';
+import type { AuthContext } from '../types/user';
+import { ENTITY_TYPE_IDENTITY_ORGANIZATION, ENTITY_TYPE_RESOLVED_FILTERS } from '../schema/stixDomainObject';
+import { ENTITY_TYPE_ENTITY_SETTING } from '../modules/entitySetting/entitySetting-types';
+import { OrderingMode } from '../generated/graphql';
+import { extractFilterIdsToResolve } from '../utils/filtering';
+import { BasicStoreEntityTrigger, ENTITY_TYPE_TRIGGER } from '../modules/notification/notification-types';
+import { ES_MAX_CONCURRENCY } from '../database/engine';
+import { resolveUserById } from '../domain/user';
 
-let cache: any = {};
-
-export const getConfigCache = async<T extends BasicStoreEntity>(type: string): Promise<Array<T>> => {
-  const fromCache = cache[type];
-  if (!fromCache) {
-    throw UnsupportedError(`${type} is not supported in cache configuration`);
-  }
-  if (!fromCache.values) {
-    fromCache.values = await fromCache.fn();
-  }
-  return fromCache.values;
-};
-
-const workflowStatuses = async () => {
+const workflowStatuses = (context: AuthContext) => {
   const reloadStatuses = async () => {
-    const templates = await listEntities<BasicWorkflowTemplateEntity>(SYSTEM_USER, [ENTITY_TYPE_STATUS_TEMPLATE], { connectionFormat: false });
-    const args:EntityOptions<BasicWorkflowStatusEntity> = { orderBy: ['order'], orderMode: 'asc', connectionFormat: false };
-    const statuses = await listEntities<BasicWorkflowStatusEntity>(SYSTEM_USER, [ENTITY_TYPE_STATUS], args);
+    const templates = await listAllEntities<BasicWorkflowTemplateEntity>(context, SYSTEM_USER, [ENTITY_TYPE_STATUS_TEMPLATE], { connectionFormat: false });
+    const args:EntityOptions<BasicWorkflowStatusEntity> = { orderBy: ['order'], orderMode: OrderingMode.Asc, connectionFormat: false };
+    const statuses = await listAllEntities<BasicWorkflowStatusEntity>(context, SYSTEM_USER, [ENTITY_TYPE_STATUS], args);
     return statuses.map((status) => {
       const template = templates.find((t) => t.internal_id === status.template_id);
       return { ...status, name: template?.name ?? 'Error with template association' };
     });
   };
-  return { values: await reloadStatuses(), fn: reloadStatuses };
+  return { values: null, fn: reloadStatuses };
 };
-const platformConnectors = async () => {
-  const reloadConnectors = async () => {
-    return connectors(SYSTEM_USER);
+const platformResolvedFilters = (context: AuthContext) => {
+  const reloadFilters = async () => {
+    const filteringIds = [];
+    const streams = await listAllEntities<BasicStreamEntity>(context, SYSTEM_USER, [ENTITY_TYPE_STREAM_COLLECTION], { connectionFormat: false });
+    filteringIds.push(...streams.map((s) => extractFilterIdsToResolve(JSON.parse(s.filters ?? '{}'))).flat());
+    const triggers = await listAllEntities<BasicTriggerEntity>(context, SYSTEM_USER, [ENTITY_TYPE_TRIGGER], { connectionFormat: false });
+    filteringIds.push(...triggers.map((s) => extractFilterIdsToResolve(JSON.parse(s.filters ?? '{}'))).flat());
+    if (filteringIds.length > 0) {
+      const resolvingIds = R.uniq(filteringIds);
+      const loadedDependencies = await internalFindByIds(context, SYSTEM_USER, resolvingIds);
+      return loadedDependencies.map((l) => ({ internal_id: l.internal_id, standard_id: l.standard_id }));
+    }
+    return [];
   };
-  return { values: await reloadConnectors(), fn: reloadConnectors };
+  return { values: null, fn: reloadFilters };
 };
-const platformRules = async () => {
-  const reloadRules = async () => {
-    return listEntities(SYSTEM_USER, [ENTITY_TYPE_RULE], { connectionFormat: false });
+const platformConnectors = (context: AuthContext) => {
+  const reloadConnectors = () => {
+    return findConnectors(context, SYSTEM_USER);
   };
-  return { values: await reloadRules(), fn: reloadRules };
+  return { values: null, fn: reloadConnectors };
+};
+const platformOrganizations = (context: AuthContext) => {
+  const reloadOrganizations = () => {
+    return listAllEntities(context, SYSTEM_USER, [ENTITY_TYPE_IDENTITY_ORGANIZATION], { connectionFormat: false });
+  };
+  return { values: null, fn: reloadOrganizations };
+};
+const platformRules = (context: AuthContext) => {
+  const reloadRules = () => {
+    return listAllEntities(context, SYSTEM_USER, [ENTITY_TYPE_RULE], { connectionFormat: false });
+  };
+  return { values: null, fn: reloadRules };
+};
+const platformMarkings = (context: AuthContext) => {
+  const reloadMarkings = () => {
+    return listAllEntities(context, SYSTEM_USER, [ENTITY_TYPE_MARKING_DEFINITION], { connectionFormat: false });
+  };
+  return { values: null, fn: reloadMarkings };
+};
+const platformTriggers = (context: AuthContext) => {
+  const reloadTriggers = () => {
+    return listAllEntities<BasicStoreEntityTrigger>(context, SYSTEM_USER, [ENTITY_TYPE_TRIGGER], { connectionFormat: false });
+  };
+  return { values: null, fn: reloadTriggers };
+};
+const platformUsers = (context: AuthContext) => {
+  const reloadUsers = async () => {
+    const users = await listAllEntities(context, SYSTEM_USER, [ENTITY_TYPE_USER], { connectionFormat: false });
+    const allUserIds = users.map((user) => user.internal_id);
+    return Bluebird.map(allUserIds, (userId: string) => resolveUserById(context, userId), { concurrency: ES_MAX_CONCURRENCY });
+  };
+  return { values: null, fn: reloadUsers };
+};
+const platformSettings = (context: AuthContext) => {
+  const reloadSettings = () => {
+    return listAllEntities(context, SYSTEM_USER, [ENTITY_TYPE_SETTINGS], { connectionFormat: false });
+  };
+  return { values: null, fn: reloadSettings };
+};
+const platformEntitySettings = (context: AuthContext) => {
+  const reloadEntitySettings = () => {
+    return listAllEntities(context, SYSTEM_USER, [ENTITY_TYPE_ENTITY_SETTING], { connectionFormat: false });
+  };
+  return { values: null, fn: reloadEntitySettings };
 };
 
 const initCacheManager = () => {
-  let subscribeIdentifier: number;
+  let subscribeIdentifier: { topic: string; unsubscribe: () => void; };
+  const initCacheContent = () => {
+    const context = executionContext('cache_manager');
+    writeCacheForEntity(ENTITY_TYPE_SETTINGS, platformSettings(context));
+    writeCacheForEntity(ENTITY_TYPE_ENTITY_SETTING, platformEntitySettings(context));
+    writeCacheForEntity(ENTITY_TYPE_MARKING_DEFINITION, platformMarkings(context));
+    writeCacheForEntity(ENTITY_TYPE_USER, platformUsers(context));
+    writeCacheForEntity(ENTITY_TYPE_STATUS, workflowStatuses(context));
+    writeCacheForEntity(ENTITY_TYPE_CONNECTOR, platformConnectors(context));
+    writeCacheForEntity(ENTITY_TYPE_TRIGGER, platformTriggers(context));
+    writeCacheForEntity(ENTITY_TYPE_RULE, platformRules(context));
+    writeCacheForEntity(ENTITY_TYPE_IDENTITY_ORGANIZATION, platformOrganizations(context));
+    writeCacheForEntity(ENTITY_TYPE_RESOLVED_FILTERS, platformResolvedFilters(context));
+  };
   return {
+    init: () => initCacheContent(), // Use for testing
     start: async () => {
-      logApp.info('[OPENCTI-MODULE] Initializing cache manager');
-      // Load initial data used for cache
-      cache[ENTITY_TYPE_STATUS] = await workflowStatuses();
-      cache[ENTITY_TYPE_CONNECTOR] = await platformConnectors();
-      cache[ENTITY_TYPE_RULE] = await platformRules();
+      initCacheContent();
       // Listen pub/sub configuration events
-      // noinspection ES6MissingAwait
-      subscribeIdentifier = await pubsub.subscribe(`${TOPIC_PREFIX}*`, (event) => {
+      subscribeIdentifier = await pubSubSubscription<{ instance: BasicStoreEntity }>(`${TOPIC_PREFIX}*`, (event) => {
         const { instance } = event;
         // Invalid cache if any entity has changed.
-        if (cache[instance.entity_type]) {
-          cache[instance.entity_type].values = undefined;
-        } else {
-          // This entity type is not part of the caching system
-        }
-      }, { pattern: true });
-      logApp.info('[OPENCTI-MODULE] Cache manager initialized');
+        resetCacheForEntity(instance.entity_type);
+      });
+      logApp.info('[OPENCTI-MODULE] Cache manager pub sub listener initialized');
     },
     shutdown: async () => {
       if (subscribeIdentifier) {
-        pubsub.unsubscribe(subscribeIdentifier);
+        try { subscribeIdentifier.unsubscribe(); } catch { /* dont care */ }
       }
-      cache = {};
       return true;
     }
   };

@@ -1,6 +1,6 @@
 import React, { Suspense } from 'react';
 import { Link } from 'react-router-dom';
-import { head, pathOr, assoc, map, pluck, last } from 'ramda';
+import { assoc, head, last, map, pathOr, pluck } from 'ramda';
 import { makeStyles, useTheme } from '@mui/styles';
 import Card from '@mui/material/Card';
 import Grid from '@mui/material/Grid';
@@ -20,11 +20,14 @@ import {
 import Chart from 'react-apexcharts';
 import Slide from '@mui/material/Slide';
 import { graphql, useLazyLoadQuery } from 'react-relay';
-import { yearsAgo, dayAgo, monthsAgo } from '../../utils/Time';
+import Chip from '@mui/material/Chip';
+import Tooltip from '@mui/material/Tooltip';
+import { dayAgo, monthsAgo, yearsAgo } from '../../utils/Time';
 import { useFormatter } from '../../components/i18n';
 import ItemNumberDifference from '../../components/ItemNumberDifference';
 import Loader from '../../components/Loader';
-import Security, { EXPLORE, KNOWLEDGE } from '../../utils/Security';
+import Security from '../../utils/Security';
+import { EXPLORE, KNOWLEDGE } from '../../utils/hooks/useGranted';
 import { resolveLink } from '../../utils/Entity';
 import ItemIcon from '../../components/ItemIcon';
 import { hexToRGB } from '../../utils/Colors';
@@ -38,6 +41,7 @@ import { useViewStorage } from '../../utils/ListParameters';
 import TopBar from './nav/TopBar';
 import ErrorNotFound from '../../components/ErrorNotFound';
 import { areaChartOptions, polarAreaChartOptions } from '../../utils/Charts';
+import { defaultValue } from '../../utils/Graph';
 
 // region styles
 const Transition = React.forwardRef((props, ref) => (
@@ -115,9 +119,19 @@ const useStyles = makeStyles((theme) => ({
     fontSize: 15,
   },
   itemAuthor: {
-    width: 200,
-    minWidth: 200,
-    maxWidth: 200,
+    width: 160,
+    minWidth: 160,
+    maxWidth: 160,
+    paddingRight: 24,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    textAlign: 'left',
+  },
+  itemCreator: {
+    width: 160,
+    minWidth: 160,
+    maxWidth: 160,
     paddingRight: 24,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
@@ -125,9 +139,9 @@ const useStyles = makeStyles((theme) => ({
     textAlign: 'left',
   },
   itemType: {
-    width: 100,
-    minWidth: 100,
-    maxWidth: 100,
+    width: 150,
+    minWidth: 150,
+    maxWidth: 150,
     paddingRight: 24,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
@@ -143,6 +157,12 @@ const useStyles = makeStyles((theme) => ({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     textAlign: 'left',
+  },
+  chipInList: {
+    fontSize: 12,
+    height: 20,
+    float: 'left',
+    width: 120,
   },
 }));
 // endregion
@@ -200,10 +220,13 @@ const TotalRelationshipsCard = ({ title, options, Icon }) => {
   const { t, n } = useFormatter();
   const dashboardStixCoreRelationshipsNumberQuery = graphql`
     query DashboardStixCoreRelationshipsNumberQuery(
-      $type: String
+      $relationship_type: [String]
       $endDate: DateTime
     ) {
-      stixCoreRelationshipsNumber(type: $type, endDate: $endDate) {
+      stixCoreRelationshipsNumber(
+        relationship_type: $relationship_type
+        endDate: $endDate
+      ) {
         total
         count
       }
@@ -269,7 +292,7 @@ const TopLabelsCard = ({ classes }) => {
     query DashboardStixMetaRelationshipsDistributionQuery(
       $field: String!
       $operation: StatsOperation!
-      $relationship_type: String
+      $relationship_type: [String]
       $toTypes: [String]
       $startDate: DateTime
       $endDate: DateTime
@@ -311,6 +334,7 @@ const TopLabelsCard = ({ classes }) => {
   const data = useLazyLoadQuery(
     dashboardStixMetaRelationshipsDistributionQuery,
     queryOptions,
+    { fetchPolicy: 'network-only' },
   );
   const distribution = data.stixMetaRelationshipsDistribution;
   if (distribution.length === 0) {
@@ -363,12 +387,16 @@ const IngestedEntitiesGraph = () => {
       }
     }
   `;
-  const data = useLazyLoadQuery(dashboardStixDomainObjectsTimeSeriesQuery, {
-    field: 'created_at',
-    operation: 'count',
-    startDate: yearsAgo(1),
-    interval: 'month',
-  });
+  const data = useLazyLoadQuery(
+    dashboardStixDomainObjectsTimeSeriesQuery,
+    {
+      field: 'created_at',
+      operation: 'count',
+      startDate: yearsAgo(1),
+      interval: 'month',
+    },
+    { fetchPolicy: 'network-only' },
+  );
   const chartData = data.stixDomainObjectsTimeSeries.map((entry) => {
     const date = new Date(entry.date);
     date.setDate(date.getDate() + 15);
@@ -405,7 +433,7 @@ const TargetedCountries = ({ timeField }) => {
     query DashboardStixCoreRelationshipsDistributionQuery(
       $field: String!
       $operation: StatsOperation!
-      $relationship_type: String
+      $relationship_type: [String]
       $toTypes: [String]
       $startDate: DateTime
       $endDate: DateTime
@@ -452,6 +480,7 @@ const TargetedCountries = ({ timeField }) => {
       dateAttribute: timeField === 'functional' ? 'start_time' : 'created_at',
       limit: 20,
     },
+    { fetchPolicy: 'network-only' },
   );
   const values = pluck('value', data.stixCoreRelationshipsDistribution);
   const countries = map(
@@ -472,7 +501,6 @@ const TargetedCountries = ({ timeField }) => {
 };
 const LastIngestedAnalysis = () => {
   const classes = useStyles();
-  const theme = useTheme();
   const { t, fsd } = useFormatter();
   const dashboardLastStixDomainObjectsQuery = graphql`
     query DashboardLastStixDomainObjectsQuery(
@@ -494,14 +522,11 @@ const LastIngestedAnalysis = () => {
             created_at
             ... on Report {
               name
+              report_types
             }
-            ... on Note {
-              attribute_abstract
-              content
-            }
-            ... on Opinion {
-              opinion
-              explanation
+            creator {
+              id
+              name
             }
             createdBy {
               ... on Identity {
@@ -514,7 +539,10 @@ const LastIngestedAnalysis = () => {
               edges {
                 node {
                   id
+                  definition_type
                   definition
+                  x_opencti_order
+                  x_opencti_color
                 }
               }
             }
@@ -523,12 +551,16 @@ const LastIngestedAnalysis = () => {
       }
     }
   `;
-  const data = useLazyLoadQuery(dashboardLastStixDomainObjectsQuery, {
-    first: 8,
-    orderBy: 'created_at',
-    orderMode: 'desc',
-    types: ['Report', 'Note', 'Opinion'],
-  });
+  const data = useLazyLoadQuery(
+    dashboardLastStixDomainObjectsQuery,
+    {
+      first: 8,
+      orderBy: 'created_at',
+      orderMode: 'desc',
+      types: ['Report'],
+    },
+    { fetchPolicy: 'network-only' },
+  );
   const objects = data.stixDomainObjects;
   if (objects.edges.length === 0) {
     return <NoTableElement />;
@@ -551,26 +583,30 @@ const LastIngestedAnalysis = () => {
             to={stixDomainObjectLink}
           >
             <ListItemIcon>
-              <ItemIcon
-                type={stixDomainObject.entity_type}
-                color={theme.palette.primary.main}
-              />
+              <ItemIcon type={stixDomainObject.entity_type} />
             </ListItemIcon>
-            <div className={classes.itemType}>
-              {t(`entity_${stixDomainObject.entity_type}`)}
-            </div>
             <ListItemText
               primary={
-                <div className={classes.itemText}>
-                  {stixDomainObject.name
-                    || stixDomainObject.attribute_abstract
-                    || truncate(stixDomainObject.content, 30)
-                    || stixDomainObject.opinion}
-                </div>
+                <Tooltip title={defaultValue(stixDomainObject)}>
+                  <div className={classes.itemText}>
+                    {defaultValue(stixDomainObject)}
+                  </div>
+                </Tooltip>
               }
             />
+            <div className={classes.itemType}>
+              <Chip
+                classes={{ root: classes.chipInList }}
+                color="primary"
+                variant="outlined"
+                label={stixDomainObject.report_types?.at(0) ?? t('Unknown')}
+              />
+            </div>
             <div className={classes.itemAuthor}>
               {pathOr('', ['createdBy', 'name'], stixDomainObject)}
+            </div>
+            <div className={classes.itemCreator}>
+              {pathOr('', ['creator', 'name'], stixDomainObject)}
             </div>
             <div className={classes.itemDate}>
               {fsd(stixDomainObject.created_at)}
@@ -584,11 +620,9 @@ const LastIngestedAnalysis = () => {
               }}
             >
               <ItemMarkings
-                markingDefinitions={pathOr(
-                  [],
-                  ['objectMarking', 'edges'],
-                  stixDomainObject,
-                )}
+                markingDefinitionsEdges={
+                  stixDomainObject.objectMarking.edges ?? []
+                }
                 limit={1}
                 variant="inList"
               />
@@ -617,6 +651,7 @@ const ObservablesDistribution = () => {
   const data = useLazyLoadQuery(
     dashboardStixCyberObservablesDistributionQuery,
     { field: 'entity_type', operation: 'count' },
+    { fetchPolicy: 'network-only' },
   );
   const distribution = data.stixCyberObservablesDistribution.map(
     (n) => n.value,
@@ -647,9 +682,13 @@ const WorkspaceDashboard = ({ dashboard, timeField }) => {
       }
     }
   `;
-  const data = useLazyLoadQuery(dashboardCustomDashboardQuery, {
-    id: dashboard,
-  });
+  const data = useLazyLoadQuery(
+    dashboardCustomDashboardQuery,
+    {
+      id: dashboard,
+    },
+    { fetchPolicy: 'network-only' },
+  );
   if (data.workspace) {
     return (
       <DashboardView
@@ -700,7 +739,10 @@ const DefaultDashboard = ({ timeField }) => {
             <Suspense fallback={<Loader variant="inElement" />}>
               <TotalRelationshipsCard
                 title={'Total relationships'}
-                options={{ type: 'stix-core-relationship', endDate: dayAgo() }}
+                options={{
+                  relationship_type: ['stix-core-relationship'],
+                  endDate: dayAgo(),
+                }}
                 Icon={GraphOutline}
                 classes={classes}
               />
@@ -765,7 +807,7 @@ const DefaultDashboard = ({ timeField }) => {
             style={{ height: 300 }}
           >
             <Suspense fallback={<Loader variant="inElement" />}>
-              <IngestedEntitiesGraph classes={classes} theme={theme} />
+              <IngestedEntitiesGraph />
             </Suspense>
           </Paper>
         </Grid>
@@ -782,6 +824,8 @@ const DefaultDashboard = ({ timeField }) => {
               'Malware',
               'Tool',
               'Vulnerability',
+              'Channel',
+              'Narrative',
             ]}
             title={t('Top 10 active entities (3 last months)')}
             field="internal_id"
@@ -816,7 +860,7 @@ const DefaultDashboard = ({ timeField }) => {
       <Grid container={true} spacing={3} style={{ marginTop: 5 }}>
         <Grid item={true} xs={8}>
           <Typography variant="h4" gutterBottom={true}>
-            {t('Last ingested analysis (creation date in the platform)')}
+            {t('Last ingested reports (creation date in the platform)')}
           </Typography>
           <Paper
             classes={{ root: classes.paper }}
@@ -824,7 +868,7 @@ const DefaultDashboard = ({ timeField }) => {
             style={{ height: 420 }}
           >
             <Suspense fallback={<Loader variant="inElement" />}>
-              <LastIngestedAnalysis classes={classes} theme={theme} />
+              <LastIngestedAnalysis />
             </Suspense>
           </Paper>
         </Grid>

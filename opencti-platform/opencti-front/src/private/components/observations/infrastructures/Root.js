@@ -29,7 +29,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -47,13 +47,13 @@ const infrastructureQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
+    }
+    connectorsForImport {
+      ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
-    }
-    settings {
-      platform_enable_reference
     }
   }
 `;
@@ -78,14 +78,13 @@ class RootInfrastructure extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { infrastructureId },
       },
     } = this.props;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <QueryRenderer
           query={infrastructureQuery}
           variables={{ id: infrastructureId }}
@@ -130,9 +129,6 @@ class RootInfrastructure extends Component {
                           <StixDomainObjectHeader
                             stixDomainObject={props.infrastructure}
                             PopoverComponent={<InfrastructurePopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Infrastructure',
-                            )}
                           />
                           <StixCoreObjectOrStixCoreRelationshipContainers
                             {...routeProps}
@@ -151,9 +147,6 @@ class RootInfrastructure extends Component {
                           <StixDomainObjectHeader
                             stixDomainObject={props.infrastructure}
                             PopoverComponent={<InfrastructurePopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Infrastructure',
-                            )}
                           />
                           <StixDomainObjectIndicators
                             {...routeProps}
@@ -181,14 +174,11 @@ class RootInfrastructure extends Component {
                           <StixDomainObjectHeader
                             stixDomainObject={props.infrastructure}
                             PopoverComponent={<InfrastructurePopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Infrastructure',
-                            )}
                           />
                           <FileManager
                             {...routeProps}
                             id={infrastructureId}
-                            connectorsImport={[]}
+                            connectorsImport={props.connectorsForImport}
                             connectorsExport={props.connectorsForExport}
                             entity={props.infrastructure}
                           />
@@ -203,9 +193,6 @@ class RootInfrastructure extends Component {
                           <StixDomainObjectHeader
                             stixDomainObject={props.infrastructure}
                             PopoverComponent={<InfrastructurePopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Infrastructure',
-                            )}
                           />
                           <StixCoreObjectHistory
                             {...routeProps}
@@ -230,7 +217,6 @@ class RootInfrastructure extends Component {
 RootInfrastructure.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootInfrastructure);

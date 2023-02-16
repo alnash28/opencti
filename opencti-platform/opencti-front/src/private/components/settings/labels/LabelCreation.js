@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
-import { Formik, Form, Field } from 'formik';
+import { Field, Form, Formik } from 'formik';
 import withStyles from '@mui/styles/withStyles';
 import Drawer from '@mui/material/Drawer';
 import Typography from '@mui/material/Typography';
@@ -114,7 +114,11 @@ class LabelCreation extends Component {
   }
 
   onSubmit(values, { setSubmitting, resetForm }) {
-    commitMutation({
+    if (this.props.dryrun && this.props.contextual) {
+      this.props.creationCallback({ labelAdd: values });
+      return this.props.handleClose();
+    }
+    return commitMutation({
       mutation: this.props.contextual ? labelContextualMutation : labelMutation,
       variables: {
         input: values,

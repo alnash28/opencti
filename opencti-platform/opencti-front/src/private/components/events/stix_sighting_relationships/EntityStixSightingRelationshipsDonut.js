@@ -27,7 +27,7 @@ const styles = () => ({
 
 const entityStixSightingRelationshipsDonutStixSightingRelationshipsDistributionQuery = graphql`
   query EntityStixSightingRelationshipsDonutStixSightingRelationshipsDistributionQuery(
-    $fromId: String!
+    $fromId: StixRef!
     $limit: Int
     $startDate: DateTime
     $endDate: DateTime
@@ -93,6 +93,10 @@ const entityStixSightingRelationshipsDonutStixSightingRelationshipsDistributionQ
           description
         }
         ... on City {
+          name
+          description
+        }
+        ... on AdministrativeArea {
           name
           description
         }

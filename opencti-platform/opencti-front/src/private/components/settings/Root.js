@@ -1,5 +1,5 @@
 import React from 'react';
-import { Switch, Redirect } from 'react-router-dom';
+import { Redirect, Switch } from 'react-router-dom';
 import Settings from './Settings';
 import Users from './Users';
 import RootUser from './users/Root';
@@ -9,12 +9,16 @@ import Sessions from './Sessions';
 import MarkingDefinitions from './MarkingDefinitions';
 import Rules from './Rules';
 import KillChainPhases from './KillChainPhases';
-import Attributes from './Attributes';
 import Labels from './Labels';
-import Workflow from './Workflow';
 import Retention from './Retention';
 import { BoundaryRoute } from '../Error';
-import Security, { SETTINGS } from '../../../utils/Security';
+import Security from '../../../utils/Security';
+import { SETTINGS } from '../../../utils/hooks/useGranted';
+import StatusTemplates from './status_templates/StatusTemplates';
+import Vocabularies from './Vocabularies';
+import VocabularyCategories from './VocabularyCategories';
+import SubTypes from './sub_types/SubTypes';
+import RootSubType from './sub_types/Root';
 
 const Root = () => (
   <Switch>
@@ -32,7 +36,7 @@ const Root = () => (
       />
       <BoundaryRoute
         path="/dashboard/settings/accesses/users/:userId"
-        render={(routeProps) => <RootUser {...routeProps} />}
+        component={RootUser}
       />
       <BoundaryRoute
         exact
@@ -56,8 +60,19 @@ const Root = () => (
       />
       <BoundaryRoute
         exact
-        path="/dashboard/settings/workflow"
-        component={Workflow}
+        path="/dashboard/settings/entity_types"
+        component={SubTypes}
+      />
+      <BoundaryRoute
+        path="/dashboard/settings/entity_types/:subTypeId"
+        render={() => (
+          <RootSubType />
+        )}
+      />
+      <BoundaryRoute
+        exact
+        path="/dashboard/settings/vocabularies/statusTemplates"
+        component={StatusTemplates}
       />
       <BoundaryRoute
         exact
@@ -67,23 +82,28 @@ const Root = () => (
       <BoundaryRoute exact path="/dashboard/settings/rules" component={Rules} />
       <BoundaryRoute
         exact
-        path="/dashboard/settings/attributes"
-        render={() => <Redirect to="/dashboard/settings/attributes/labels" />}
+        path="/dashboard/settings/vocabularies"
+        render={() => <Redirect to="/dashboard/settings/vocabularies/labels" />}
       />
       <BoundaryRoute
         exact
-        path="/dashboard/settings/attributes/labels"
+        path="/dashboard/settings/vocabularies/labels"
         component={Labels}
       />
       <BoundaryRoute
         exact
-        path="/dashboard/settings/attributes/kill_chain_phases"
+        path="/dashboard/settings/vocabularies/kill_chain_phases"
         component={KillChainPhases}
       />
       <BoundaryRoute
         exact
-        path="/dashboard/settings/attributes/fields/:attributeKey"
-        component={Attributes}
+        path="/dashboard/settings/vocabularies/fields"
+        component={VocabularyCategories}
+      />
+      <BoundaryRoute
+        exact
+        path="/dashboard/settings/vocabularies/fields/:category"
+        component={Vocabularies}
       />
     </Security>
   </Switch>

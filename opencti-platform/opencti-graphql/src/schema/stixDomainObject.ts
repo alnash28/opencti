@@ -1,6 +1,9 @@
 import * as R from 'ramda';
 import {
+  ABSTRACT_INTERNAL_OBJECT,
   ABSTRACT_STIX_DOMAIN_OBJECT,
+  ABSTRACT_STIX_META_OBJECT,
+  ABSTRACT_STIX_META_RELATIONSHIP,
   buildRefRelationKey,
   ENTITY_TYPE_CONTAINER,
   ENTITY_TYPE_IDENTITY,
@@ -11,10 +14,13 @@ import {
   RELATION_CREATED_BY,
   RELATION_EXTERNAL_REFERENCE,
   RELATION_OBJECT,
+  RELATION_OBJECT_ASSIGNEE,
   RELATION_OBJECT_LABEL,
   RELATION_OBJECT_MARKING,
 } from './stixMetaRelationship';
 import { RELATION_INDICATES } from './stixCoreRelationship';
+import { ENTITY_TYPE_CONTAINER_GROUPING } from '../modules/grouping/grouping-types';
+import { ENTITY_TYPE_TAXII_COLLECTION, ENTITY_TYPE_WORK } from './internalObject';
 
 export const ATTRIBUTE_NAME = 'name';
 export const ATTRIBUTE_ABSTRACT = 'abstract';
@@ -47,21 +53,33 @@ export const ENTITY_TYPE_THREAT_ACTOR = 'Threat-Actor';
 export const ENTITY_TYPE_TOOL = 'Tool';
 export const ENTITY_TYPE_VULNERABILITY = 'Vulnerability';
 export const ENTITY_TYPE_INCIDENT = 'Incident';
+export const ENTITY_TYPE_DATA_COMPONENT = 'Data-Component';
+export const ENTITY_TYPE_DATA_SOURCE = 'Data-Source';
+
+export const ENTITY_TYPE_RESOLVED_FILTERS = 'Resolved-Filters';
 
 const STIX_DOMAIN_OBJECT_CONTAINERS: Array<string> = [
   ENTITY_TYPE_CONTAINER_NOTE,
   ENTITY_TYPE_CONTAINER_OBSERVED_DATA,
   ENTITY_TYPE_CONTAINER_OPINION,
   ENTITY_TYPE_CONTAINER_REPORT,
+  ENTITY_TYPE_CONTAINER_GROUPING,
 ];
 
-const CONTAINER_OBJECTS = 'object_refs';
-export const CONTAINER_REFS_TO_FIELDS: { [k: string]: string } = {
-  [CONTAINER_OBJECTS]: 'objects',
+schemaTypes.register(ENTITY_TYPE_CONTAINER, STIX_DOMAIN_OBJECT_CONTAINERS);
+export const isStixDomainObjectContainer = (type: string): boolean => {
+  const containerEntities = schemaTypes.get(ENTITY_TYPE_CONTAINER);
+  return R.includes(type, containerEntities) || type === ENTITY_TYPE_CONTAINER;
 };
 
-schemaTypes.register(ENTITY_TYPE_CONTAINER, STIX_DOMAIN_OBJECT_CONTAINERS);
-export const isStixDomainObjectContainer = (type: string): boolean => R.includes(type, STIX_DOMAIN_OBJECT_CONTAINERS) || type === ENTITY_TYPE_CONTAINER;
+const STIX_DOMAIN_OBJECT_SHAREABLE_CONTAINERS: Array<string> = [
+  ENTITY_TYPE_CONTAINER_OBSERVED_DATA,
+  ENTITY_TYPE_CONTAINER_GROUPING,
+  ENTITY_TYPE_CONTAINER_REPORT,
+];
+export const isStixDomainObjectShareableContainer = (type: string): boolean => {
+  return R.includes(type, STIX_DOMAIN_OBJECT_SHAREABLE_CONTAINERS);
+};
 
 const STIX_DOMAIN_OBJECT_IDENTITIES: Array<string> = [
   ENTITY_TYPE_IDENTITY_INDIVIDUAL,
@@ -70,7 +88,9 @@ const STIX_DOMAIN_OBJECT_IDENTITIES: Array<string> = [
   ENTITY_TYPE_IDENTITY_SYSTEM,
 ];
 schemaTypes.register(ENTITY_TYPE_IDENTITY, STIX_DOMAIN_OBJECT_IDENTITIES);
-export const isStixDomainObjectIdentity = (type: string): boolean => R.includes(type, STIX_DOMAIN_OBJECT_IDENTITIES) || type === ENTITY_TYPE_IDENTITY;
+export const isStixDomainObjectIdentity = (type: string): boolean => {
+  return R.includes(type, STIX_DOMAIN_OBJECT_IDENTITIES) || type === ENTITY_TYPE_IDENTITY;
+};
 
 const STIX_DOMAIN_OBJECT_LOCATIONS: Array<string> = [
   ENTITY_TYPE_LOCATION_CITY,
@@ -79,9 +99,12 @@ const STIX_DOMAIN_OBJECT_LOCATIONS: Array<string> = [
   ENTITY_TYPE_LOCATION_POSITION,
 ];
 schemaTypes.register(ENTITY_TYPE_LOCATION, STIX_DOMAIN_OBJECT_LOCATIONS);
-export const isStixDomainObjectLocation = (type: string): boolean => R.includes(type, STIX_DOMAIN_OBJECT_LOCATIONS) || type === ENTITY_TYPE_LOCATION;
+export const isStixDomainObjectLocation = (type: string): boolean => {
+  const locationEntities = schemaTypes.get(ENTITY_TYPE_LOCATION);
+  return locationEntities.includes(type) || type === ENTITY_TYPE_LOCATION;
+};
 
-const STIX_DOMAIN_OBJECTS: Array<string> = [
+export const STIX_DOMAIN_OBJECTS: Array<string> = [
   ENTITY_TYPE_ATTACK_PATTERN,
   ENTITY_TYPE_CAMPAIGN,
   ENTITY_TYPE_CONTAINER_NOTE,
@@ -106,12 +129,18 @@ const STIX_DOMAIN_OBJECTS: Array<string> = [
   ENTITY_TYPE_VULNERABILITY,
   ENTITY_TYPE_INCIDENT,
 ];
+export const registerStixDomainType = (type: string) => {
+  STIX_DOMAIN_OBJECTS.push(type);
+};
+
 schemaTypes.register(ABSTRACT_STIX_DOMAIN_OBJECT, STIX_DOMAIN_OBJECTS);
-export const isStixDomainObject = (type: string): boolean => R.includes(type, STIX_DOMAIN_OBJECTS)
-  || isStixDomainObjectIdentity(type)
-  || isStixDomainObjectLocation(type)
-  || isStixDomainObjectContainer(type)
-  || type === ABSTRACT_STIX_DOMAIN_OBJECT;
+export const isStixDomainObject = (type: string): boolean => {
+  return R.includes(type, STIX_DOMAIN_OBJECTS)
+    || isStixDomainObjectIdentity(type)
+    || isStixDomainObjectLocation(type)
+    || isStixDomainObjectContainer(type)
+    || type === ABSTRACT_STIX_DOMAIN_OBJECT;
+};
 
 const STIX_DOMAIN_OBJECT_ALIASED: Array<string> = [
   ENTITY_TYPE_COURSE_OF_ACTION,
@@ -125,31 +154,51 @@ const STIX_DOMAIN_OBJECT_ALIASED: Array<string> = [
   ENTITY_TYPE_INCIDENT,
   ENTITY_TYPE_VULNERABILITY,
 ];
-export const isStixObjectAliased = (type: string): boolean => R.includes(type, STIX_DOMAIN_OBJECT_ALIASED) || isStixDomainObjectIdentity(type) || isStixDomainObjectLocation(type);
+export const registerStixDomainAliased = (type: string) => {
+  STIX_DOMAIN_OBJECT_ALIASED.push(type);
+};
+export const isStixObjectAliased = (type: string): boolean => {
+  return R.includes(type, STIX_DOMAIN_OBJECT_ALIASED) || isStixDomainObjectIdentity(type) || isStixDomainObjectLocation(type);
+};
 export const resolveAliasesField = (type: string): string => {
-  if (type === ENTITY_TYPE_COURSE_OF_ACTION || type === ENTITY_TYPE_VULNERABILITY || isStixDomainObjectIdentity(type) || isStixDomainObjectLocation(type)) {
+  // eslint-disable-next-line max-len
+  if (type === ENTITY_TYPE_COURSE_OF_ACTION || type === ENTITY_TYPE_VULNERABILITY || type === ENTITY_TYPE_CONTAINER_GROUPING || isStixDomainObjectIdentity(type) || isStixDomainObjectLocation(type)) {
     return ATTRIBUTE_ALIASES_OPENCTI;
   }
   return ATTRIBUTE_ALIASES;
 };
 
+export const STIX_ORGANIZATIONS_UNRESTRICTED = [
+  ABSTRACT_INTERNAL_OBJECT,
+  ABSTRACT_STIX_META_OBJECT,
+  ABSTRACT_STIX_META_RELATIONSHIP,
+  ENTITY_TYPE_IDENTITY,
+  ENTITY_TYPE_LOCATION,
+  ENTITY_TYPE_WORK, // Work is defined as an history object
+  ENTITY_TYPE_TAXII_COLLECTION // TODO TaxiiCollection must be migrate to add according parent types
+];
+
 export const stixDomainObjectOptions = {
   StixDomainObjectsFilter: {
     createdBy: buildRefRelationKey(RELATION_CREATED_BY),
     markedBy: buildRefRelationKey(RELATION_OBJECT_MARKING),
+    assigneeTo: buildRefRelationKey(RELATION_OBJECT_ASSIGNEE),
     labelledBy: buildRefRelationKey(RELATION_OBJECT_LABEL),
-    objectContains: buildRefRelationKey(RELATION_OBJECT),
-    containedBy: buildRefRelationKey(RELATION_OBJECT),
+    objectContains: buildRefRelationKey(RELATION_OBJECT, '*'),
+    containedBy: buildRefRelationKey(RELATION_OBJECT, '*'),
     hasExternalReference: buildRefRelationKey(RELATION_EXTERNAL_REFERENCE),
     indicates: buildRefRelationKey(RELATION_INDICATES),
+    creator: 'creator_id',
   },
+  StixDomainObjectsOrdering: {}
 };
 
-export const stixDomainObjectFieldsToBeUpdated: { [k: string]: Array<string> } = {
+const stixDomainObjectFieldsToBeUpdated: { [k: string]: Array<string> } = {
   [ENTITY_TYPE_ATTACK_PATTERN]: [
     'name',
     'revoked',
     'description',
+    'x_mitre_id',
     'x_mitre_platforms',
     'x_mitre_permissions_required',
     'x_mitre_detection',
@@ -157,14 +206,15 @@ export const stixDomainObjectFieldsToBeUpdated: { [k: string]: Array<string> } =
     'aliases',
   ],
   [ENTITY_TYPE_CAMPAIGN]: ['name', 'revoked', 'description', 'first_seen', 'last_seen', 'confidence', 'aliases'],
-  [ENTITY_TYPE_CONTAINER_NOTE]: ['content', 'confidence', 'attribute_abstract'],
+  [ENTITY_TYPE_CONTAINER_NOTE]: ['content', 'confidence', 'attribute_abstract', 'note_types', 'likelihood'],
   [ENTITY_TYPE_CONTAINER_OBSERVED_DATA]: ['description', 'confidence'],
   [ENTITY_TYPE_CONTAINER_OPINION]: ['opinion', 'confidence', 'explanation'],
-  [ENTITY_TYPE_CONTAINER_REPORT]: ['name', 'revoked', 'description', 'confidence', 'confidence'],
+  [ENTITY_TYPE_CONTAINER_REPORT]: ['name', 'revoked', 'description', 'confidence', 'report_types'],
   [ENTITY_TYPE_COURSE_OF_ACTION]: [
     'name',
     'revoked',
     'description',
+    'x_mitre_id',
     'x_opencti_threat_hunting',
     'x_opencti_log_sources',
     'confidence',
@@ -181,9 +231,12 @@ export const stixDomainObjectFieldsToBeUpdated: { [k: string]: Array<string> } =
     'valid_from',
     'valid_until',
     'confidence',
+    'indicator_types',
     'x_opencti_score',
     'x_opencti_detection',
-    'indicator_types',
+    'x_mitre_platforms',
+    'x_opencti_main_observable_type',
+    'creator',
   ],
   [ENTITY_TYPE_INFRASTRUCTURE]: ['name', 'revoked', 'description', 'confidence', 'aliases'],
   [ENTITY_TYPE_INTRUSION_SET]: [
@@ -203,7 +256,7 @@ export const stixDomainObjectFieldsToBeUpdated: { [k: string]: Array<string> } =
   [ENTITY_TYPE_LOCATION_COUNTRY]: ['name', 'revoked', 'description', 'latitude', 'longitude', 'confidence', 'x_opencti_aliases'],
   [ENTITY_TYPE_LOCATION_REGION]: ['name', 'revoked', 'description', 'latitude', 'longitude', 'confidence', 'x_opencti_aliases'],
   [ENTITY_TYPE_LOCATION_POSITION]: ['name', 'revoked', 'description', 'latitude', 'longitude', 'confidence', 'x_opencti_aliases'],
-  [ENTITY_TYPE_MALWARE]: ['name', 'revoked', 'description', 'is_family', 'malware_types', 'confidence', 'aliases'],
+  [ENTITY_TYPE_MALWARE]: ['name', 'revoked', 'description', 'first_seen', 'last_seen', 'is_family', 'malware_types', 'confidence', 'aliases'],
   [ENTITY_TYPE_THREAT_ACTOR]: [
     'name',
     'revoked',
@@ -231,11 +284,13 @@ export const stixDomainObjectFieldsToBeUpdated: { [k: string]: Array<string> } =
     'x_opencti_confidentiality_impact',
     'confidence',
     'x_opencti_aliases',
+    'creator',
   ],
-  [ENTITY_TYPE_INCIDENT]: ['name', 'revoked', 'description', 'first_seen', 'last_seen', 'objective', 'confidence', 'aliases'],
+  [ENTITY_TYPE_INCIDENT]: ['name', 'revoked', 'description', 'incident_type', 'severity', 'source', 'first_seen', 'last_seen', 'objective', 'confidence', 'aliases'],
 };
+R.forEachObjIndexed((value, key) => schemaTypes.registerUpsertAttributes(key, value), stixDomainObjectFieldsToBeUpdated);
 
-export const stixDomainObjectsAttributes: { [k: string]: Array<string> } = {
+const stixDomainObjectsAttributes: { [k: string]: Array<string> } = {
   [ENTITY_TYPE_ATTACK_PATTERN]: [
     'internal_id',
     'standard_id',
@@ -317,6 +372,8 @@ export const stixDomainObjectsAttributes: { [k: string]: Array<string> } = {
     'authors',
     'x_opencti_graph_data',
     'x_opencti_workflow_id',
+    'note_types',
+    'likelihood'
   ],
   [ENTITY_TYPE_CONTAINER_OBSERVED_DATA]: [
     'internal_id',
@@ -377,6 +434,7 @@ export const stixDomainObjectsAttributes: { [k: string]: Array<string> } = {
     'confidence',
     'lang',
     'created',
+    'creator',
     'modified',
     'name',
     'description',
@@ -884,6 +942,9 @@ export const stixDomainObjectsAttributes: { [k: string]: Array<string> } = {
     'name',
     'description',
     'aliases',
+    'incident_type',
+    'severity',
+    'source',
     'i_aliases_ids',
     'first_seen',
     'i_first_seen_day',

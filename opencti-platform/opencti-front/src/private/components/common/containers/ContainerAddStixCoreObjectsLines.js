@@ -1,14 +1,14 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
-import { graphql, createPaginationContainer } from 'react-relay';
+import { createPaginationContainer, graphql } from 'react-relay';
 import {
-  map,
-  filter,
-  keys,
-  groupBy,
+  append,
   assoc,
   compose,
-  append,
+  filter,
+  groupBy,
+  keys,
+  map,
   pipe,
 } from 'ramda';
 import withStyles from '@mui/styles/withStyles';
@@ -20,7 +20,7 @@ import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Typography from '@mui/material/Typography';
-import { ExpandMore, CheckCircle } from '@mui/icons-material';
+import { CheckCircle, ExpandMore } from '@mui/icons-material';
 import { ConnectionHandler } from 'relay-runtime';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -30,9 +30,10 @@ import { truncate } from '../../../../utils/String';
 import ItemIcon from '../../../../components/ItemIcon';
 import inject18n from '../../../../components/i18n';
 import {
-  reportKnowledgeGraphtMutationRelationAddMutation,
   reportKnowledgeGraphMutationRelationDeleteMutation,
+  reportKnowledgeGraphtMutationRelationAddMutation,
 } from '../../analysis/reports/ReportKnowledgeGraphQuery';
+import ItemMarkings from '../../../../components/ItemMarkings';
 
 const styles = (theme) => ({
   container: {
@@ -94,7 +95,7 @@ export const containerAddStixCoreObjectsLinesRelationAddMutation = graphql`
 export const containerAddStixCoreObjectsLinesRelationDeleteMutation = graphql`
   mutation ContainerAddStixCoreObjectsLinesRelationDeleteMutation(
     $id: ID!
-    $toId: String!
+    $toId: StixRef!
     $relationship_type: String!
   ) {
     containerEdit(id: $id) {
@@ -152,10 +153,15 @@ class ContainerAddStixCoreObjectsLinesContainer extends Component {
             relationship_type: 'object',
           },
           updater: (store) => {
+            // ID is not valid pagination options, will be handled better when hooked
+            const options = { ...paginationOptions };
+            delete options.id;
+            delete options.count;
+
             const conn = ConnectionHandler.getConnection(
               store.get(containerId),
               'Pagination_objects',
-              this.props.paginationOptions,
+              options,
             );
             ConnectionHandler.deleteNode(conn, stixCoreObject.id);
           },
@@ -201,6 +207,11 @@ class ContainerAddStixCoreObjectsLinesContainer extends Component {
             input,
           },
           updater: (store) => {
+            // ID is not valid pagination options, will be handled better when hooked
+            const options = { ...paginationOptions };
+            delete options.id;
+            delete options.count;
+
             const payload = store
               .getRootField('containerEdit')
               .getLinkedRecord('relationAdd', { input })
@@ -209,7 +220,7 @@ class ContainerAddStixCoreObjectsLinesContainer extends Component {
             const conn = ConnectionHandler.getConnection(
               store.get(containerId),
               'Pagination_objects',
-              paginationOptions,
+              options,
             );
             ConnectionHandler.insertEdgeBefore(conn, newEdge);
           },
@@ -330,6 +341,14 @@ class ContainerAddStixCoreObjectsLinesContainer extends Component {
                             </Markdown>
                           }
                         />
+                        <div style={{ marginLeft: 10 }}>
+                          <ItemMarkings
+                            markingDefinitionsEdges={
+                              stixCoreObject.objectMarking.edges
+                            }
+                            limit={1}
+                          />
+                        </div>
                       </ListItem>
                     );
                   })}
@@ -420,7 +439,10 @@ const ContainerAddStixCoreObjectsLines = createPaginationContainer(
                 edges {
                   node {
                     id
+                    definition_type
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }
@@ -450,6 +472,11 @@ const ContainerAddStixCoreObjectsLines = createPaginationContainer(
                 name
                 description
                 published
+              }
+              ... on Grouping {
+                name
+                description
+                context
               }
               ... on CourseOfAction {
                 name
@@ -494,6 +521,10 @@ const ContainerAddStixCoreObjectsLines = createPaginationContainer(
                 name
                 description
               }
+              ... on AdministrativeArea {
+                name
+                description
+              }
               ... on Country {
                 name
                 description
@@ -527,6 +558,32 @@ const ContainerAddStixCoreObjectsLines = createPaginationContainer(
                 description
                 first_seen
                 last_seen
+              }
+              ... on Event {
+                name
+                description
+                start_time
+                stop_time
+              }
+              ... on Channel {
+                name
+                description
+              }
+              ... on Narrative {
+                name
+                description
+              }
+              ... on Language {
+                name
+              }
+              ... on DataComponent {
+                name
+              }
+              ... on DataSource {
+                name
+              }
+              ... on Case {
+                name
               }
               ... on StixCyberObservable {
                 observable_value

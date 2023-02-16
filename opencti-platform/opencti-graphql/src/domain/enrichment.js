@@ -3,17 +3,17 @@ import { map } from 'ramda';
 import { createWork } from './work';
 import { pushToConnector } from '../database/rabbitmq';
 import { connectorsEnrichment } from '../database/repository';
-import { getConfigCache } from '../manager/cacheManager';
 import { ENTITY_TYPE_CONNECTOR } from '../schema/internalObject';
+import { getEntitiesFromCache } from '../database/cache';
 
-export const createEntityAutoEnrichment = async (user, stixCoreObjectId, scope) => {
+export const createEntityAutoEnrichment = async (context, user, stixCoreObjectId, scope) => {
   // Get the list of compatible connectors
-  const connectors = await getConfigCache(ENTITY_TYPE_CONNECTOR);
+  const connectors = await getEntitiesFromCache(context, user, ENTITY_TYPE_CONNECTOR);
   const targetConnectors = connectorsEnrichment(connectors, scope, true, true);
   // Create a work for each connector
   const workList = await Promise.all(
     map((connector) => {
-      return createWork(user, connector, `Enrichment (${stixCoreObjectId})`, stixCoreObjectId).then((work) => {
+      return createWork(context, user, connector, `Enrichment (${stixCoreObjectId})`, stixCoreObjectId).then((work) => {
         return { connector, work };
       });
     }, targetConnectors)
@@ -31,7 +31,7 @@ export const createEntityAutoEnrichment = async (user, stixCoreObjectId, scope) 
           entity_id: stixCoreObjectId,
         },
       };
-      return pushToConnector(connector, message);
+      return pushToConnector(context, connector, message);
     }, workList)
   );
   return workList;

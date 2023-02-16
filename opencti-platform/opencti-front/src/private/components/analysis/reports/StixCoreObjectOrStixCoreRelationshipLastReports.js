@@ -1,7 +1,7 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
+import * as R from 'ramda';
 import { Link } from 'react-router-dom';
-import { compose, pathOr, head } from 'ramda';
 import { graphql } from 'react-relay';
 import withStyles from '@mui/styles/withStyles';
 import Paper from '@mui/material/Paper';
@@ -10,11 +10,13 @@ import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import { DescriptionOutlined } from '@mui/icons-material';
 import Skeleton from '@mui/material/Skeleton';
+import Chip from '@mui/material/Chip';
+import Tooltip from '@mui/material/Tooltip';
 import inject18n from '../../../../components/i18n';
-import ItemMarking from '../../../../components/ItemMarking';
 import { QueryRenderer } from '../../../../relay/environment';
+import ItemIcon from '../../../../components/ItemIcon';
+import ItemMarkings from '../../../../components/ItemMarkings';
 
 const styles = (theme) => ({
   paper: {
@@ -44,13 +46,29 @@ const styles = (theme) => ({
     marginRight: 0,
     color: theme.palette.grey[700],
   },
+  chipInList: {
+    fontSize: 12,
+    height: 20,
+    float: 'left',
+    width: 120,
+  },
 });
 
 const inlineStyles = {
+  itemType: {
+    width: 150,
+    minWidth: 150,
+    maxWidth: 150,
+    paddingRight: 24,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    textAlign: 'left',
+  },
   itemAuthor: {
-    width: 80,
-    minWidth: 80,
-    maxWidth: 80,
+    width: 100,
+    minWidth: 100,
+    maxWidth: 100,
     marginRight: 24,
     marginLeft: 24,
     whiteSpace: 'nowrap',
@@ -58,9 +76,9 @@ const inlineStyles = {
     textOverflow: 'ellipsis',
   },
   itemDate: {
-    width: 80,
-    minWidth: 80,
-    maxWidth: 80,
+    width: 100,
+    minWidth: 100,
+    maxWidth: 100,
     marginRight: 24,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
@@ -84,9 +102,11 @@ const stixCoreObjectOrStixCoreRelationshipLastReportsQuery = graphql`
       edges {
         node {
           id
+          entity_type
           name
           description
           published
+          report_types
           createdBy {
             ... on Identity {
               id
@@ -97,7 +117,11 @@ const stixCoreObjectOrStixCoreRelationshipLastReportsQuery = graphql`
           objectMarking {
             edges {
               node {
+                id
+                definition_type
                 definition
+                x_opencti_order
+                x_opencti_color
               }
             }
           }
@@ -147,9 +171,6 @@ class StixCoreObjectOrStixCoreRelationshipLastReports extends Component {
                     <List>
                       {props.reports.edges.map((reportEdge) => {
                         const report = reportEdge.node;
-                        const markingDefinition = head(
-                          pathOr([], ['objectMarking', 'edges'], report),
-                        );
                         return (
                           <ListItem
                             key={report.id}
@@ -161,29 +182,41 @@ class StixCoreObjectOrStixCoreRelationshipLastReports extends Component {
                             to={`/dashboard/analysis/reports/${report.id}`}
                           >
                             <ListItemIcon>
-                              <DescriptionOutlined color="primary" />
+                              <ItemIcon type={report.entity_type} />
                             </ListItemIcon>
                             <ListItemText
                               primary={
-                                <div className={classes.itemText}>
-                                  {report.name}
-                                </div>
+                                <Tooltip title={report.name}>
+                                  <div className={classes.itemText}>
+                                    {report.name}
+                                  </div>
+                                </Tooltip>
                               }
                             />
+                            <div className={classes.itemType}>
+                              <Chip
+                                classes={{ root: classes.chipInList }}
+                                color="primary"
+                                variant="outlined"
+                                label={
+                                  report.report_types?.at(0) ?? t('Unknown')
+                                }
+                              />
+                            </div>
                             <div style={inlineStyles.itemAuthor}>
-                              {pathOr('', ['createdBy', 'name'], report)}
+                              {R.pathOr('', ['createdBy', 'name'], report)}
                             </div>
                             <div style={inlineStyles.itemDate}>
                               {fsd(report.published)}
                             </div>
                             <div style={{ width: 110, paddingRight: 20 }}>
-                              {markingDefinition && (
-                                <ItemMarking
-                                  key={markingDefinition.node.id}
-                                  label={markingDefinition.node.definition}
-                                  variant="inList"
-                                />
-                              )}
+                              <ItemMarkings
+                                variant="inList"
+                                markingDefinitionsEdges={
+                                  report.objectMarking.edges
+                                }
+                                limit={1}
+                              />
                             </div>
                           </ListItem>
                         );
@@ -269,7 +302,7 @@ StixCoreObjectOrStixCoreRelationshipLastReports.propTypes = {
   fsd: PropTypes.func,
 };
 
-export default compose(
+export default R.compose(
   inject18n,
   withStyles(styles),
 )(StixCoreObjectOrStixCoreRelationshipLastReports);

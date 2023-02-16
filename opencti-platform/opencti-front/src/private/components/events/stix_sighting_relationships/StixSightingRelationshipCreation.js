@@ -26,6 +26,7 @@ import ConfidenceField from '../../common/form/ConfidenceField';
 import { defaultValue } from '../../../../utils/Graph';
 import TextField from '../../../../components/TextField';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -136,8 +137,8 @@ const styles = (theme) => ({
 
 export const stixSightingRelationshipCreationQuery = graphql`
   query StixSightingRelationshipCreationQuery(
-    $fromId: String!
-    $toId: String!
+    $fromId: StixRef!
+    $toId: StixRef!
   ) {
     stixSightingRelationships(fromId: $fromId, toId: $toId) {
       edges {
@@ -196,7 +197,10 @@ export const stixSightingRelationshipCreationQuery = graphql`
             edges {
               node {
                 id
+                definition_type
                 definition
+                x_opencti_order
+                x_opencti_color
               }
             }
           }
@@ -263,7 +267,10 @@ const stixSightingRelationshipCreationMutation = graphql`
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
+            x_opencti_color
           }
         }
       }
@@ -560,7 +567,7 @@ class StixSightingRelationshipCreation extends Component {
                 name="confidence"
                 label={t('Confidence level')}
                 fullWidth={true}
-                containerstyle={{ marginTop: 20, width: '100%' }}
+                containerStyle={fieldSpacingContainerStyle}
               />
               <Field
                 component={DateTimePickerField}

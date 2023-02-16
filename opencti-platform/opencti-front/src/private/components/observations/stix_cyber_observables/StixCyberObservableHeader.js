@@ -1,18 +1,16 @@
-import React, { Component } from 'react';
-import * as PropTypes from 'prop-types';
-import { compose, pathOr } from 'ramda';
+import React from 'react';
 import { graphql, createFragmentContainer } from 'react-relay';
-import withStyles from '@mui/styles/withStyles';
 import Typography from '@mui/material/Typography';
-import ItemMarking from '../../../../components/ItemMarking';
+import makeStyles from '@mui/styles/makeStyles';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import StixCyberObservablePopover from './StixCyberObservablePopover';
 import { truncate } from '../../../../utils/String';
 import StixCoreObjectEnrichment from '../../common/stix_core_objects/StixCoreObjectEnrichment';
+import StixCoreObjectSharing from '../../common/stix_core_objects/StixCoreObjectSharing';
 
-const styles = () => ({
+const useStyles = makeStyles(() => ({
   title: {
     float: 'left',
-    textTransform: 'uppercase',
   },
   popover: {
     float: 'left',
@@ -22,51 +20,47 @@ const styles = () => ({
     float: 'right',
     overflowX: 'hidden',
   },
-});
+  actions: {
+    margin: '-6px 0 0 0',
+    float: 'right',
+  },
+}));
 
-class StixCyberObservableHeaderComponent extends Component {
-  render() {
-    const { classes, variant, stixCyberObservable, isArtifact } = this.props;
-    return (
-      <div>
-        <Typography
-          variant="h1"
-          gutterBottom={true}
-          classes={{ root: classes.title }}
-        >
-          {truncate(stixCyberObservable.observable_value, 50)}
-        </Typography>
-        <div className={classes.popover}>
-          <StixCyberObservablePopover
-            stixCyberObservableId={stixCyberObservable.id}
-            isArtifact={isArtifact}
-          />
-        </div>
-        <StixCoreObjectEnrichment stixCoreObjectId={stixCyberObservable.id} />
-        {variant !== 'noMarking' && (
-          <div className={classes.marking}>
-            {pathOr([], ['objectMarking', 'edges'], stixCyberObservable).map(
-              (markingDefinition) => (
-                <ItemMarking
-                  key={markingDefinition.node.id}
-                  label={markingDefinition.node.definition}
-                  color={markingDefinition.node.x_opencti_color}
-                />
-              ),
-            )}
-          </div>
-        )}
-        <div className="clearfix" />
+const StixCyberObservableHeaderComponent = ({
+  stixCyberObservable,
+  isArtifact,
+  disableSharing,
+}) => {
+  const classes = useStyles();
+  return (
+    <div>
+      <Typography
+        variant="h1"
+        gutterBottom={true}
+        classes={{ root: classes.title }}
+      >
+        {truncate(stixCyberObservable.observable_value, 50)}
+      </Typography>
+      <div className={classes.popover}>
+        <StixCyberObservablePopover
+          stixCyberObservableId={stixCyberObservable.id}
+          isArtifact={isArtifact}
+        />
       </div>
-    );
-  }
-}
-
-StixCyberObservableHeaderComponent.propTypes = {
-  stixCyberObservable: PropTypes.object,
-  variant: PropTypes.string,
-  classes: PropTypes.object,
-  isArtifact: PropTypes.bool,
+      <div className={classes.actions}>
+        <ToggleButtonGroup size="small" color="secondary" exclusive={true}>
+          {disableSharing !== true && (
+            <StixCoreObjectSharing
+              elementId={stixCyberObservable.id}
+              variant="header"
+            />
+          )}
+          <StixCoreObjectEnrichment stixCoreObjectId={stixCyberObservable.id} />
+        </ToggleButtonGroup>
+      </div>
+      <div className="clearfix" />
+    </div>
+  );
 };
 
 const StixCyberObservableHeader = createFragmentContainer(
@@ -77,18 +71,9 @@ const StixCyberObservableHeader = createFragmentContainer(
         id
         entity_type
         observable_value
-        objectMarking {
-          edges {
-            node {
-              id
-              definition
-              x_opencti_color
-            }
-          }
-        }
       }
     `,
   },
 );
 
-export default compose(withStyles(styles))(StixCyberObservableHeader);
+export default StixCyberObservableHeader;

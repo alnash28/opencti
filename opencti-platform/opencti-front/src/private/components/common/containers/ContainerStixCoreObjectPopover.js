@@ -1,8 +1,10 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
+import * as R from 'ramda';
 import { compose } from 'ramda';
 import { graphql } from 'react-relay';
 import withStyles from '@mui/styles/withStyles';
+import withTheme from '@mui/styles/withTheme';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Button from '@mui/material/Button';
@@ -14,8 +16,11 @@ import DialogContentText from '@mui/material/DialogContentText';
 import Slide from '@mui/material/Slide';
 import MoreVert from '@mui/icons-material/MoreVert';
 import { ConnectionHandler } from 'relay-runtime';
+import Alert from '@mui/material/Alert';
 import inject18n from '../../../../components/i18n';
 import { commitMutation } from '../../../../relay/environment';
+import { KNOWLEDGE_KNUPDATE_KNDELETE } from '../../../../utils/hooks/useGranted';
+import Security from '../../../../utils/Security';
 
 const styles = (theme) => ({
   container: {
@@ -42,7 +47,7 @@ Transition.displayName = 'TransitionSlide';
 export const containerStixCoreObjectPopoverRemoveMutation = graphql`
   mutation ContainerStixCoreObjectPopoverRemoveMutation(
     $id: ID!
-    $toId: String!
+    $toId: StixRef!
     $relationship_type: String!
   ) {
     containerEdit(id: $id) {
@@ -107,6 +112,8 @@ class ContainerStixCoreObjectPopover extends Component {
       relationshipType,
       paginationKey,
       paginationOptions,
+      selectedElements,
+      setSelectedElements,
     } = this.props;
     this.setState({ removing: true });
     commitMutation({
@@ -117,23 +124,36 @@ class ContainerStixCoreObjectPopover extends Component {
         relationship_type: relationshipType,
       },
       updater: (store) => {
+        // ID is not valid pagination options, will be handled better when hooked
+        const options = { ...paginationOptions };
+        delete options.id;
+        delete options.count;
         if (toId) {
           const conn = ConnectionHandler.getConnection(
             store.get(containerId),
             paginationKey,
-            paginationOptions,
+            options,
           );
           ConnectionHandler.deleteNode(conn, toId);
         }
       },
       onCompleted: () => {
         this.handleCloseRemove();
+        const newSelectedElements = R.omit([toId], selectedElements);
+        setSelectedElements(newSelectedElements);
       },
     });
   }
 
   submitDelete() {
-    const { containerId, toId, paginationKey, paginationOptions } = this.props;
+    const {
+      containerId,
+      toId,
+      paginationKey,
+      paginationOptions,
+      selectedElements,
+      setSelectedElements,
+    } = this.props;
     this.setState({ deleting: true });
     commitMutation({
       mutation: containerStixCoreObjectPopoverDeleteMutation,
@@ -141,29 +161,35 @@ class ContainerStixCoreObjectPopover extends Component {
         id: toId,
       },
       updater: (store) => {
+        // ID is not valid pagination options, will be handled better when hooked
+        const options = { ...paginationOptions };
+        delete options.id;
+        delete options.count;
         if (toId) {
           const conn = ConnectionHandler.getConnection(
             store.get(containerId),
             paginationKey,
-            paginationOptions,
+            options,
           );
           ConnectionHandler.deleteNode(conn, toId);
         }
       },
       onCompleted: () => {
         this.handleCloseDelete();
+        const newSelectedElements = R.omit([toId], selectedElements);
+        setSelectedElements(newSelectedElements);
       },
     });
   }
 
   render() {
-    const { classes, t } = this.props;
+    const { classes, t, theme } = this.props;
     return (
       <div className={classes.container}>
         <IconButton
           onClick={this.handleOpen.bind(this)}
+          disabled={this.props.menuDisable ?? false}
           aria-haspopup="true"
-          style={{ marginTop: 3 }}
           size="large"
         >
           <MoreVert />
@@ -176,9 +202,14 @@ class ContainerStixCoreObjectPopover extends Component {
           <MenuItem onClick={this.handleOpenRemove.bind(this)}>
             {t('Remove')}
           </MenuItem>
-          <MenuItem onClick={this.handleOpenDelete.bind(this)}>
-            {t('Delete')}
-          </MenuItem>
+          <Security needs={[KNOWLEDGE_KNUPDATE_KNDELETE]}>
+            <MenuItem
+              onClick={this.handleOpenDelete.bind(this)}
+              style={{ color: theme.palette.warning.main }}
+            >
+              {t('Delete')}
+            </MenuItem>
+          </Security>
         </Menu>
         <Dialog
           PaperProps={{ elevation: 1 }}
@@ -218,6 +249,11 @@ class ContainerStixCoreObjectPopover extends Component {
           <DialogContent>
             <DialogContentText>
               {t('Do you want to delete this entity?')}
+              <Alert severity="warning" style={{ marginTop: 20 }}>
+                {t(
+                  'You are about to completely delete the entity from the platform (not only from the container), be sure of what you are doing.',
+                )}
+              </Alert>
             </DialogContentText>
           </DialogContent>
           <DialogActions>
@@ -249,9 +285,12 @@ ContainerStixCoreObjectPopover.propTypes = {
   paginationOptions: PropTypes.object,
   classes: PropTypes.object,
   t: PropTypes.func,
+  selectedElements: PropTypes.object,
+  setSelectedElements: PropTypes.func,
 };
 
 export default compose(
   inject18n,
+  withTheme,
   withStyles(styles),
 )(ContainerStixCoreObjectPopover);

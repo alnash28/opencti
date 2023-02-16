@@ -12,15 +12,25 @@ import {
   isStixCyberObservableRelationship,
   STIX_CYBER_OBSERVABLE_FIELD_TO_STIX_ATTRIBUTE
 } from '../schema/stixCyberObservableRelationship';
-import { isStixMetaRelationship, META_FIELD_TO_STIX_ATTRIBUTE } from '../schema/stixMetaRelationship';
+import { isStixMetaRelationship, metaFieldToStixAttribute } from '../schema/stixMetaRelationship';
 import { isStixObject } from '../schema/stixCoreObject';
-import { EVENT_TYPE_CREATE, EVENT_TYPE_DELETE } from './rabbitmq';
 import conf from '../config/conf';
 import { now, observableValue } from '../utils/format';
 import { isStixRelationship } from '../schema/stixRelationship';
 import { isDictionaryAttribute, isJsonAttribute } from '../schema/fieldDataAdapter';
+import { truncate } from '../utils/mailData';
 
 export const ES_INDEX_PREFIX = conf.get('elasticsearch:index_prefix') || 'opencti';
+const rabbitmqPrefix = conf.get('rabbitmq:queue_prefix');
+export const RABBIT_QUEUE_PREFIX = rabbitmqPrefix ? `${rabbitmqPrefix}_` : '';
+
+export const INTERNAL_SYNC_QUEUE = 'sync';
+export const EVENT_TYPE_CREATE = 'create';
+export const EVENT_TYPE_DELETE = 'delete';
+export const EVENT_TYPE_DEPENDENCIES = 'init-dependencies';
+export const EVENT_TYPE_INIT = 'init-create';
+export const EVENT_TYPE_UPDATE = 'update';
+export const EVENT_TYPE_MERGE = 'merge';
 
 // Operations definition
 export const UPDATE_OPERATION_ADD = 'add';
@@ -87,10 +97,13 @@ export const READ_DATA_INDICES_WITHOUT_INFERRED = [
   READ_INDEX_STIX_META_RELATIONSHIPS,
   ...READ_STIX_INDICES,
 ];
-export const READ_DATA_INDICES = [
-  ...READ_DATA_INDICES_WITHOUT_INFERRED,
+export const READ_DATA_INDICES_INFERRED = [
   READ_INDEX_INFERRED_ENTITIES,
   READ_INDEX_INFERRED_RELATIONSHIPS,
+];
+export const READ_DATA_INDICES = [
+  ...READ_DATA_INDICES_WITHOUT_INFERRED,
+  ...READ_DATA_INDICES_INFERRED
 ];
 export const READ_PLATFORM_INDICES = [READ_INDEX_HISTORY, ...READ_DATA_INDICES];
 export const READ_ENTITIES_INDICES = [
@@ -100,7 +113,6 @@ export const READ_ENTITIES_INDICES = [
   READ_INDEX_STIX_CYBER_OBSERVABLES,
   READ_INDEX_INFERRED_ENTITIES,
 ];
-
 export const READ_RELATIONSHIPS_INDICES_WITHOUT_INFERRED = [
   READ_INDEX_INTERNAL_RELATIONSHIPS,
   READ_INDEX_STIX_CORE_RELATIONSHIPS,
@@ -116,23 +128,33 @@ export const READ_RELATIONSHIPS_INDICES = [
 export const isNotEmptyField = (field) => !R.isEmpty(field) && !R.isNil(field);
 export const isEmptyField = (field) => !isNotEmptyField(field);
 
-export const fillTimeSeries = (startDate, endDate, interval, data) => {
-  const startDateParsed = moment.parseZone(startDate);
-  const endDateParsed = moment.parseZone(endDate ?? now());
-  let dateFormat;
+const getMonday = (d) => {
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+  return new Date(d.setDate(diff));
+};
 
+export const fillTimeSeries = (startDate, endDate, interval, data) => {
+  let startDateParsed = moment.parseZone(startDate);
+  let endDateParsed = moment.parseZone(endDate ?? now());
+  let dateFormat;
   switch (interval) {
     case 'year':
       dateFormat = 'YYYY';
       break;
+    case 'quarter':
     case 'month':
       dateFormat = 'YYYY-MM';
       break;
     /* istanbul ignore next */
+    case 'week':
+      dateFormat = 'YYYY-MM-DD';
+      startDateParsed = moment.parseZone(getMonday(new Date(startDateParsed.format(dateFormat))).toISOString());
+      endDateParsed = moment.parseZone(getMonday(new Date(endDateParsed.format(dateFormat))).toISOString());
+      break;
     default:
       dateFormat = 'YYYY-MM-DD';
   }
-
   const startFormatDate = new Date(endDateParsed.format(dateFormat));
   const endFormatDate = new Date(startDateParsed.format(dateFormat));
   const elementsOfInterval = moment(startFormatDate).diff(moment(endFormatDate), `${interval}s`);
@@ -199,6 +221,8 @@ export const inferIndexFromConceptType = (conceptType, inferred = false) => {
     if (isStixDomainObject(conceptType)) return INDEX_INFERRED_ENTITIES;
     if (isStixCoreRelationship(conceptType)) return INDEX_INFERRED_RELATIONSHIPS;
     if (isStixSightingRelationship(conceptType)) return INDEX_INFERRED_RELATIONSHIPS;
+    if (isStixMetaRelationship(conceptType)) return INDEX_INFERRED_RELATIONSHIPS;
+    if (isInternalRelationship(conceptType)) return INDEX_INFERRED_RELATIONSHIPS;
     throw DatabaseError(`Cant find inferred index for type ${conceptType}`);
   }
   // Entities
@@ -216,11 +240,12 @@ export const inferIndexFromConceptType = (conceptType, inferred = false) => {
   throw DatabaseError(`Cant find index for type ${conceptType}`);
 };
 
-const extractEntityMainValue = (entityData) => {
+// TODO migrate to extractStixRepresentative from convertStoreToStix
+export const extractEntityRepresentative = (entityData) => {
   let mainValue;
   if (isStixCyberObservable(entityData.entity_type)) {
     mainValue = observableValue(entityData);
-  } else if (isNotEmptyField(entityData.definition)) { // TODO Improve the entity domain main value extractor
+  } else if (isNotEmptyField(entityData.definition)) {
     mainValue = entityData.definition;
   } else if (isNotEmptyField(entityData.value)) {
     mainValue = entityData.value;
@@ -255,12 +280,12 @@ const extractEntityMainValue = (entityData) => {
 };
 
 export const generateMergeMessage = (instance, sources) => {
-  const name = extractEntityMainValue(instance);
-  const sourcesNames = sources.map((source) => extractEntityMainValue(source)).join(', ');
+  const name = extractEntityRepresentative(instance);
+  const sourcesNames = sources.map((source) => extractEntityRepresentative(source)).join(', ');
   return `merges ${instance.entity_type} \`${sourcesNames}\` in \`${name}\``;
 };
 const generateCreateDeleteMessage = (type, instance) => {
-  const name = extractEntityMainValue(instance);
+  const name = extractEntityRepresentative(instance);
   if (isStixObject(instance.entity_type)) {
     let entityType = instance.entity_type;
     if (entityType === ENTITY_HASHED_OBSERVABLE_STIX_FILE) {
@@ -269,12 +294,12 @@ const generateCreateDeleteMessage = (type, instance) => {
     return `${type}s a ${entityType} \`${name}\``;
   }
   if (isStixRelationship(instance.entity_type)) {
-    const from = extractEntityMainValue(instance.from);
+    const from = extractEntityRepresentative(instance.from);
     let fromType = instance.from.entity_type;
     if (fromType === ENTITY_HASHED_OBSERVABLE_STIX_FILE) {
       fromType = 'File';
     }
-    const to = extractEntityMainValue(instance.to);
+    const to = extractEntityRepresentative(instance.to);
     let toType = instance.to.entity_type;
     if (toType === ENTITY_HASHED_OBSERVABLE_STIX_FILE) {
       toType = 'File';
@@ -283,6 +308,7 @@ const generateCreateDeleteMessage = (type, instance) => {
   }
   return '-';
 };
+
 export const generateCreateMessage = (instance) => {
   return generateCreateDeleteMessage(EVENT_TYPE_CREATE, instance);
 };
@@ -297,36 +323,36 @@ export const generateUpdateMessage = (inputs) => {
     throw UnsupportedError('[OPENCTI] Error generating update message with empty inputs');
   }
   // noinspection UnnecessaryLocalVariableJS
-  const generatedMessage = patchElements.map(([type, operations]) => {
-    return `${type}s ${operations.map(({ key, value }) => {
+  const generatedMessage = patchElements.slice(0, 3).map(([type, operations]) => {
+    return `${type}s ${operations.slice(0, 3).map(({ key, value }) => {
       let message = 'nothing';
       let convertedKey = key;
-      if (META_FIELD_TO_STIX_ATTRIBUTE[key]) {
-        convertedKey = META_FIELD_TO_STIX_ATTRIBUTE[key];
+      if (metaFieldToStixAttribute()[key]) {
+        convertedKey = metaFieldToStixAttribute()[key];
       }
       if (STIX_CYBER_OBSERVABLE_FIELD_TO_STIX_ATTRIBUTE[key]) {
         convertedKey = STIX_CYBER_OBSERVABLE_FIELD_TO_STIX_ATTRIBUTE[key];
       }
       const fromArray = Array.isArray(value) ? value : [value];
-      const values = fromArray.filter((v) => isNotEmptyField(v));
+      const values = fromArray.slice(0, 3).filter((v) => isNotEmptyField(v));
       if (isNotEmptyField(values)) {
         // If update is based on internal ref, we need to extract the value
-        if (META_FIELD_TO_STIX_ATTRIBUTE[key] || STIX_CYBER_OBSERVABLE_FIELD_TO_STIX_ATTRIBUTE[key]) {
-          message = values.map((val) => extractEntityMainValue(val)).join(', ');
+        if (metaFieldToStixAttribute()[key] || STIX_CYBER_OBSERVABLE_FIELD_TO_STIX_ATTRIBUTE[key]) {
+          message = values.map((val) => truncate(extractEntityRepresentative(val))).join(', ');
         } else if (isDictionaryAttribute(key)) {
-          message = Object.entries(R.head(values)).map(([k, v]) => `${k}:${v}`).join(', ');
+          message = Object.entries(R.head(values)).map(([k, v]) => truncate(`${k}:${v}`)).join(', ');
         } else if (isJsonAttribute(key)) {
-          message = values.map((v) => JSON.stringify(v));
+          message = values.map((v) => truncate(JSON.stringify(v)));
         } else {
           // If standard primitive data, just join the values
           message = values.join(', ');
         }
       }
-      return `\`${message}\` in \`${convertedKey}\``;
+      return `\`${message}\` in \`${convertedKey}\`${(fromArray.length > 3) ? ` and ${fromArray.length - 3} more items` : ''}`;
     }).join(' - ')}`;
   }).join(' | ');
   // Return generated update message
-  return generatedMessage;
+  return `${generatedMessage}${patchElements.length > 3 ? ` and ${patchElements.length - 3} more operations` : ''}`;
 };
 
 export const pascalize = (s) => {
@@ -339,3 +365,11 @@ export const computeAverage = (numbers) => {
   const sum = numbers.reduce((a, b) => a + b, 0);
   return Math.round(sum / numbers.length || 0);
 };
+
+export const wait = (ms) => {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+};
+
+export const waitInSec = (sec) => wait(sec * 1000);

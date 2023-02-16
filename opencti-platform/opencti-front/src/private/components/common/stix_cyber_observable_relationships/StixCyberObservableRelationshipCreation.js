@@ -25,6 +25,7 @@ import { truncate } from '../../../../utils/String';
 import ObjectMarkingField from '../form/ObjectMarkingField';
 import ConfidenceField from '../form/ConfidenceField';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -135,8 +136,8 @@ const styles = (theme) => ({
 
 export const stixCyberObservableRelationshipCreationQuery = graphql`
   query StixCyberObservableRelationshipCreationQuery(
-    $fromId: String!
-    $toId: String!
+    $fromId: StixRef!
+    $toId: StixRef!
   ) {
     stixCyberObservableRelationships(fromId: $fromId, toId: $toId) {
       edges {
@@ -184,7 +185,10 @@ export const stixCyberObservableRelationshipCreationQuery = graphql`
             edges {
               node {
                 id
+                definition_type
                 definition
+                x_opencti_order
+                x_opencti_color
               }
             }
           }
@@ -242,7 +246,10 @@ const stixCyberObservableRelationshipCreationMutation = graphql`
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
+            x_opencti_color
           }
         }
       }
@@ -542,7 +549,7 @@ class StixCyberObservableRelationshipCreation extends Component {
                 name="confidence"
                 label={t('Confidence level')}
                 fullWidth={true}
-                containerstyle={{ marginTop: 20, width: '100%' }}
+                containerStyle={fieldSpacingContainerStyle}
               />
               <Field
                 component={DateTimePickerField}

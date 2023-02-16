@@ -1,44 +1,29 @@
+import { describe, expect, it } from 'vitest';
 import * as R from 'ramda';
 import { FIVE_MINUTES, RAW_EVENTS_SIZE } from '../../utils/testQuery';
-import { shutdownModules, startModules } from '../../../src/modules';
-import {
-  checkStreamData,
-  checkStreamGenericContent,
-  fetchStreamEvents,
-} from '../../utils/testStream';
-import {
-  EVENT_TYPE_CREATE,
-  EVENT_TYPE_DELETE,
-  EVENT_TYPE_MERGE,
-  EVENT_TYPE_UPDATE,
-} from '../../../src/database/rabbitmq';
+import { checkStreamData, checkStreamGenericContent, fetchStreamEvents, } from '../../utils/testStream';
+import { PORT } from '../../../src/config/conf';
+import { EVENT_TYPE_CREATE, EVENT_TYPE_DELETE, EVENT_TYPE_MERGE, EVENT_TYPE_UPDATE } from '../../../src/database/utils';
 
 describe('Raw streams tests', () => {
-  beforeAll(async () => {
-    await startModules();
-  });
-  afterAll(async () => {
-    await shutdownModules();
-  });
-
   // We need to check the event format to be sure that everything is setup correctly
   it(
     'Should stream correctly formatted',
     async () => {
-      // Read all events from the beginning.
-      const events = await fetchStreamEvents('http://localhost:4000/stream', { from: '0' });
+    // Read all events from the beginning.
+      const events = await fetchStreamEvents(`http://localhost:${PORT}/stream`, { from: '0' });
       // Check the number of events
       expect(events.length).toBe(RAW_EVENTS_SIZE);
       // 01 - CHECK CREATE EVENTS
       const createEvents = events.filter((e) => e.type === EVENT_TYPE_CREATE);
-      expect(createEvents.length).toBe(300);
+      expect(createEvents.length).toBe(572);
       // Check some events count
       const createEventsByTypes = R.groupBy((e) => e.data.data.type, createEvents);
-      expect(createEventsByTypes['marking-definition'].length).toBe(7);
+      expect(createEventsByTypes['marking-definition'].length).toBe(8);
       expect(createEventsByTypes['external-reference'].length).toBe(17);
       expect(createEventsByTypes.label.length).toBe(15);
-      expect(createEventsByTypes.identity.length).toBe(13);
-      expect(createEventsByTypes.relationship.length).toBe(119);
+      expect(createEventsByTypes.identity.length).toBe(14);
+      expect(createEventsByTypes.relationship.length).toBe(120);
       expect(createEventsByTypes.indicator.length).toBe(30);
       expect(createEventsByTypes['attack-pattern'].length).toBe(6);
       expect(createEventsByTypes.report.length).toBe(3);
@@ -51,7 +36,7 @@ describe('Raw streams tests', () => {
       }
       // 02 - CHECK UPDATE EVENTS
       const updateEvents = events.filter((e) => e.type === EVENT_TYPE_UPDATE);
-      expect(updateEvents.length).toBe(90);
+      expect(updateEvents.length).toBe(99);
       const updateEventsByTypes = R.groupBy((e) => e.data.data.type, updateEvents);
       expect(updateEventsByTypes.report.length).toBe(3);
       for (let updateIndex = 0; updateIndex < updateEvents.length; updateIndex += 1) {
@@ -66,7 +51,7 @@ describe('Raw streams tests', () => {
       }
       // 03 - CHECK DELETE EVENTS
       const deleteEvents = events.filter((e) => e.type === EVENT_TYPE_DELETE);
-      expect(deleteEvents.length).toBe(39);
+      expect(deleteEvents.length).toBe(44);
       // const deleteEventsByTypes = R.groupBy((e) => e.data.data.type, deleteEvents);
       for (let delIndex = 0; delIndex < deleteEvents.length; delIndex += 1) {
         const { data: insideData, origin, type } = deleteEvents[delIndex];
@@ -97,7 +82,7 @@ describe('Raw streams tests', () => {
   it(
     'Should events dependencies available',
     async () => {
-      const events = await fetchStreamEvents('http://localhost:4000/stream', { from: '0' });
+      const events = await fetchStreamEvents(`http://localhost:${PORT}/stream`, { from: '0' });
       const contextWithDeletionEvents = events.filter(
         (e) => {
           const { context } = e.data;

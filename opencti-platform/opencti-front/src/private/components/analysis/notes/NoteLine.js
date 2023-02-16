@@ -1,18 +1,22 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
-import { graphql, createFragmentContainer } from 'react-relay';
+import { createFragmentContainer, graphql } from 'react-relay';
 import withStyles from '@mui/styles/withStyles';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import { KeyboardArrowRightOutlined, WorkOutline } from '@mui/icons-material';
-import { compose, pathOr } from 'ramda';
+import { KeyboardArrowRightOutlined } from '@mui/icons-material';
+import { compose } from 'ramda';
 import Skeleton from '@mui/material/Skeleton';
+import Chip from '@mui/material/Chip';
+import Checkbox from '@mui/material/Checkbox';
 import inject18n from '../../../../components/i18n';
 import StixCoreObjectLabels from '../../common/stix_core_objects/StixCoreObjectLabels';
 import { truncate } from '../../../../utils/String';
 import ItemMarkings from '../../../../components/ItemMarkings';
+import ItemIcon from '../../../../components/ItemIcon';
+import ItemStatus from '../../../../components/ItemStatus';
 
 const styles = (theme) => ({
   item: {
@@ -43,11 +47,29 @@ const styles = (theme) => ({
     height: '1em',
     backgroundColor: theme.palette.grey[700],
   },
+  chipInList: {
+    fontSize: 12,
+    height: 20,
+    float: 'left',
+    width: 120,
+  },
 });
 
 class NoteLineComponent extends Component {
   render() {
-    const { fd, classes, node, dataColumns, onLabelClick } = this.props;
+    const {
+      fd,
+      classes,
+      node,
+      dataColumns,
+      onLabelClick,
+      onToggleEntity,
+      selectedElements,
+      deSelectedElements,
+      selectAll,
+      onToggleShiftEntity,
+      index,
+    } = this.props;
     return (
       <ListItem
         classes={{ root: classes.item }}
@@ -56,8 +78,25 @@ class NoteLineComponent extends Component {
         component={Link}
         to={`/dashboard/analysis/notes/${node.id}`}
       >
+        <ListItemIcon
+          classes={{ root: classes.itemIcon }}
+          style={{ minWidth: 40 }}
+          onClick={(event) => (event.shiftKey
+            ? onToggleShiftEntity(index, node, event)
+            : onToggleEntity(node, event))
+          }
+        >
+          <Checkbox
+            edge="start"
+            checked={
+              (selectAll && !(node.id in (deSelectedElements || {})))
+              || node.id in (selectedElements || {})
+            }
+            disableRipple={true}
+          />
+        </ListItemIcon>
         <ListItemIcon classes={{ root: classes.itemIcon }}>
-          <WorkOutline />
+          <ItemIcon type="Note" />
         </ListItemIcon>
         <ListItemText
           primary={
@@ -75,9 +114,28 @@ class NoteLineComponent extends Component {
               </div>
               <div
                 className={classes.bodyItem}
+                style={{ width: dataColumns.note_types.width }}
+              >
+                {node.note_types?.length > 0 && (
+                  <Chip
+                    classes={{ root: classes.chipInList }}
+                    color="primary"
+                    variant="outlined"
+                    label={node.note_types[0]}
+                  />
+                )}
+              </div>
+              <div
+                className={classes.bodyItem}
                 style={{ width: dataColumns.createdBy.width }}
               >
-                {pathOr('', ['createdBy', 'name'], node)}
+                {node.createdBy?.name}
+              </div>
+              <div
+                className={classes.bodyItem}
+                style={{ width: dataColumns.creator.width }}
+              >
+                {node.creator?.name}
               </div>
               <div
                 className={classes.bodyItem}
@@ -97,16 +155,22 @@ class NoteLineComponent extends Component {
               </div>
               <div
                 className={classes.bodyItem}
+                style={{ width: dataColumns.x_opencti_workflow_id.width }}
+              >
+                <ItemStatus
+                  status={node.status}
+                  variant="inList"
+                  disabled={!node.workflowEnabled}
+                />
+              </div>
+              <div
+                className={classes.bodyItem}
                 style={{ width: dataColumns.objectMarking.width }}
               >
                 <ItemMarkings
-                  markingDefinitions={pathOr(
-                    [],
-                    ['objectMarking', 'edges'],
-                    node,
-                  )}
-                  limit={1}
                   variant="inList"
+                  markingDefinitionsEdges={node.objectMarking.edges ?? []}
+                  limit={1}
                 />
               </div>
             </div>
@@ -132,9 +196,13 @@ const NoteLineFragment = createFragmentContainer(NoteLineComponent, {
   node: graphql`
     fragment NoteLine_node on Note {
       id
+      entity_type
       attribute_abstract
       content
       created
+      note_types
+      likelihood
+      confidence
       createdBy {
         ... on Identity {
           id
@@ -146,7 +214,9 @@ const NoteLineFragment = createFragmentContainer(NoteLineComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }
@@ -160,6 +230,19 @@ const NoteLineFragment = createFragmentContainer(NoteLineComponent, {
           }
         }
       }
+      creator {
+        id
+        name
+      }
+      status {
+        id
+        order
+        template {
+          name
+          color
+        }
+      }
+      workflowEnabled
     }
   `,
 });
@@ -174,6 +257,12 @@ class NoteLineDummyComponent extends Component {
     const { classes, dataColumns } = this.props;
     return (
       <ListItem classes={{ root: classes.item }} divider={true}>
+        <ListItemIcon
+          classes={{ root: classes.itemIconDisabled }}
+          style={{ minWidth: 40 }}
+        >
+          <Checkbox edge="start" disabled={true} disableRipple={true} />
+        </ListItemIcon>
         <ListItemIcon classes={{ root: classes.itemIcon }}>
           <Skeleton
             animation="wave"
@@ -198,7 +287,29 @@ class NoteLineDummyComponent extends Component {
               </div>
               <div
                 className={classes.bodyItem}
+                style={{ width: dataColumns.note_types.width }}
+              >
+                <Skeleton
+                  animation="wave"
+                  variant="rectangular"
+                  width="90%"
+                  height="100%"
+                />
+              </div>
+              <div
+                className={classes.bodyItem}
                 style={{ width: dataColumns.createdBy.width }}
+              >
+                <Skeleton
+                  animation="wave"
+                  variant="rectangular"
+                  width="90%"
+                  height="100%"
+                />
+              </div>
+              <div
+                className={classes.bodyItem}
+                style={{ width: dataColumns.creator.width }}
               >
                 <Skeleton
                   animation="wave"
@@ -221,6 +332,17 @@ class NoteLineDummyComponent extends Component {
               <div
                 className={classes.bodyItem}
                 style={{ width: dataColumns.created.width }}
+              >
+                <Skeleton
+                  animation="wave"
+                  variant="rectangular"
+                  width="90%"
+                  height="100%"
+                />
+              </div>
+              <div
+                className={classes.bodyItem}
+                style={{ width: dataColumns.x_opencti_workflow_id.width }}
               >
                 <Skeleton
                   animation="wave"

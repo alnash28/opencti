@@ -9,10 +9,10 @@ import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Fab from '@mui/material/Fab';
 import { Add, Close } from '@mui/icons-material';
-import { compose, pluck, evolve, path } from 'ramda';
 import * as Yup from 'yup';
 import { graphql } from 'react-relay';
 import { ConnectionHandler } from 'relay-runtime';
+import * as R from 'ramda';
 import inject18n from '../../../../components/i18n';
 import {
   commitMutation,
@@ -41,15 +41,6 @@ const styles = (theme) => ({
     transition: theme.transitions.create('right', {
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.enteringScreen,
-    }),
-  },
-  createButtonExports: {
-    position: 'fixed',
-    bottom: 30,
-    right: 310,
-    transition: theme.transitions.create('right', {
-      easing: theme.transitions.easing.easeOut,
-      duration: theme.transitions.duration.leavingScreen,
     }),
   },
   buttons: {
@@ -129,11 +120,11 @@ class ArtifactCreation extends Component {
   }
 
   onSubmit(values, { setSubmitting, setErrors, resetForm }) {
-    const adaptedValues = evolve(
+    const adaptedValues = R.evolve(
       {
-        createdBy: path(['value']),
-        objectMarking: pluck('value'),
-        objectLabel: pluck('value'),
+        createdBy: R.path(['value']),
+        objectMarking: R.pluck('value'),
+        objectLabel: R.pluck('value'),
       },
       values,
     );
@@ -172,16 +163,14 @@ class ArtifactCreation extends Component {
   }
 
   render() {
-    const { t, classes, openExports } = this.props;
+    const { t, classes } = this.props;
     return (
       <div>
         <Fab
           onClick={this.handleOpen.bind(this)}
           color="secondary"
           aria-label="Add"
-          className={
-            openExports ? classes.createButtonExports : classes.createButton
-          }
+          className={classes.createButton}
         >
           <Add />
         </Fab>
@@ -299,7 +288,7 @@ ArtifactCreation.propTypes = {
   openExports: PropTypes.bool,
 };
 
-export default compose(
+export default R.compose(
   inject18n,
   withStyles(styles, { withTheme: true }),
 )(ArtifactCreation);

@@ -1,5 +1,6 @@
+import { expect, it, describe } from 'vitest';
 import gql from 'graphql-tag';
-import { ADMIN_USER, queryAsAdmin } from '../../utils/testQuery';
+import { ADMIN_USER, testContext, queryAsAdmin } from '../../utils/testQuery';
 import { elLoadById } from '../../../src/database/engine';
 
 const LIST_QUERY = gql`
@@ -157,7 +158,7 @@ describe('ExternalReference resolver standard behavior', () => {
     expect(queryResult.data.externalReferenceEdit.contextClean.id).toEqual(externalReferenceInternalId);
   });
   it('should add relation in externalReference', async () => {
-    const campaign = await elLoadById(ADMIN_USER, 'campaign--92d46985-17a6-4610-8be8-cc70c82ed214');
+    const campaign = await elLoadById(testContext, ADMIN_USER, 'campaign--92d46985-17a6-4610-8be8-cc70c82ed214');
     campaignId = campaign.internal_id;
     const RELATION_ADD_QUERY = gql`
       mutation ExternalReferenceEdit($id: ID!, $input: StixMetaRelationshipAddInput!) {
@@ -194,7 +195,7 @@ describe('ExternalReference resolver standard behavior', () => {
   });
   it('should delete relation in externalReference', async () => {
     const RELATION_DELETE_QUERY = gql`
-      mutation ExternalReferenceEdit($id: ID!, $fromId: String!, $relationship_type: String!) {
+      mutation ExternalReferenceEdit($id: ID!, $fromId: StixRef!, $relationship_type: String!) {
         externalReferenceEdit(id: $id) {
           relationDelete(fromId: $fromId, relationship_type: $relationship_type) {
             id

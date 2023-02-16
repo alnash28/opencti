@@ -22,7 +22,8 @@ import { withRouter } from 'react-router-dom';
 import ItemBoolean from '../../../../components/ItemBoolean';
 import inject18n from '../../../../components/i18n';
 import { FIVE_SECONDS } from '../../../../utils/Time';
-import Security, { MODULES_MODMANAGE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { MODULES_MODMANAGE } from '../../../../utils/hooks/useGranted';
 import {
   commitMutation,
   MESSAGING$,
@@ -213,7 +214,6 @@ class ConnectorComponent extends Component {
       filters: [
         { key: 'connector_id', values: [connector.id] },
         { key: 'status', values: ['complete'] },
-        { key: 'completed_number', values: ['0'], operator: 'gt' },
       ],
     };
     return (

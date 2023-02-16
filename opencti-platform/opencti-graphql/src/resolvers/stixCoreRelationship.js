@@ -2,6 +2,15 @@ import { withFilter } from 'graphql-subscriptions';
 import { BUS_TOPICS } from '../config/conf';
 import {
   addStixCoreRelationship,
+  batchCreatedBy,
+  batchExternalReferences,
+  batchKillChainPhases,
+  batchLabels,
+  batchMarkingDefinitions,
+  batchNotes,
+  batchOpinions,
+  batchReports,
+  batchCases,
   findAll,
   findById,
   stixCoreRelationshipAddRelation,
@@ -11,27 +20,22 @@ import {
   stixCoreRelationshipDeleteRelation,
   stixCoreRelationshipEditContext,
   stixCoreRelationshipEditField,
-  stixCoreRelationshipsNumber,
-  batchCreatedBy,
-  batchKillChainPhases,
-  batchExternalReferences,
-  batchLabels,
-  batchMarkingDefinitions,
-  batchNotes,
-  batchOpinions,
-  batchReports,
   stixCoreRelationshipsExportAsk,
-  stixCoreRelationshipsExportPush
+  stixCoreRelationshipsExportPush,
+  stixCoreRelationshipsNumber,
+  stixCoreRelationshipsMultiTimeSeries,
+  stixCoreRelationshipsDistribution,
 } from '../domain/stixCoreRelationship';
-import { fetchEditContext, pubsub } from '../database/redis';
+import { fetchEditContext, pubSubAsyncIterator } from '../database/redis';
 import withCancel from '../graphql/subscriptionWrapper';
-import { distributionRelations, timeSeriesRelations, batchLoader, stixLoadByIdStringify } from '../database/middleware';
-import { creator } from '../domain/log';
-import { RELATION_CREATED_BY, RELATION_OBJECT_LABEL, RELATION_OBJECT_MARKING } from '../schema/stixMetaRelationship';
-import { ABSTRACT_STIX_CORE_RELATIONSHIP, buildRefRelationKey } from '../schema/general';
+import { batchLoader, stixLoadByIdStringify, timeSeriesRelations } from '../database/middleware';
+import { ABSTRACT_STIX_CORE_RELATIONSHIP } from '../schema/general';
 import { elBatchIds } from '../database/engine';
 import { findById as findStatusById, getTypeStatuses } from '../domain/status';
 import { filesListing } from '../database/file-storage';
+import { batchCreators } from '../domain/user';
+import { stixCoreRelationshipOptions } from '../schema/stixCoreRelationship';
+import { addOrganizationRestriction, batchObjectOrganizations, removeOrganizationRestriction } from '../domain/stix';
 
 const loadByIdLoader = batchLoader(elBatchIds);
 const createdByLoader = batchLoader(batchCreatedBy);
@@ -42,69 +46,84 @@ const killChainPhasesLoader = batchLoader(batchKillChainPhases);
 const notesLoader = batchLoader(batchNotes);
 const opinionsLoader = batchLoader(batchOpinions);
 const reportsLoader = batchLoader(batchReports);
+const casesLoader = batchLoader(batchCases);
+const batchOrganizationsLoader = batchLoader(batchObjectOrganizations);
+const creatorsLoader = batchLoader(batchCreators);
 
 const stixCoreRelationshipResolvers = {
   Query: {
-    stixCoreRelationship: (_, { id }, { user }) => findById(user, id),
-    stixCoreRelationships: (_, args, { user }) => findAll(user, args),
-    stixCoreRelationshipsTimeSeries: (_, args, { user }) => timeSeriesRelations(user, args),
-    stixCoreRelationshipsDistribution: (_, args, { user }) => distributionRelations(user, args),
-    stixCoreRelationshipsNumber: (_, args, { user }) => stixCoreRelationshipsNumber(user, args),
-    stixCoreRelationshipsExportFiles: (_, { type, first }, { user }) => filesListing(user, first, `export/${type}/`),
+    stixCoreRelationship: (_, { id }, context) => findById(context, context.user, id),
+    stixCoreRelationships: (_, args, context) => findAll(context, context.user, args),
+    stixCoreRelationshipsTimeSeries: (_, args, context) => timeSeriesRelations(context, context.user, args),
+    stixCoreRelationshipsMultiTimeSeries: (_, args, context) => stixCoreRelationshipsMultiTimeSeries(context, context.user, args),
+    stixCoreRelationshipsDistribution: (_, args, context) => stixCoreRelationshipsDistribution(context, context.user, args),
+    stixCoreRelationshipsNumber: (_, args, context) => stixCoreRelationshipsNumber(context, context.user, args),
+    stixCoreRelationshipsExportFiles: (_, { type, first }, context) => {
+      return filesListing(context, context.user, first, `export/${type}/`);
+    },
   },
-  StixCoreRelationshipsFilter: {
-    createdBy: buildRefRelationKey(RELATION_CREATED_BY),
-    markedBy: buildRefRelationKey(RELATION_OBJECT_MARKING),
-    labelledBy: buildRefRelationKey(RELATION_OBJECT_LABEL),
-  },
+  StixCoreRelationshipsFilter: stixCoreRelationshipOptions.StixCoreRelationshipsFilter,
+  StixCoreRelationshipsOrdering: stixCoreRelationshipOptions.StixCoreRelationshipsOrdering,
   StixCoreRelationship: {
-    from: (rel, _, { user }) => loadByIdLoader.load(rel.fromId, user),
-    to: (rel, _, { user }) => loadByIdLoader.load(rel.toId, user),
-    toStix: (rel, _, { user }) => stixLoadByIdStringify(user, rel.id),
-    creator: (rel, _, { user }) => creator(user, rel.id, ABSTRACT_STIX_CORE_RELATIONSHIP),
-    createdBy: (rel, _, { user }) => createdByLoader.load(rel.id, user),
-    objectMarking: (rel, _, { user }) => markingDefinitionsLoader.load(rel.id, user),
-    objectLabel: (rel, _, { user }) => labelsLoader.load(rel.id, user),
-    externalReferences: (rel, _, { user }) => externalReferencesLoader.load(rel.id, user),
-    killChainPhases: (rel, _, { user }) => killChainPhasesLoader.load(rel.id, user),
-    reports: (rel, _, { user }) => reportsLoader.load(rel.id, user),
-    notes: (rel, _, { user }) => notesLoader.load(rel.id, user),
-    opinions: (rel, _, { user }) => opinionsLoader.load(rel.id, user),
+    from: (rel, _, context) => loadByIdLoader.load(rel.fromId, context, context.user),
+    to: (rel, _, context) => loadByIdLoader.load(rel.toId, context, context.user),
+    toStix: (rel, _, context) => stixLoadByIdStringify(context, context.user, rel.id),
+    creator: (rel, _, context) => creatorsLoader.load(rel.creator_id, context, context.user),
+    createdBy: (rel, _, context) => createdByLoader.load(rel.id, context, context.user),
+    objectMarking: (rel, _, context) => markingDefinitionsLoader.load(rel.id, context, context.user),
+    objectLabel: (rel, _, context) => labelsLoader.load(rel.id, context, context.user),
+    objectOrganization: (rel, _, context) => batchOrganizationsLoader.load(rel.id, context, context.user),
+    externalReferences: (rel, _, context) => externalReferencesLoader.load(rel.id, context, context.user),
+    killChainPhases: (rel, _, context) => killChainPhasesLoader.load(rel.id, context, context.user),
+    reports: (rel, _, context) => reportsLoader.load(rel.id, context, context.user),
+    cases: (rel, _, context) => casesLoader.load(rel.id, context, context.user),
+    notes: (rel, _, context) => notesLoader.load(rel.id, context, context.user),
+    opinions: (rel, _, context) => opinionsLoader.load(rel.id, context, context.user),
     editContext: (rel) => fetchEditContext(rel.id),
-    status: (entity, _, { user }) => (entity.x_opencti_workflow_id ? findStatusById(user, entity.x_opencti_workflow_id) : null),
-    workflowEnabled: async (entity, _, { user }) => {
-      const statusesEdges = await getTypeStatuses(user, ABSTRACT_STIX_CORE_RELATIONSHIP);
+    status: (entity, _, context) => (entity.x_opencti_workflow_id ? findStatusById(context, context.user, entity.x_opencti_workflow_id) : null),
+    workflowEnabled: async (entity, _, context) => {
+      const statusesEdges = await getTypeStatuses(context, context.user, ABSTRACT_STIX_CORE_RELATIONSHIP);
       return statusesEdges.edges.length > 0;
     },
   },
   Mutation: {
-    stixCoreRelationshipEdit: (_, { id }, { user }) => ({
-      delete: () => stixCoreRelationshipDelete(user, id),
-      fieldPatch: ({ input, commitMessage, references }) => stixCoreRelationshipEditField(user, id, input, { commitMessage, references }),
-      contextPatch: ({ input }) => stixCoreRelationshipEditContext(user, id, input),
-      contextClean: () => stixCoreRelationshipCleanContext(user, id),
-      relationAdd: ({ input }) => stixCoreRelationshipAddRelation(user, id, input),
-      relationDelete: ({ toId, relationship_type: relationshipType }) => stixCoreRelationshipDeleteRelation(user, id, toId, relationshipType),
+    stixCoreRelationshipEdit: (_, { id }, context) => ({
+      delete: () => stixCoreRelationshipDelete(context, context.user, id),
+      fieldPatch: ({ input, commitMessage, references }) => {
+        return stixCoreRelationshipEditField(context, context.user, id, input, { commitMessage, references });
+      },
+      contextPatch: ({ input }) => stixCoreRelationshipEditContext(context, context.user, id, input),
+      contextClean: () => stixCoreRelationshipCleanContext(context, context.user, id),
+      relationAdd: ({ input }) => stixCoreRelationshipAddRelation(context, context.user, id, input),
+      relationDelete: ({ toId, relationship_type: relationshipType }) => {
+        return stixCoreRelationshipDeleteRelation(context, context.user, id, toId, relationshipType);
+      },
+      restrictionOrganizationAdd: ({ organizationId }) => addOrganizationRestriction(context, context.user, id, organizationId),
+      restrictionOrganizationDelete: ({ organizationId }) => removeOrganizationRestriction(context, context.user, id, organizationId),
     }),
-    stixCoreRelationshipAdd: (_, { input }, { user }) => addStixCoreRelationship(user, input),
-    stixCoreRelationshipsExportAsk: (_, args, { user }) => stixCoreRelationshipsExportAsk(user, args),
-    stixCoreRelationshipsExportPush: (_, { type, file, listFilters }, { user }) => stixCoreRelationshipsExportPush(user, type, file, listFilters),
-    stixCoreRelationshipDelete: (_, { fromId, toId, relationship_type: relationshipType }, { user }) => stixCoreRelationshipDeleteByFromAndTo(user, fromId, toId, relationshipType),
+    stixCoreRelationshipAdd: (_, { input }, context) => addStixCoreRelationship(context, context.user, input),
+    stixCoreRelationshipsExportAsk: (_, args, context) => stixCoreRelationshipsExportAsk(context, context.user, args),
+    stixCoreRelationshipsExportPush: (_, { type, file, listFilters }, context) => {
+      return stixCoreRelationshipsExportPush(context, context.user, type, file, listFilters);
+    },
+    stixCoreRelationshipDelete: (_, { fromId, toId, relationship_type: relationshipType }, context) => {
+      return stixCoreRelationshipDeleteByFromAndTo(context, context.user, fromId, toId, relationshipType);
+    },
   },
   Subscription: {
     stixCoreRelationship: {
       resolve: /* istanbul ignore next */ (payload) => payload.instance,
-      subscribe: /* istanbul ignore next */ (_, { id }, { user }) => {
-        stixCoreRelationshipEditContext(user, id);
+      subscribe: /* istanbul ignore next */ (_, { id }, context) => {
+        stixCoreRelationshipEditContext(context, context.user, id);
         const filtering = withFilter(
-          () => pubsub.asyncIterator(BUS_TOPICS[ABSTRACT_STIX_CORE_RELATIONSHIP].EDIT_TOPIC),
+          () => pubSubAsyncIterator(BUS_TOPICS[ABSTRACT_STIX_CORE_RELATIONSHIP].EDIT_TOPIC),
           (payload) => {
-            if (!payload) return false; // When disconnect, an empty payload is dispatched.
-            return payload.user.id !== user.id && payload.instance.id === id;
+            if (!payload) return false; // When disconnected, an empty payload is dispatched.
+            return payload.user.id !== context.user.id && payload.instance.id === id;
           }
-        )(_, { id }, { user });
+        )(_, { id }, context);
         return withCancel(filtering, () => {
-          stixCoreRelationshipCleanContext(user, id);
+          stixCoreRelationshipCleanContext(context, context.user, id);
         });
       },
     },

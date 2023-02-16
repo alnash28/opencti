@@ -1,19 +1,19 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
-import { graphql, createFragmentContainer } from 'react-relay';
+import { createFragmentContainer, graphql } from 'react-relay';
 import withStyles from '@mui/styles/withStyles';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import ListItemSecondaryAction from '@mui/material/ListItemSecondaryAction';
-import { MoreVert, LayersClearOutlined } from '@mui/icons-material';
-import { compose, last, map, toPairs } from 'ramda';
+import { LayersClearOutlined, MoreVert } from '@mui/icons-material';
+import * as R from 'ramda';
 import Chip from '@mui/material/Chip';
 import Slide from '@mui/material/Slide';
 import Skeleton from '@mui/material/Skeleton';
-import { truncate } from '../../../../utils/String';
 import inject18n from '../../../../components/i18n';
 import RetentionPopover from './RetentionPopover';
+import FilterIconButton from '../../../../components/FilterIconButton';
 
 const Transition = React.forwardRef((props, ref) => (
   <Slide direction="up" ref={ref} {...props} />
@@ -49,26 +49,13 @@ const styles = (theme) => ({
     height: '1em',
     backgroundColor: theme.palette.grey[700],
   },
-  filter: {
-    fontSize: 12,
-    lineHeight: '12px',
-    height: 20,
-    marginRight: 7,
-    borderRadius: 10,
-  },
-  operator: {
-    fontFamily: 'Consolas, monaco, monospace',
-    backgroundColor: theme.palette.background.accent,
-    height: 20,
-    marginRight: 10,
-  },
 });
 
 class RetentionLineComponent extends Component {
   render() {
     const { t, classes, node, dataColumns, paginationOptions, nsdt, n } = this.props;
     const filters = JSON.parse(node.filters);
-    const filterPairs = toPairs(filters);
+    const filterPairs = R.toPairs(filters);
     return (
       <ListItem classes={{ root: classes.item }} divider={true}>
         <ListItemIcon classes={{ root: classes.itemIcon }}>
@@ -83,54 +70,15 @@ class RetentionLineComponent extends Component {
               >
                 {node.name}
               </div>
-              <div
-                className={classes.bodyItem}
-                style={{ width: dataColumns.filters.width }}
-              >
-                {filterPairs.length > 0 ? (
-                  map((currentFilter) => {
-                    const label = `${truncate(
-                      t(`filter_${currentFilter[0]}`),
-                      20,
-                    )}`;
-                    const values = (
-                      <span>
-                        {map(
-                          (val) => (
-                            <span key={val.value}>
-                              {val.value && val.value.length > 0
-                                ? truncate(val.value, 15)
-                                : t('No label')}{' '}
-                              {last(currentFilter[1]).value !== val.value && (
-                                <code>OR</code>
-                              )}{' '}
-                            </span>
-                          ),
-                          currentFilter[1],
-                        )}
-                      </span>
-                    );
-                    return (
-                      <span>
-                        <Chip
-                          key={currentFilter[0]}
-                          classes={{ root: classes.filter }}
-                          label={
-                            <div>
-                              <strong>{label}</strong>: {values}
-                            </div>
-                          }
-                        />
-                        {last(toPairs(filters))[0] !== currentFilter[0] && (
-                          <Chip
-                            classes={{ root: classes.operator }}
-                            label={t('AND')}
-                          />
-                        )}
-                      </span>
-                    );
-                  }, filterPairs)
-                ) : (
+              {filterPairs.length > 0
+                ? <FilterIconButton
+                filters={filters}
+                dataColumns={dataColumns}
+                classNameNumber={3}
+                styleNumber={3}
+                />
+                : (
+                  <div className={classes.bodyItem} style={{ width: dataColumns.filters.width }}>
                   <span>
                     <Chip
                       classes={{ root: classes.filter }}
@@ -141,8 +89,9 @@ class RetentionLineComponent extends Component {
                       }
                     />
                   </span>
-                )}
-              </div>
+                  </div>
+                )
+              }
               <div
                 className={classes.bodyItem}
                 style={{ width: dataColumns.retention.width }}
@@ -197,7 +146,7 @@ const RetentionLineFragment = createFragmentContainer(RetentionLineComponent, {
   `,
 });
 
-export const RetentionLine = compose(
+export const RetentionLine = R.compose(
   inject18n,
   withStyles(styles),
 )(RetentionLineFragment);
@@ -289,7 +238,7 @@ RetentionDummyComponent.propTypes = {
   classes: PropTypes.object,
 };
 
-export const RetentionLineDummy = compose(
+export const RetentionLineDummy = R.compose(
   inject18n,
   withStyles(styles),
 )(RetentionDummyComponent);

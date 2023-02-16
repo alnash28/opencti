@@ -6,6 +6,7 @@ import { graphql } from 'react-relay';
 import withTheme from '@mui/styles/withTheme';
 import withStyles from '@mui/styles/withStyles';
 import Toolbar from '@mui/material/Toolbar';
+import MuiSwitch from '@mui/material/Switch';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
 import List from '@mui/material/List';
@@ -26,17 +27,22 @@ import TableContainer from '@mui/material/TableContainer';
 import TableRow from '@mui/material/TableRow';
 import IconButton from '@mui/material/IconButton';
 import {
+  Add,
   AddOutlined,
-  DeleteOutlined,
+  BrushOutlined,
+  CancelOutlined,
+  CenterFocusStrong,
   ClearOutlined,
   CloseOutlined,
-  BrushOutlined,
-  CenterFocusStrong,
-  CancelOutlined,
-  LinkOffOutlined,
+  DeleteOutlined,
   LanguageOutlined,
+  LinkOffOutlined,
+  TransformOutlined,
+  ContentCopyOutlined,
+  AutoFixHighOutlined,
+  MergeOutlined,
 } from '@mui/icons-material';
-import { AutoFix, Label, Merge } from 'mdi-material-ui';
+import { CloudRefresh, Label } from 'mdi-material-ui';
 import Autocomplete from '@mui/material/Autocomplete';
 import Drawer from '@mui/material/Drawer';
 import Dialog from '@mui/material/Dialog';
@@ -49,7 +55,6 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Alert from '@mui/material/Alert';
 import TextField from '@mui/material/TextField';
 import Grid from '@mui/material/Grid';
-import { ascend, map, path, pathOr, pipe, sortWith, union } from 'ramda';
 import Avatar from '@mui/material/Avatar';
 import inject18n from '../../../components/i18n';
 import { truncate } from '../../../utils/String';
@@ -58,39 +63,48 @@ import {
   fetchQuery,
   MESSAGING$,
 } from '../../../relay/environment';
-import ItemMarking from '../../../components/ItemMarking';
 import ItemIcon from '../../../components/ItemIcon';
 import { objectMarkingFieldAllowedMarkingsQuery } from '../common/form/ObjectMarkingField';
 import { defaultValue } from '../../../utils/Graph';
 import { identitySearchIdentitiesSearchQuery } from '../common/identities/IdentitySearch';
 import { labelsSearchQuery } from '../settings/LabelsQuery';
-import Security, {
-  UserContext,
+import Security from '../../../utils/Security';
+import {
   KNOWLEDGE_KNUPDATE,
   KNOWLEDGE_KNUPDATE_KNDELETE,
-} from '../../../utils/Security';
+} from '../../../utils/hooks/useGranted';
+import { UserContext } from '../../../utils/hooks/useAuth';
 import { statusFieldStatusesSearchQuery } from '../common/form/StatusField';
 import { hexToRGB } from '../../../utils/Colors';
-import { externalReferencesSearchQuery } from '../analysis/ExternalReferences';
+import { externalReferencesQueriesSearchQuery } from '../analysis/external_references/ExternalReferencesQueries';
+import StixDomainObjectCreation from '../common/stix_domain_objects/StixDomainObjectCreation';
+import ItemMarkings from '../../../components/ItemMarkings';
 
 const styles = (theme) => ({
   bottomNav: {
+    padding: 0,
     zIndex: 1100,
-    padding: '0 0 0 180px',
     display: 'flex',
     height: 50,
     overflow: 'hidden',
   },
-  bottomNavWithPadding: {
+  bottomNavWithLargePadding: {
     zIndex: 1100,
-    padding: '0 230px 0 180px',
+    padding: '0 230px 0 0',
     display: 'flex',
     height: 50,
     overflow: 'hidden',
   },
-  withSmallPaddingRight: {
+  bottomNavWithMediumPadding: {
     zIndex: 1100,
-    padding: '0 200px 0 180px',
+    padding: '0 200px 0 0',
+    display: 'flex',
+    height: 50,
+    overflow: 'hidden',
+  },
+  bottomNavWithSmallPadding: {
+    zIndex: 1100,
+    padding: '0 180px 0 0',
     display: 'flex',
     height: 50,
     overflow: 'hidden',
@@ -193,7 +207,7 @@ const styles = (theme) => ({
   },
 });
 
-const notMergableTypes = ['Indicator', 'Note', 'Opinion'];
+const notMergableTypes = ['Indicator', 'Note', 'Opinion', 'Label'];
 
 const Transition = React.forwardRef((props, ref) => (
   <Slide direction="up" ref={ref} {...props} />
@@ -218,14 +232,53 @@ const toolBarQueryTaskAddMutation = graphql`
   }
 `;
 
+const toolBarConnectorsQuery = graphql`
+  query ToolBarConnectorsQuery($type: String!) {
+    enrichmentConnectors(type: $type) {
+      id
+      name
+    }
+  }
+`;
+
+export const maxNumberOfObservablesToCopy = 1000;
+
+const toolBarContainersQuery = graphql`
+  query ToolBarContainersQuery($search: String) {
+    containers(
+      search: $search
+      filters: [{ key: entity_type, values: ["Report", "Grouping"] }]
+    ) {
+      edges {
+        node {
+          id
+          entity_type
+          ... on Report {
+            name
+          }
+          ... on Grouping {
+            name
+          }
+          ... on ObservedData {
+            name
+          }
+        }
+      }
+    }
+  }
+`;
+
 class ToolBar extends Component {
   constructor(props) {
     super(props);
     this.state = {
       displayTask: false,
       displayUpdate: false,
+      displayEnrichment: false,
       displayRescan: false,
       displayMerge: false,
+      displayPromote: false,
+      containerCreation: false,
       actions: [],
       actionsInputs: [{}],
       keptEntityId: null,
@@ -234,9 +287,23 @@ class ToolBar extends Component {
       markingDefinitions: [],
       labels: [],
       identities: [],
+      containers: [],
       statuses: [],
       externalReferences: [],
+      enrichConnectors: [],
+      enrichSelected: [],
+      navOpen: localStorage.getItem('navOpen') === 'true',
     };
+  }
+
+  componentDidMount() {
+    this.subscription = MESSAGING$.toggleNav.subscribe({
+      next: () => this.setState({ navOpen: localStorage.getItem('navOpen') === 'true' }),
+    });
+  }
+
+  componentWillUnmount() {
+    this.subscription.unsubscribe();
   }
 
   handleOpenTask() {
@@ -271,6 +338,42 @@ class ToolBar extends Component {
 
   handleOpenMerge() {
     this.setState({ displayMerge: true });
+  }
+
+  handleOpenPromote() {
+    this.setState({ displayPromote: true });
+  }
+
+  handleClosePromote() {
+    this.setState({ displayPromote: false });
+  }
+
+  handleOpenEnrichment() {
+    // Get enrich type
+    let enrichType;
+    if (this.props.selectAll) {
+      enrichType = R.head(this.props.filters.entity_type).id;
+    } else {
+      const selected = this.props.selectedElements;
+      const selectedTypes = R.uniq(
+        R.map((o) => o.entity_type, R.values(selected || {})),
+      );
+      enrichType = R.head(selectedTypes);
+    }
+    // Get available connectors
+    fetchQuery(toolBarConnectorsQuery, { type: enrichType })
+      .toPromise()
+      .then((data) => {
+        this.setState({
+          displayEnrichment: true,
+          enrichConnectors: data.enrichmentConnectors ?? [],
+          enrichSelected: [],
+        });
+      });
+  }
+
+  handleCloseEnrichment() {
+    this.setState({ displayEnrichment: false });
   }
 
   handleCloseMerge() {
@@ -311,6 +414,8 @@ class ToolBar extends Component {
     const { actionsInputs } = this.state;
     actionsInputs[i] = R.assoc(key, value, actionsInputs[i] || {});
     if (key === 'field') {
+      const values = value === 'creator_id' ? ['From history'] : [];
+      actionsInputs[i] = R.assoc('values', values, actionsInputs[i] || {});
       if (
         value === 'object-marking'
         || value === 'object-label'
@@ -369,11 +474,7 @@ class ToolBar extends Component {
     const actions = [
       {
         type: 'REMOVE',
-        context: {
-          type: 'REVERSED_RELATION',
-          field: 'object',
-          values: [this.props.container],
-        },
+        context: { field: 'container-object', values: [this.props.container] },
       },
     ];
     this.setState({ actions }, () => {
@@ -385,10 +486,41 @@ class ToolBar extends Component {
     this.setState({ keptEntityId: entityId });
   }
 
+  handleChangeEnrichSelected(connectorId) {
+    if (this.state.enrichSelected.includes(connectorId)) {
+      const filtered = this.state.enrichSelected.filter(
+        (e) => e !== connectorId,
+      );
+      this.setState({ enrichSelected: filtered });
+    } else {
+      this.setState({
+        enrichSelected: [...this.state.enrichSelected, connectorId],
+      });
+    }
+  }
+
   handleLaunchRescan() {
     const actions = [{ type: 'RULE_ELEMENT_RESCAN' }];
     this.setState({ actions }, () => {
       this.handleCloseRescan();
+      this.handleOpenTask();
+    });
+  }
+
+  handleLaunchPromote() {
+    const actions = [{ type: 'PROMOTE' }];
+    this.setState({ actions }, () => {
+      this.handleClosePromote();
+      this.handleOpenTask();
+    });
+  }
+
+  handleLaunchEnrichment() {
+    const actions = [
+      { type: 'ENRICHMENT', context: { values: this.state.enrichSelected } },
+    ];
+    this.setState({ actions }, () => {
+      this.handleCloseEnrichment();
       this.handleOpenTask();
     });
   }
@@ -413,6 +545,18 @@ class ToolBar extends Component {
       this.handleCloseMerge();
       this.handleOpenTask();
     });
+  }
+
+  titleCopy() {
+    const { t } = this.props;
+    if (this.props.numberOfSelectedElements > maxNumberOfObservablesToCopy) {
+      return `${
+        t(
+          'Copy disabled: too many selected elements (maximum number of elements for a copy: ',
+        ) + maxNumberOfObservablesToCopy
+      })`;
+    }
+    return t('Copy');
   }
 
   submitTask() {
@@ -503,52 +647,27 @@ class ToolBar extends Component {
     if (actionsInputs[i]?.type === 'ADD') {
       options = [
         { label: t('Marking definitions'), value: 'object-marking' },
-        {
-          label: t('Labels'),
-          value: 'object-label',
-        },
-        {
-          label: t('External references'),
-          value: 'external-reference',
-        },
+        { label: t('Labels'), value: 'object-label' },
+        { label: t('External references'), value: 'external-reference' },
+        { label: t('In containers'), value: 'container-object' },
       ];
     } else if (actionsInputs[i]?.type === 'REPLACE') {
       options = [
         { label: t('Marking definitions'), value: 'object-marking' },
-        {
-          label: t('Labels'),
-          value: 'object-label',
-        },
-        {
-          label: t('Author'),
-          value: 'created-by',
-        },
-        {
-          label: t('Score'),
-          value: 'x_opencti_score',
-        },
-        {
-          label: t('Confidence'),
-          value: 'confidence',
-        },
+        { label: t('Labels'), value: 'object-label' },
+        { label: t('Author'), value: 'created-by' },
+        { label: t('Score'), value: 'x_opencti_score' },
+        { label: t('Confidence'), value: 'confidence' },
+        { label: t('filter_creator'), value: 'creator_id' },
       ];
       if (this.props.type) {
-        options.push({
-          label: t('Status'),
-          value: 'x_opencti_workflow_id',
-        });
+        options.push({ label: t('Status'), value: 'x_opencti_workflow_id' });
       }
     } else if (actionsInputs[i]?.type === 'REMOVE') {
       options = [
         { label: t('Marking definitions'), value: 'object-marking' },
-        {
-          label: t('Labels'),
-          value: 'object-label',
-        },
-        {
-          label: t('External references'),
-          value: 'external-reference',
-        },
+        { label: t('Labels'), value: 'object-label' },
+        { label: t('External references'), value: 'external-reference' },
       ];
     }
     return (
@@ -572,6 +691,30 @@ class ToolBar extends Component {
         )}
       </Select>
     );
+  }
+
+  searchContainers(i, event, newValue) {
+    if (!event) return;
+    const { actionsInputs } = this.state;
+    actionsInputs[i] = R.assoc(
+      'inputValue',
+      newValue && newValue.length > 0 ? newValue : '',
+      actionsInputs[i],
+    );
+    this.setState({ actionsInputs });
+    fetchQuery(toolBarContainersQuery, {
+      search: newValue && newValue.length > 0 ? newValue : '',
+    })
+      .toPromise()
+      .then((data) => {
+        const elements = data.containers.edges.map((e) => e.node);
+        const containers = elements.map((n) => ({
+          label: n.name,
+          type: n.entity_type,
+          value: n.id,
+        }));
+        this.setState({ containers });
+      });
   }
 
   searchMarkingDefinitions(i, event, newValue) {
@@ -612,16 +755,16 @@ class ToolBar extends Component {
     })
       .toPromise()
       .then((data) => {
-        const labels = pipe(
-          pathOr([], ['labels', 'edges']),
-          map((n) => ({
+        const labels = R.pipe(
+          R.pathOr([], ['labels', 'edges']),
+          R.map((n) => ({
             label: n.node.value,
             value: n.node.id,
             color: n.node.color,
           })),
         )(data);
         this.setState({
-          labels: union(this.state.labels, labels),
+          labels: R.union(this.state.labels, labels),
         });
       });
   }
@@ -635,15 +778,15 @@ class ToolBar extends Component {
       actionsInputs[i],
     );
     this.setState({ actionsInputs });
-    fetchQuery(externalReferencesSearchQuery, {
+    fetchQuery(externalReferencesQueriesSearchQuery, {
       search: newValue && newValue.length > 0 ? newValue : '',
     })
       .toPromise()
       .then((data) => {
-        const externalReferences = pipe(
-          pathOr([], ['externalReferences', 'edges']),
-          sortWith([ascend(path(['node', 'source_name']))]),
-          map((n) => ({
+        const externalReferences = R.pipe(
+          R.pathOr([], ['externalReferences', 'edges']),
+          R.sortWith([R.ascend(R.path(['node', 'source_name']))]),
+          R.map((n) => ({
             label: `[${n.node.source_name}] ${truncate(
               n.node.description || n.node.external_id,
               150,
@@ -652,7 +795,7 @@ class ToolBar extends Component {
           })),
         )(data);
         this.setState({
-          externalReferences: union(
+          externalReferences: R.union(
             this.state.externalReferences,
             externalReferences,
           ),
@@ -676,15 +819,17 @@ class ToolBar extends Component {
     })
       .toPromise()
       .then((data) => {
-        const identities = pipe(
-          pathOr([], ['identities', 'edges']),
-          map((n) => ({
+        const identities = R.pipe(
+          R.pathOr([], ['identities', 'edges']),
+          R.map((n) => ({
             label: n.node.name,
             value: n.node.id,
             type: n.node.entity_type,
           })),
         )(data);
-        this.setState({ identities: union(this.state.identities, identities) });
+        this.setState({
+          identities: R.union(this.state.identities, identities),
+        });
       });
   }
 
@@ -706,16 +851,16 @@ class ToolBar extends Component {
     })
       .toPromise()
       .then((data) => {
-        const statuses = pipe(
-          pathOr([], ['statuses', 'edges']),
-          map((n) => ({
-            label: this.props.t(`status_${n.node.template.name}`),
+        const statuses = R.pipe(
+          R.pathOr([], ['statuses', 'edges']),
+          R.map((n) => ({
+            label: n.node.template.name,
             value: n.node.id,
             order: n.node.order,
             color: n.node.template.color,
           })),
         )(data);
-        this.setState({ statuses: union(this.state.statuses, statuses) });
+        this.setState({ statuses: R.union(this.state.statuses, statuses) });
       });
   }
 
@@ -724,6 +869,68 @@ class ToolBar extends Component {
     const { actionsInputs } = this.state;
     const disabled = R.isNil(actionsInputs[i]?.field) || R.isEmpty(actionsInputs[i]?.field);
     switch (actionsInputs[i]?.field) {
+      case 'container-object':
+        return (
+          <>
+            <StixDomainObjectCreation
+              inputValue={actionsInputs[i]?.inputValue || ''}
+              open={this.state.containerCreation}
+              display={true}
+              speeddial={true}
+              stixCoreObjectTypes={['Report', 'Grouping']}
+              handleClose={() => this.setState({ containerCreation: false })}
+              creationCallback={(data) => {
+                const element = {
+                  label: data.stixDomainObjectAdd.name,
+                  value: data.stixDomainObjectAdd.id,
+                  type: data.stixDomainObjectAdd.entity_type,
+                };
+                this.handleChangeActionInputValues(i, null, element);
+              }}
+            />
+            <Autocomplete
+              disabled={disabled}
+              size="small"
+              fullWidth={true}
+              selectOnFocus={true}
+              autoHighlight={true}
+              getOptionLabel={(option) => (option.label ? option.label : '')}
+              value={actionsInputs[i]?.values || []}
+              multiple={true}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  variant="standard"
+                  label={t('Values')}
+                  fullWidth={true}
+                  onFocus={this.searchContainers.bind(this, i)}
+                  style={{ marginTop: 3 }}
+                />
+              )}
+              noOptionsText={t('No available options')}
+              options={this.state.containers}
+              onInputChange={this.searchContainers.bind(this, i)}
+              inputValue={actionsInputs[i]?.inputValue || ''}
+              onChange={this.handleChangeActionInputValues.bind(this, i)}
+              renderOption={(props, option) => (
+                <li {...props}>
+                  <div className={classes.icon}>
+                    <ItemIcon type={option.type} />
+                  </div>
+                  <div className={classes.text}>{option.label}</div>
+                </li>
+              )}
+            />
+            <IconButton
+              onClick={() => this.setState({ containerCreation: true })}
+              edge="end"
+              style={{ position: 'absolute', top: 22, right: 48 }}
+              size="large"
+            >
+              <Add />
+            </IconButton>
+          </>
+        );
       case 'object-marking':
         return (
           <Autocomplete
@@ -929,6 +1136,16 @@ class ToolBar extends Component {
             )}
           />
         );
+      case 'creator_id':
+        return (
+          <TextField
+            variant="standard"
+            disabled={true}
+            label="&nbsp;"
+            fullWidth={true}
+            value={'From history'}
+          />
+        );
       default:
         return (
           <TextField
@@ -963,20 +1180,70 @@ class ToolBar extends Component {
       selectAll,
       filters,
       search,
-      withPaddingRight,
-      withSmallPaddingRight,
       theme,
       container,
+      variant,
+      noAuthor,
+      noMarking,
+      noWarning,
+      deleteDisable,
     } = this.props;
-    const { actions, keptEntityId, mergingElement, actionsInputs } = this.state;
+    const { actions, keptEntityId, mergingElement, actionsInputs, navOpen } = this.state;
     const isOpen = numberOfSelectedElements > 0;
-    const typesAreDifferent = R.uniq(R.map((o) => o.entity_type, R.values(selectedElements || {})))
-      .length > 1;
+    const selectedTypes = R.uniq(
+      R.map((o) => o.entity_type, R.values(selectedElements || {})),
+    );
+    const typesAreDifferent = selectedTypes.length > 1;
+    // region update
+    const notUpdatableTypes = ['Label', 'Vocabulary'];
+    const typesAreNotUpdatable = R.includes(
+      R.uniq(
+        R.map((o) => o.entity_type, R.values(selectedElements || {})),
+      )[0],
+      notUpdatableTypes,
+    )
+      || ((filters?.entity_type ?? []).length === 1
+        && notUpdatableTypes.includes(R.head(filters.entity_type).id));
+    // endregion
+    // region rules
+    const notScannableTypes = ['Label', 'Vocabulary'];
+    const typesAreNotScannable = R.includes(
+      R.uniq(
+        R.map((o) => o.entity_type, R.values(selectedElements || {})),
+      )[0],
+      notScannableTypes,
+    )
+      || ((filters?.entity_type ?? []).length === 1
+        && notScannableTypes.includes(R.head(filters.entity_type).id));
+    // endregion
+    // region promote filters
+    const promotionTypes = ['Stix-Cyber-Observable', 'Indicator'];
+    const observablesFiltered = (filters?.entity_type ?? []).length === 1
+      && R.head(filters.entity_type).id === 'Stix-Cyber-Observable';
+    const isManualPromoteSelect = observablesFiltered
+      || (!selectAll
+        && selectedTypes.length === 1
+        && promotionTypes.includes(R.head(selectedTypes)));
+    const isAllPromoteSelect = selectAll
+      && (filters?.entity_type ?? []).length === 1
+      && promotionTypes.includes(R.head(filters.entity_type).id);
+    const promoteDisable = !isManualPromoteSelect && !isAllPromoteSelect;
+    // endregion
+    // region enrich
+    const notEnrichableTypes = ['Label', 'Vocabulary'];
+    const isManualEnrichSelect = !selectAll && selectedTypes.length === 1;
+    const isAllEnrichSelect = selectAll && (filters?.entity_type ?? []).length === 1;
+    const enrichDisable = notEnrichableTypes.includes(R.head(selectedTypes))
+      || ((filters?.entity_type ?? []).length === 1
+        && notEnrichableTypes.includes(R.head(filters.entity_type).id))
+      || (!isManualEnrichSelect && !isAllEnrichSelect);
+    // endregion
     const typesAreNotMergable = R.includes(
       R.uniq(R.map((o) => o.entity_type, R.values(selectedElements || {})))[0],
       notMergableTypes,
     );
     const selectedElementsList = R.values(selectedElements || {});
+    const titleCopy = this.titleCopy();
     let keptElement = null;
     let newAliases = [];
     if (!typesAreNotMergable && !typesAreDifferent) {
@@ -1003,20 +1270,31 @@ class ToolBar extends Component {
         );
       }
     }
+    let paperClass;
+    switch (variant) {
+      case 'large':
+        paperClass = classes.bottomNavWithLargePadding;
+        break;
+      case 'medium':
+        paperClass = classes.bottomNavWithMediumPadding;
+        break;
+      case 'small':
+        paperClass = classes.bottomNavWithSmallPadding;
+        break;
+      default:
+        paperClass = classes.bottomNav;
+    }
     return (
       <Drawer
         anchor="bottom"
         variant="persistent"
-        classes={{
-          // eslint-disable-next-line no-nested-ternary
-          paper: withPaddingRight
-            ? classes.bottomNavWithPadding
-            : withSmallPaddingRight
-              ? classes.bottomNavWithSmallPadding
-              : classes.bottomNav,
-        }}
+        classes={{ paper: paperClass }}
         open={isOpen}
-        PaperProps={{ variant: 'elevation', elevation: 1 }}
+        PaperProps={{
+          variant: 'elevation',
+          elevation: 1,
+          style: { paddingLeft: navOpen ? 185 : 60 },
+        }}
       >
         <Toolbar style={{ minHeight: 54 }}>
           <Typography
@@ -1039,66 +1317,123 @@ class ToolBar extends Component {
               aria-label="clear"
               disabled={numberOfSelectedElements === 0 || this.state.processing}
               onClick={handleClearSelectedElements.bind(this)}
-              size="large"
+              size="small"
             >
               <ClearOutlined fontSize="small" />
             </IconButton>
           </Typography>
           <Security needs={[KNOWLEDGE_KNUPDATE]}>
-            <Tooltip title={t('Update')}>
-              <span>
-                <IconButton
-                  aria-label="update"
-                  disabled={
-                    numberOfSelectedElements === 0 || this.state.processing
-                  }
-                  onClick={this.handleOpenUpdate.bind(this)}
-                  color="primary"
-                  size="large"
-                >
-                  <BrushOutlined />
-                </IconButton>
-              </span>
-            </Tooltip>
+            {!typesAreNotUpdatable && (
+              <Tooltip title={t('Update')}>
+                <span>
+                  <IconButton
+                    aria-label="update"
+                    disabled={
+                      numberOfSelectedElements === 0 || this.state.processing
+                    }
+                    onClick={this.handleOpenUpdate.bind(this)}
+                    color="primary"
+                    size="small"
+                  >
+                    <BrushOutlined fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
             <UserContext.Consumer>
               {({ helper }) => {
-                const label = helper.isRuleEngineEnable() ? 'Rule rescan' : 'Rule rescan (engine is disabled)';
-                const buttonDisable = !helper.isRuleEngineEnable() || numberOfSelectedElements === 0
-                    || this.state.processing;
-                return <Tooltip title={t(label)}>
-                  <span>
-                    <IconButton
+                const label = helper.isRuleEngineEnable()
+                  ? 'Rule rescan'
+                  : 'Rule rescan (engine is disabled)';
+                const buttonDisable = typesAreNotScannable
+                  || !helper.isRuleEngineEnable()
+                  || numberOfSelectedElements === 0
+                  || this.state.processing;
+                return typesAreNotScannable ? undefined : (
+                  <Tooltip title={t(label)}>
+                    <span>
+                      <IconButton
                         aria-label="update"
                         disabled={buttonDisable}
                         onClick={this.handleOpenRescan.bind(this)}
                         color="primary"
-                        size="large">
-                      <AutoFix />
-                    </IconButton>
-                  </span>
-                </Tooltip>;
+                        size="small"
+                      >
+                        <AutoFixHighOutlined fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                );
               }}
             </UserContext.Consumer>
-            <Tooltip title={t('Merge')}>
-              <span>
-                <IconButton
-                  aria-label="merge"
-                  disabled={
-                    typesAreNotMergable
-                    || typesAreDifferent
-                    || numberOfSelectedElements < 2
-                    || numberOfSelectedElements > 4
-                    || selectAll
-                    || this.state.processing
-                  }
-                  onClick={this.handleOpenMerge.bind(this)}
-                  color="primary"
-                  size="large"
-                >
-                  <Merge />
-                </IconButton>
-              </span>
-            </Tooltip>
+            {this.props.handleCopy && (
+              <Tooltip title={titleCopy}>
+                <span>
+                  <IconButton
+                    aria-label="copy"
+                    disabled={
+                      numberOfSelectedElements > maxNumberOfObservablesToCopy
+                    }
+                    onClick={this.props.handleCopy}
+                    color="primary"
+                    size="small"
+                  >
+                    <ContentCopyOutlined fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+            {!enrichDisable && (
+              <Tooltip title={t('Enrichment')}>
+                <span>
+                  <IconButton
+                    aria-label="enrichment"
+                    disabled={this.state.processing}
+                    onClick={this.handleOpenEnrichment.bind(this)}
+                    color="primary"
+                    size="small"
+                  >
+                    <CloudRefresh fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+            {!promoteDisable && (
+              <Tooltip title={t('Indicators/observables generation')}>
+                <span>
+                  <IconButton
+                    aria-label="promote"
+                    disabled={this.state.processing}
+                    onClick={this.handleOpenPromote.bind(this)}
+                    color="primary"
+                    size="small"
+                  >
+                    <TransformOutlined fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+            {!typesAreNotMergable && (
+              <Tooltip title={t('Merge')}>
+                <span>
+                  <IconButton
+                    aria-label="merge"
+                    disabled={
+                      typesAreDifferent
+                      || numberOfSelectedElements < 2
+                      || numberOfSelectedElements > 4
+                      || selectAll
+                      || this.state.processing
+                    }
+                    onClick={this.handleOpenMerge.bind(this)}
+                    color="primary"
+                    size="small"
+                  >
+                    <MergeOutlined fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
           </Security>
           {container && (
             <Security needs={[KNOWLEDGE_KNUPDATE]}>
@@ -1111,31 +1446,33 @@ class ToolBar extends Component {
                     }
                     onClick={this.handleLaunchRemove.bind(this)}
                     color="primary"
-                    size="large"
+                    size="small"
                   >
-                    <LinkOffOutlined />
+                    <LinkOffOutlined fontSize="small" />
                   </IconButton>
                 </span>
               </Tooltip>
             </Security>
           )}
-          <Security needs={[KNOWLEDGE_KNUPDATE_KNDELETE]}>
-            <Tooltip title={t('Delete')}>
-              <span>
-                <IconButton
-                  aria-label="delete"
-                  disabled={
-                    numberOfSelectedElements === 0 || this.state.processing
-                  }
-                  onClick={this.handleLaunchDelete.bind(this)}
-                  color="primary"
-                  size="large"
-                >
-                  <DeleteOutlined />
-                </IconButton>
-              </span>
-            </Tooltip>
-          </Security>
+          {deleteDisable !== true && (
+            <Security needs={[KNOWLEDGE_KNUPDATE_KNDELETE]}>
+              <Tooltip title={t('Delete')}>
+                <span>
+                  <IconButton
+                    aria-label="delete"
+                    disabled={
+                      numberOfSelectedElements === 0 || this.state.processing
+                    }
+                    onClick={this.handleLaunchDelete.bind(this)}
+                    color="primary"
+                    size="small"
+                  >
+                    <DeleteOutlined fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Security>
+          )}
         </Toolbar>
         <Dialog
           PaperProps={{ elevation: 1 }}
@@ -1215,17 +1552,30 @@ class ToolBar extends Component {
                                   </div>
                                 }
                               />
-                              <Chip
-                                classes={{ root: classes.operator }}
-                                label={t('AND')}
-                              />
+                              {R.toPairs(filters).length > 0 && (
+                                <Chip
+                                  classes={{ root: classes.operator }}
+                                  label={t('AND')}
+                                />
+                              )}
                             </span>
                           )}
-                          {R.map((currentFilter) => {
+                          {R.toPairs(filters).map((currentFilter) => {
                             const label = `${truncate(
-                              t(`filter_${currentFilter[0]}`),
+                              currentFilter[0].startsWith('rel_')
+                                ? t(
+                                  `relationship_${currentFilter[0]
+                                    .replace('rel_', '')
+                                    .replace('.*', '')}`,
+                                )
+                                : t(`filter_${currentFilter[0]}`),
                               20,
                             )}`;
+                            const localFilterMode = currentFilter[0].endsWith(
+                              'not_eq',
+                            )
+                              ? t('AND')
+                              : t('OR');
                             const values = (
                               <span>
                                 {R.map(
@@ -1240,7 +1590,9 @@ class ToolBar extends Component {
                                           ? truncate(o.value, 15)
                                           : t('No label')}{' '}
                                       {R.last(currentFilter[1]).value
-                                        !== o.value && <code>OR</code>}{' '}
+                                        !== o.value && (
+                                        <code>{localFilterMode}</code>
+                                      )}{' '}
                                     </span>
                                   ),
                                   currentFilter[1],
@@ -1266,7 +1618,7 @@ class ToolBar extends Component {
                                 )}
                               </span>
                             );
-                          }, R.toPairs(filters))}
+                          })}
                         </div>
                       ) : (
                         <span>
@@ -1380,7 +1732,7 @@ class ToolBar extends Component {
                     aria-label="Delete"
                     className={classes.stepCloseButton}
                     onClick={this.handleRemoveStep.bind(this, i)}
-                    size="large"
+                    size="small"
                   >
                     <CancelOutlined fontSize="small" />
                   </IconButton>
@@ -1489,19 +1841,12 @@ class ToolBar extends Component {
                     {R.pathOr('', ['createdBy', 'name'], element)}
                   </div>
                   <div style={{ marginRight: 50 }}>
-                    {R.pathOr([], ['objectMarking', 'edges'], element).length
-                      > 0
-                      && R.map(
-                        (markingDefinition) => (
-                          <ItemMarking
-                            key={markingDefinition.node.id}
-                            label={markingDefinition.node.definition}
-                            color={markingDefinition.node.x_opencti_color}
-                            variant="inList"
-                          />
-                        ),
-                        element.objectMarking.edges,
-                      )}
+                    <ItemMarkings
+                      variant="inList"
+                      markingDefinitionsEdges={
+                        element.objectMarking?.edges ?? []
+                      }
+                    />
                   </div>
                   <ListItemSecondaryAction>
                     <Radio
@@ -1553,40 +1898,43 @@ class ToolBar extends Component {
             ) : (
               ''
             )))}
-            <Typography
-              variant="h3"
-              gutterBottom={true}
-              style={{ marginTop: 20 }}
-            >
-              {t('Author')}
-            </Typography>
-            {R.pathOr('', ['createdBy', 'name'], keptElement)}
-            <Typography
-              variant="h3"
-              gutterBottom={true}
-              style={{ marginTop: 20 }}
-            >
-              {t('Marking')}
-            </Typography>
-            {R.pathOr([], ['markingDefinitions', 'edges'], keptElement).length
-            > 0 ? (
-                R.map(
-                  (markingDefinition) => (
-                  <ItemMarking
-                    key={markingDefinition.node.id}
-                    label={markingDefinition.node.definition}
-                  />
-                  ),
-                  R.pathOr([], ['objectMarking', 'edges'], keptElement),
-                )
-              ) : (
-              <ItemMarking label="TLP:WHITE" />
-              )}
-            <Alert severity="warning" style={{ marginTop: 20 }}>
-              {t(
-                'The relations attached to selected entities will be copied to the merged entity.',
-              )}
-            </Alert>
+            {noAuthor !== true && (
+              <>
+                <Typography
+                  variant="h3"
+                  gutterBottom={true}
+                  style={{ marginTop: 20 }}
+                >
+                  {t('Author')}
+                </Typography>
+                {R.pathOr('', ['createdBy', 'name'], keptElement)}
+              </>
+            )}
+            {noMarking !== true && (
+              <>
+                <Typography
+                  variant="h3"
+                  gutterBottom={true}
+                  style={{ marginTop: 20 }}
+                >
+                  {t('Marking')}
+                </Typography>
+                <ItemMarkings
+                  markingDefinitionsEdges={
+                    keptElement?.markingDefinitions?.edges || []
+                  }
+                />
+              </>
+            )}
+            {noWarning !== true && (
+              <>
+                <Alert severity="warning" style={{ marginTop: 20 }}>
+                  {t(
+                    'The relations attached to selected entities will be copied to the merged entity.',
+                  )}
+                </Alert>
+              </>
+            )}
             <div className={classes.buttons}>
               <Button
                 variant="contained"
@@ -1600,20 +1948,156 @@ class ToolBar extends Component {
           </div>
         </Drawer>
         <Drawer
-            open={this.state.displayRescan}
-            anchor="right"
-            elevation={1}
-            sx={{ zIndex: 1202 }}
-            classes={{ paper: classes.drawerPaper }}
-            onClose={this.handleCloseRescan.bind(this)}
+          open={this.state.displayEnrichment}
+          anchor="right"
+          elevation={1}
+          sx={{ zIndex: 1202 }}
+          classes={{ paper: classes.drawerPaper }}
+          onClose={this.handleCloseEnrichment.bind(this)}
         >
           <div className={classes.header}>
             <IconButton
-                aria-label="Close"
-                className={classes.closeButton}
-                onClick={this.handleCloseRescan.bind(this)}
-                size="large"
-                color="primary"
+              aria-label="Close"
+              className={classes.closeButton}
+              onClick={this.handleCloseEnrichment.bind(this)}
+              size="large"
+              color="primary"
+            >
+              <CloseOutlined fontSize="small" color="primary" />
+            </IconButton>
+            <Typography variant="h6">{t('Entity enrichment')}</Typography>
+          </div>
+          <div className={classes.container}>
+            <Typography
+              variant="h4"
+              gutterBottom={true}
+              style={{ marginTop: 20 }}
+            >
+              {t('Selected connectors')}
+            </Typography>
+            <List>
+              {this.state.enrichConnectors.length === 0 && (
+                <Alert severity="warning">
+                  {t('No connector available for the selected entities.')}
+                </Alert>
+              )}
+              {this.state.enrichConnectors.map((connector) => (
+                <ListItem key={connector.id} dense={true} divider={true}>
+                  <ListItemIcon>
+                    <CloudRefresh />
+                  </ListItemIcon>
+                  <ListItemText primary={connector.name} />
+                  <ListItemSecondaryAction>
+                    <MuiSwitch
+                      checked={this.state.enrichSelected.includes(connector.id)}
+                      onChange={this.handleChangeEnrichSelected.bind(
+                        this,
+                        connector.id,
+                      )}
+                      inputProps={{ 'aria-label': 'controlled' }}
+                    />
+                  </ListItemSecondaryAction>
+                </ListItem>
+              ))}
+            </List>
+            <div className={classes.buttons}>
+              <Button
+                variant="contained"
+                disabled={
+                  this.state.enrichConnectors.length === 0
+                  || this.state.enrichSelected.length === 0
+                }
+                color="secondary"
+                onClick={this.handleLaunchEnrichment.bind(this)}
+                classes={{ root: classes.button }}
+              >
+                {t('Enrich')}
+              </Button>
+            </div>
+          </div>
+        </Drawer>
+        <Drawer
+          open={this.state.displayPromote}
+          anchor="right"
+          elevation={1}
+          sx={{ zIndex: 1202 }}
+          classes={{ paper: classes.drawerPaper }}
+          onClose={this.handleClosePromote.bind(this)}
+        >
+          <div className={classes.header}>
+            <IconButton
+              aria-label="Close"
+              className={classes.closeButton}
+              onClick={this.handleClosePromote.bind(this)}
+              size="large"
+              color="primary"
+            >
+              <CloseOutlined fontSize="small" color="primary" />
+            </IconButton>
+            <Typography variant="h6">
+              {t('Observables and indicators conversion')}
+            </Typography>
+          </div>
+          <div className={classes.container}>
+            {!observablesFiltered && (
+              <div>
+                <Typography
+                  variant="h4"
+                  gutterBottom={true}
+                  style={{ marginTop: 20 }}
+                >
+                  {t('Indicators')}
+                </Typography>
+                <Alert severity="warning" style={{ marginTop: 20 }}>
+                  {t(
+                    'This action will generate observables from the selected indicators.',
+                  )}
+                </Alert>
+              </div>
+            )}
+            {observablesFiltered && (
+              <div>
+                <Typography
+                  variant="h4"
+                  gutterBottom={true}
+                  style={{ marginTop: 20 }}
+                >
+                  {t('Observables')}
+                </Typography>
+                <Alert severity="warning" style={{ marginTop: 20 }}>
+                  {t(
+                    'This action will generate STIX patterns indicators from the selected observables.',
+                  )}
+                </Alert>
+              </div>
+            )}
+            <div className={classes.buttons}>
+              <Button
+                variant="contained"
+                color="secondary"
+                onClick={this.handleLaunchPromote.bind(this)}
+                classes={{ root: classes.button }}
+              >
+                {t('Generate')}
+              </Button>
+            </div>
+          </div>
+        </Drawer>
+        <Drawer
+          open={this.state.displayRescan}
+          anchor="right"
+          elevation={1}
+          sx={{ zIndex: 1202 }}
+          classes={{ paper: classes.drawerPaper }}
+          onClose={this.handleCloseRescan.bind(this)}
+        >
+          <div className={classes.header}>
+            <IconButton
+              aria-label="Close"
+              className={classes.closeButton}
+              onClick={this.handleCloseRescan.bind(this)}
+              size="large"
+              color="primary"
             >
               <CloseOutlined fontSize="small" color="primary" />
             </IconButton>
@@ -1621,23 +2105,22 @@ class ToolBar extends Component {
           </div>
           <div className={classes.container}>
             <Typography
-                variant="h4"
-                gutterBottom={true}
-                style={{ marginTop: 20 }}
+              variant="h4"
+              gutterBottom={true}
+              style={{ marginTop: 20 }}
             >
               {t('Selected rules')}
             </Typography>
             <Alert severity="warning" style={{ marginTop: 20 }}>
-              {t(
-                'Element will be rescan with all compatible activated rules',
-              )}
+              {t('Element will be rescan with all compatible activated rules')}
             </Alert>
             <div className={classes.buttons}>
               <Button
-                  variant="contained"
-                  color="secondary"
-                  onClick={this.handleLaunchRescan.bind(this)}
-                  classes={{ root: classes.button }}>
+                variant="contained"
+                color="secondary"
+                onClick={this.handleLaunchRescan.bind(this)}
+                classes={{ root: classes.button }}
+              >
                 {t('Rescan')}
               </Button>
             </div>
@@ -1659,10 +2142,10 @@ ToolBar.propTypes = {
   filters: PropTypes.object,
   search: PropTypes.string,
   handleClearSelectedElements: PropTypes.func,
-  withPaddingRight: PropTypes.bool,
-  withSmallPaddingRight: PropTypes.bool,
+  variant: PropTypes.string,
   container: PropTypes.object,
   type: PropTypes.string,
+  handleCopy: PropTypes.func,
 };
 
 export default R.compose(inject18n, withTheme, withStyles(styles))(ToolBar);

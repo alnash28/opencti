@@ -42,15 +42,6 @@ const styles = (theme) => ({
     right: 30,
     zIndex: 1100,
   },
-  createButtonExports: {
-    position: 'fixed',
-    bottom: 30,
-    right: 590,
-    transition: theme.transitions.create('right', {
-      easing: theme.transitions.easing.easeOut,
-      duration: theme.transitions.duration.leavingScreen,
-    }),
-  },
   createButtonWithPadding: {
     position: 'fixed',
     bottom: 30,
@@ -176,14 +167,13 @@ class ContainerAddStixCoreObjects extends Component {
     return (
       <StixDomainObjectCreation
         display={open}
-        contextual={true}
         inputValue={search}
         paginationKey="Pagination_stixCoreObjects"
         paginationOptions={paginationOptions}
         confidence={confidence}
         defaultCreatedBy={defaultCreatedBy}
         defaultMarkingDefinitions={defaultMarkingDefinitions}
-        targetStixDomainObjectTypes={
+        stixDomainObjectTypes={
           targetStixCoreObjectTypes && targetStixCoreObjectTypes.length > 0
             ? targetStixCoreObjectTypes
             : []
@@ -258,14 +248,13 @@ class ContainerAddStixCoreObjects extends Component {
         </SpeedDial>
         <StixDomainObjectCreation
           display={open}
-          contextual={true}
           inputValue={search}
           paginationKey="Pagination_stixCoreObjects"
           paginationOptions={paginationOptions}
           confidence={confidence}
           defaultCreatedBy={defaultCreatedBy}
           defaultMarkingDefinitions={defaultMarkingDefinitions}
-          targetStixDomainObjectTypes={
+          stixCoreObjectTypes={
             targetStixCoreObjectTypes && targetStixCoreObjectTypes.length > 0
               ? targetStixCoreObjectTypes
               : []
@@ -425,12 +414,12 @@ class ContainerAddStixCoreObjects extends Component {
     const { targetStixCoreObjectTypes } = this.props;
     const { search } = this.state;
     let orderMode = 'desc';
-    let orderBy = 'created_at';
+    let orderBy = '_score';
     if (
       targetStixCoreObjectTypes
       && ContainerAddStixCoreObjects.isTypeObservable(targetStixCoreObjectTypes)
     ) {
-      orderBy = 'created_at';
+      orderBy = '_score';
     }
     if (search.length > 0) {
       orderBy = null;
@@ -489,7 +478,7 @@ class ContainerAddStixCoreObjects extends Component {
   }
 
   render() {
-    const { t, classes, withPadding, simple, knowledgeGraph, openExports } = this.props;
+    const { t, classes, withPadding, simple, knowledgeGraph } = this.props;
     const paginationOptions = this.getPaginationOptions();
     return (
       <div>
@@ -521,12 +510,9 @@ class ContainerAddStixCoreObjects extends Component {
             color="secondary"
             aria-label="Add"
             className={
-              // eslint-disable-next-line no-nested-ternary
-              openExports
-                ? classes.createButtonExports
-                : withPadding
-                  ? classes.createButtonWithPadding
-                  : classes.createButton
+              withPadding
+                ? classes.createButtonWithPadding
+                : classes.createButton
             }
           >
             <Add />

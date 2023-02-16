@@ -1,14 +1,11 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
-import { graphql, createPaginationContainer } from 'react-relay';
-import { pathOr, propOr } from 'ramda';
+import { createPaginationContainer, graphql } from 'react-relay';
 import ListLinesContent from '../../../../components/list_lines/ListLinesContent';
-import {
-  ContainerStixDomainObjectLine,
-  ContainerStixDomainObjectLineDummy,
-} from './ContainerStixDomainObjectLine';
+import { ContainerStixDomainObjectLine, ContainerStixDomainObjectLineDummy } from './ContainerStixDomainObjectLine';
 import { setNumberOfElements } from '../../../../utils/Number';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import ContainerAddStixCoreObjects from './ContainerAddStixCoreObjects';
 
 const nbOfRowsToLoad = 50;
@@ -37,6 +34,8 @@ class ContainerStixDomainObjectsLines extends Component {
       deSelectedElements,
       selectAll,
     } = this.props;
+    const currentSelection = container?.objects?.edges ?? [];
+    const selectWithoutInferred = currentSelection.filter((edge) => (edge.types ?? ['manual']).includes('manual'));
     return (
       <div>
         <ListLinesContent
@@ -44,16 +43,12 @@ class ContainerStixDomainObjectsLines extends Component {
           loadMore={relay.loadMore.bind(this)}
           hasMore={relay.hasMore.bind(this)}
           isLoading={relay.isLoading.bind(this)}
-          dataList={pathOr([], ['objects', 'edges'], container)}
+          dataList={container?.objects?.edges ?? []}
           paginationOptions={paginationOptions}
-          globalCount={pathOr(
-            nbOfRowsToLoad,
-            ['objects', 'pageInfo', 'globalCount'],
-            container,
-          )}
+          globalCount={container?.objects?.pageInfo?.globalCount ?? nbOfRowsToLoad}
           LineComponent={
             <ContainerStixDomainObjectLine
-              containerId={propOr(null, 'id', container)}
+              containerId={container?.id ?? null}
             />
           }
           DummyLineComponent={<ContainerStixDomainObjectLineDummy />}
@@ -66,12 +61,8 @@ class ContainerStixDomainObjectsLines extends Component {
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <ContainerAddStixCoreObjects
-            containerId={propOr(null, 'id', container)}
-            containerStixCoreObjects={pathOr(
-              [],
-              ['objects', 'edges'],
-              container,
-            )}
+            containerId={container?.id ?? null}
+            containerStixCoreObjects={selectWithoutInferred}
             paginationOptions={paginationOptions}
             withPadding={true}
             targetStixCoreObjectTypes={['Stix-Domain-Object']}
@@ -156,6 +147,7 @@ export default createPaginationContainer(
           filters: $filters
         ) @connection(key: "Pagination_objects") {
           edges {
+            types
             node {
               ... on BasicObject {
                 id

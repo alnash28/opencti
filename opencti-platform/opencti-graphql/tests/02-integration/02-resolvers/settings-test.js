@@ -1,3 +1,4 @@
+import { expect, it, describe } from 'vitest';
 import gql from 'graphql-tag';
 import { head } from 'ramda';
 import { queryAsAdmin } from '../../utils/testQuery';
@@ -36,7 +37,7 @@ const READ_QUERY = gql`
 `;
 
 describe('Settings resolver standard behavior', () => {
-  const PLATFORM_TITLE = 'Cyber threat intelligence platform';
+  const PLATFORM_TITLE = 'OpenCTI - Cyber Threat Intelligence Platform';
   const settingsId = async () => {
     const queryResult = await queryAsAdmin({ query: READ_QUERY, variables: {} });
     const { settings } = queryResult.data;
@@ -47,7 +48,6 @@ describe('Settings resolver standard behavior', () => {
     expect(queryResult).not.toBeNull();
     const { about } = queryResult.data;
     expect(about).not.toBeNull();
-    expect(about.version).toContain('5.3.7');
     expect(about.dependencies.length).toEqual(3);
   });
   it('should settings information', async () => {

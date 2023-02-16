@@ -1,5 +1,6 @@
+import { expect, it, describe } from 'vitest';
 import gql from 'graphql-tag';
-import { ADMIN_USER, queryAsAdmin } from '../../utils/testQuery';
+import { ADMIN_USER, testContext, queryAsAdmin } from '../../utils/testQuery';
 import { elLoadById } from '../../../src/database/engine';
 
 const LIST_QUERY = gql`
@@ -96,7 +97,7 @@ describe('Organization resolver standard behavior', () => {
     expect(queryResult.data.organization.id).toEqual(organizationInternalId);
   });
   it('should organization sectors be accurate', async () => {
-    const organization = await elLoadById(ADMIN_USER, 'identity--c017f212-546b-4f21-999d-97d3dc558f7b');
+    const organization = await elLoadById(testContext, ADMIN_USER, 'identity--c017f212-546b-4f21-999d-97d3dc558f7b');
     const queryResult = await queryAsAdmin({
       query: READ_QUERY,
       variables: { id: organization.internal_id },
@@ -197,7 +198,7 @@ describe('Organization resolver standard behavior', () => {
   });
   it('should delete relation in organization', async () => {
     const RELATION_DELETE_QUERY = gql`
-      mutation OrganizationEdit($id: ID!, $toId: String!, $relationship_type: String!) {
+      mutation OrganizationEdit($id: ID!, $toId: StixRef!, $relationship_type: String!) {
         organizationEdit(id: $id) {
           relationDelete(toId: $toId, relationship_type: $relationship_type) {
             id

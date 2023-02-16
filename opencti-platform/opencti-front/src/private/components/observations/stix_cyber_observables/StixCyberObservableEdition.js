@@ -29,6 +29,17 @@ const styles = (theme) => ({
     }),
     padding: 0,
   },
+  drawerPaperInGraph: {
+    minHeight: '100vh',
+    width: '30%',
+    position: 'fixed',
+    overflow: 'auto',
+    transition: theme.transitions.create('width', {
+      easing: theme.transitions.easing.sharp,
+      duration: theme.transitions.duration.enteringScreen,
+    }),
+    padding: 0,
+  },
 });
 
 export const stixCyberObservableEditionQuery = graphql`
@@ -36,9 +47,6 @@ export const stixCyberObservableEditionQuery = graphql`
     stixCyberObservable(id: $id) {
       ...StixCyberObservableEditionContainer_stixCyberObservable
       ...StixCyberObservable_stixCyberObservable
-    }
-    settings {
-      platform_enable_reference
     }
   }
 `;
@@ -64,7 +72,7 @@ class StixCyberObservableEdition extends Component {
     this.setState({ open: false });
   }
 
-  render() {
+  renderClassic() {
     const { classes, stixCyberObservableId, variant } = this.props;
     return (
       <div>
@@ -90,14 +98,7 @@ class StixCyberObservableEdition extends Component {
             render={({ props }) => {
               if (props) {
                 return (
-                  <StixCyberObservableEditionContainer
-                    variant={variant}
-                    stixCyberObservable={props.stixCyberObservable}
-                    enableReferences={props.settings.platform_enable_reference?.includes(
-                      'Stix-Cyber-Observable',
-                    )}
-                    handleClose={this.handleClose.bind(this)}
-                  />
+                  <StixCyberObservableEditionContainer variant={variant} stixCyberObservable={props.stixCyberObservable} handleClose={this.handleClose.bind(this)} />
                 );
               }
               return <Loader variant="inElement" />;
@@ -107,10 +108,60 @@ class StixCyberObservableEdition extends Component {
       </div>
     );
   }
+
+  renderInGraph() {
+    const {
+      classes,
+      stixCyberObservableId,
+      open,
+      handleClose,
+      variant,
+    } = this.props;
+    return (
+      <Drawer
+        open={open}
+        anchor="right"
+        elevation={1}
+        sx={{ zIndex: 1202 }}
+        classes={{ paper: classes.drawerPaperInGraph }}
+        onClose={handleClose.bind(this)}
+      >
+        {stixCyberObservableId ? (
+          <QueryRenderer
+            query={stixCyberObservableEditionQuery}
+            variables={{ id: stixCyberObservableId }}
+            render={({ props }) => {
+              if (props) {
+                return (
+                  <StixCyberObservableEditionContainer
+                    variant={variant}
+                    stixCyberObservable={props.stixCyberObservable}
+                    handleClose={handleClose.bind(this)}
+                  />
+                );
+              }
+              return <Loader variant="inElement" />;
+            }}
+          />
+        ) : (
+          <div> &nbsp; </div>
+        )}
+      </Drawer>
+    );
+  }
+
+  render() {
+    if (this.props.handleClose) { // in a graph bar
+      return this.renderInGraph();
+    }
+    return this.renderClassic();
+  }
 }
 
 StixCyberObservableEdition.propTypes = {
   stixCyberObservableId: PropTypes.string,
+  open: PropTypes.bool,
+  handleClose: PropTypes.func,
   variant: PropTypes.string,
   me: PropTypes.object,
   classes: PropTypes.object,

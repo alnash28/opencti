@@ -14,9 +14,17 @@ import {
   ABSTRACT_STIX_CYBER_OBSERVABLE,
   ABSTRACT_STIX_CYBER_OBSERVABLE_RELATIONSHIP,
   ABSTRACT_STIX_DOMAIN_OBJECT,
+  ABSTRACT_STIX_OBJECT,
 } from '../schema/general';
 import { STIX_SIGHTING_RELATIONSHIP } from '../schema/stixSightingRelationship';
 import pjson from '../../package.json';
+import {
+  ENTITY_TYPE_NOTIFICATION,
+  ENTITY_TYPE_TRIGGER,
+  NOTIFICATION_NUMBER
+} from '../modules/notification/notification-types';
+import { ENTITY_TYPE_VOCABULARY } from '../modules/vocabulary/vocabulary-types';
+import { ENTITY_TYPE_ENTITY_SETTING } from '../modules/entitySetting/entitySetting-types';
 
 // https://golang.org/src/crypto/x509/root_linux.go
 const LINUX_CERTFILES = [
@@ -30,15 +38,23 @@ const LINUX_CERTFILES = [
 
 const DEFAULT_ENV = 'production';
 export const OPENCTI_SESSION = 'opencti_session';
-export const TOPIC_PREFIX = 'OPENCTI_';
+export const TOPIC_PREFIX = 'OPENCTI_DATA_';
+export const TOPIC_CONTEXT_PREFIX = 'OPENCTI_CONTEXT_';
 export const BUS_TOPICS = {
   [O.ENTITY_TYPE_SETTINGS]: {
     EDIT_TOPIC: `${TOPIC_PREFIX}SETTINGS_EDIT_TOPIC`,
     ADDED_TOPIC: `${TOPIC_PREFIX}SETTINGS_ADDED_TOPIC`,
   },
+  [ENTITY_TYPE_ENTITY_SETTING]: {
+    EDIT_TOPIC: `${TOPIC_PREFIX}ENTITY_SETTING_EDIT_TOPIC`,
+    ADDED_TOPIC: `${TOPIC_PREFIX}ENTITY_SETTING_ADDED_TOPIC`,
+  },
   [O.ENTITY_TYPE_GROUP]: {
     EDIT_TOPIC: `${TOPIC_PREFIX}GROUP_EDIT_TOPIC`,
     ADDED_TOPIC: `${TOPIC_PREFIX}GROUP_ADDED_TOPIC`,
+  },
+  [O.ENTITY_TYPE_RULE]: {
+    EDIT_TOPIC: `${TOPIC_PREFIX}RULE_EDIT_TOPIC`,
   },
   [O.ENTITY_TYPE_ROLE]: {
     EDIT_TOPIC: `${TOPIC_PREFIX}ROLE_EDIT_TOPIC`,
@@ -56,6 +72,10 @@ export const BUS_TOPICS = {
     EDIT_TOPIC: `${TOPIC_PREFIX}LABEL_EDIT_TOPIC`,
     ADDED_TOPIC: `${TOPIC_PREFIX}LABEL_ADDED_TOPIC`,
   },
+  [ENTITY_TYPE_VOCABULARY]: {
+    EDIT_TOPIC: `${TOPIC_PREFIX}VOCABULARY_EDIT_TOPIC`,
+    ADDED_TOPIC: `${TOPIC_PREFIX}VOCABULARY_ADDED_TOPIC`,
+  },
   [O.ENTITY_TYPE_CONNECTOR]: {
     EDIT_TOPIC: `${TOPIC_PREFIX}CONNECTOR_EDIT_TOPIC`,
   },
@@ -70,10 +90,6 @@ export const BUS_TOPICS = {
   [O.ENTITY_TYPE_SYNC]: {
     EDIT_TOPIC: `${TOPIC_PREFIX}SYNC_EDIT_TOPIC`,
     ADDED_TOPIC: `${TOPIC_PREFIX}SYNC_ADDED_TOPIC`,
-  },
-  [O.ENTITY_TYPE_USER_SUBSCRIPTION]: {
-    EDIT_TOPIC: `${TOPIC_PREFIX}USER_SUBSCRIPTION_EDIT_TOPIC`,
-    ADDED_TOPIC: `${TOPIC_PREFIX}USER_SUBSCRIPTION_ADDED_TOPIC`,
   },
   [M.ENTITY_TYPE_MARKING_DEFINITION]: {
     EDIT_TOPIC: `${TOPIC_PREFIX}MARKING_DEFINITION_EDIT_TOPIC`,
@@ -96,6 +112,10 @@ export const BUS_TOPICS = {
     ADDED_TOPIC: `${TOPIC_PREFIX}INTERNAL_OBJECT_ADDED_TOPIC`,
     DELETE_TOPIC: `${TOPIC_PREFIX}INTERNAL_OBJECT_DELETE_TOPIC`,
   },
+  [ABSTRACT_STIX_OBJECT]: {
+    EDIT_TOPIC: `${TOPIC_PREFIX}STIX_OBJECT_EDIT_TOPIC`,
+    ADDED_TOPIC: `${TOPIC_PREFIX}STIX_OBJECT_ADDED_TOPIC`,
+  },
   [ABSTRACT_STIX_CORE_OBJECT]: {
     EDIT_TOPIC: `${TOPIC_PREFIX}STIX_CORE_OBJECT_EDIT_TOPIC`,
     ADDED_TOPIC: `${TOPIC_PREFIX}STIX_CORE_OBJECT_ADDED_TOPIC`,
@@ -103,6 +123,8 @@ export const BUS_TOPICS = {
   [ABSTRACT_STIX_DOMAIN_OBJECT]: {
     EDIT_TOPIC: `${TOPIC_PREFIX}STIX_DOMAIN_OBJECT_EDIT_TOPIC`,
     ADDED_TOPIC: `${TOPIC_PREFIX}STIX_DOMAIN_OBJECT_ADDED_TOPIC`,
+    DELETE_TOPIC: `${TOPIC_PREFIX}STIX_DOMAIN_OBJECT_DELETE_TOPIC`,
+    CONTEXT_TOPIC: `${TOPIC_CONTEXT_PREFIX}STIX_DOMAIN_OBJECT_CONTEXT_TOPIC`,
   },
   [ABSTRACT_STIX_CYBER_OBSERVABLE]: {
     EDIT_TOPIC: `${TOPIC_PREFIX}STIX_CYBER_OBSERVABLE_EDIT_TOPIC`,
@@ -119,6 +141,17 @@ export const BUS_TOPICS = {
   [ABSTRACT_STIX_CYBER_OBSERVABLE_RELATIONSHIP]: {
     EDIT_TOPIC: `${TOPIC_PREFIX}STIX_CYBER_OBSERVABLE_RELATIONSHIP_EDIT_TOPIC`,
     ADDED_TOPIC: `${TOPIC_PREFIX}STIX_CYBER_OBSERVABLE_RELATIONSHIP_ADDED_TOPIC`,
+  },
+  [ENTITY_TYPE_NOTIFICATION]: {
+    EDIT_TOPIC: `${TOPIC_PREFIX}ENTITY_TYPE_NOTIFICATION_EDIT_TOPIC`,
+    ADDED_TOPIC: `${TOPIC_PREFIX}ENTITY_TYPE_NOTIFICATION_ADDED_TOPIC`,
+  },
+  [ENTITY_TYPE_TRIGGER]: {
+    EDIT_TOPIC: `${TOPIC_PREFIX}ENTITY_TYPE_TRIGGER_EDIT_TOPIC`,
+    ADDED_TOPIC: `${TOPIC_PREFIX}ENTITY_TYPE_TRIGGER_ADDED_TOPIC`,
+  },
+  [NOTIFICATION_NUMBER]: {
+    EDIT_TOPIC: `${TOPIC_PREFIX}ENTITY_TYPE_NOTIFICATION_NUMBER_EDIT_TOPIC`,
   },
 };
 
@@ -262,7 +295,7 @@ export const logApp = {
 const LOG_AUDIT = 'AUDIT';
 export const logAudit = {
   _log: (level, user, operation, meta = {}) => {
-    if (!DEV_MODE && auditLogTransports.length > 0) {
+    if (auditLogTransports.length > 0) {
       const metaUser = { email: user.user_email, ...user.origin };
       const logMeta = isEmpty(meta) ? { auth: metaUser } : { resource: meta, auth: metaUser };
       auditLogger.log(level, operation, addBasicMetaInformation(LOG_AUDIT, logMeta));
@@ -277,11 +310,23 @@ const AppBasePath = BasePathConfig.endsWith('/') ? BasePathConfig.slice(0, -1) :
 export const basePath = isEmpty(AppBasePath) || AppBasePath.startsWith('/') ? AppBasePath : `/${AppBasePath}`;
 
 const BasePathUrl = nconf.get('app:base_url')?.trim() ?? '';
-export const baseUrl = BasePathUrl.endsWith('/') ? BasePathUrl.slice(0, -1) : BasePathUrl;
+const baseUrl = BasePathUrl.endsWith('/') ? BasePathUrl.slice(0, -1) : BasePathUrl;
 
-export const formatPath = (pathToFormat) => {
-  const withStartSlash = pathToFormat.startsWith('/') ? pathToFormat : `/${pathToFormat}`;
-  return withStartSlash.endsWith('/') ? withStartSlash.slice(0, -1) : withStartSlash;
+export const getBaseUrl = (req) => {
+  // If base url is defined, take it in priority
+  if (baseUrl) {
+    // Always append base path to the uri
+    return baseUrl + basePath;
+  }
+  // If no base url, try to infer the uri from the request
+  if (req) {
+    const [, port] = req.headers.host ? req.headers.host.split(':') : [];
+    const isCustomPort = port !== '80' && port !== '443';
+    const httpPort = isCustomPort && port ? `:${port}` : '';
+    return `${req.protocol}://${req.hostname}${httpPort}${basePath}`;
+  }
+  // If no base url and no request, send only the base path
+  return basePath;
 };
 
 export const configureCA = (certificates) => {
@@ -305,16 +350,23 @@ export const configureCA = (certificates) => {
   return { ca: [] };
 };
 
-// Expose global configuration
+// App
+export const PORT = nconf.get('app:port');
+
+// Default activated managers
 export const ENABLED_API = booleanConf('app:enabled', true);
+export const ENABLED_TRACING = booleanConf('app:telemetry:tracing:enabled', false);
+export const ENABLED_METRICS = booleanConf('app:telemetry:metrics:enabled', false);
 export const ENABLED_RETENTION_MANAGER = booleanConf('retention_manager:enabled', true);
+export const ENABLED_NOTIFICATION_MANAGER = booleanConf('notification_manager:enabled', true);
+export const ENABLED_PUBLISHER_MANAGER = booleanConf('publisher_manager:enabled', true);
+export const ENABLED_CONNECTOR_MANAGER = booleanConf('connector_manager:enabled', true);
+// Default deactivated managers
 export const ENABLED_EXPIRED_MANAGER = booleanConf('expiration_scheduler:enabled', false);
 export const ENABLED_TASK_SCHEDULER = booleanConf('task_scheduler:enabled', false);
 export const ENABLED_SYNC_MANAGER = booleanConf('sync_manager:enabled', false);
 export const ENABLED_RULE_ENGINE = booleanConf('rule_engine:enabled', false);
 export const ENABLED_HISTORY_MANAGER = booleanConf('history_manager:enabled', false);
-export const ENABLED_SUBSCRIPTION_MANAGER = booleanConf('subscription_scheduler:enabled', false);
-export const ENABLED_CACHING = booleanConf('redis:use_as_cache', false);
 
 const platformState = { stopping: false };
 export const getStoppingState = () => platformState.stopping;

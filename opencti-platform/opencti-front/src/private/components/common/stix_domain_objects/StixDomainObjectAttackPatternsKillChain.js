@@ -2,23 +2,30 @@ import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
 import * as R from 'ramda';
 import withStyles from '@mui/styles/withStyles';
-import { graphql, createRefetchContainer } from 'react-relay';
+import { createRefetchContainer, graphql } from 'react-relay';
 import Tooltip from '@mui/material/Tooltip';
-import { ViewListOutlined, ViewColumnOutlined } from '@mui/icons-material';
+import {
+  FileDownloadOutlined,
+  FilterAltOutlined,
+  InvertColorsOffOutlined,
+  ViewColumnOutlined,
+  ViewListOutlined,
+} from '@mui/icons-material';
 import { ProgressWrench } from 'mdi-material-ui';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import ToggleButton from '@mui/material/ToggleButton';
-import { last, map, toPairs } from 'ramda';
-import Chip from '@mui/material/Chip';
+import IconButton from '@mui/material/IconButton';
 import inject18n from '../../../../components/i18n';
 import SearchInput from '../../../../components/SearchInput';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNGETEXPORT, KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreRelationshipCreationFromEntity from '../stix_core_relationships/StixCoreRelationshipCreationFromEntity';
 import StixDomainObjectAttackPatternsKillChainMatrix from './StixDomainObjectAttackPatternsKillChainMatrix';
 import StixDomainObjectAttackPatternsKillChainLines from './StixDomainObjectAttackPatternsKillChainLines';
 import ExportButtons from '../../../../components/ExportButtons';
+import StixCoreRelationshipsExports from '../stix_core_relationships/StixCoreRelationshipsExports';
 import Filters from '../lists/Filters';
-import { truncate } from '../../../../utils/String';
+import FilterIconButton from '../../../../components/FilterIconButton';
 
 const styles = (theme) => ({
   container: {
@@ -30,10 +37,6 @@ const styles = (theme) => ({
   parameters: {
     margin: '0 0 20px 0',
     padding: 0,
-  },
-  filters: {
-    float: 'left',
-    margin: '2px 0 0 15px',
   },
   filtersDialog: {
     margin: '0 0 20px 0',
@@ -53,14 +56,6 @@ const styles = (theme) => ({
     margin: '5px 10px 0 10px',
     width: 200,
   },
-  filter: {
-    margin: '0 10px 10px 0',
-  },
-  operator: {
-    fontFamily: 'Consolas, monaco, monospace',
-    backgroundColor: theme.palette.background.paper,
-    margin: '0 10px 10px 0',
-  },
   export: {
     float: 'right',
     margin: '0 0 0 20px',
@@ -75,6 +70,27 @@ const styles = (theme) => ({
 });
 
 class StixDomainObjectAttackPatternsKillChainComponent extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      currentModeOnlyActive: false,
+      currentColorsReversed: false,
+      targetEntities: [],
+    };
+  }
+
+  handleToggleModeOnlyActive() {
+    this.setState({ currentModeOnlyActive: !this.state.currentModeOnlyActive });
+  }
+
+  handleToggleColorsReversed() {
+    this.setState({ currentColorsReversed: !this.state.currentColorsReversed });
+  }
+
+  handleAdd(entity) {
+    this.setState({ targetEntities: [entity] });
+  }
+
   render() {
     const {
       t,
@@ -92,7 +108,11 @@ class StixDomainObjectAttackPatternsKillChainComponent extends Component {
       paginationOptions,
       defaultStartTime,
       defaultStopTime,
+      openExports,
+      handleToggleExports,
+      exportContext,
     } = this.props;
+    const { currentColorsReversed, currentModeOnlyActive, targetEntities } = this.state;
     let csvData = null;
     if (currentView === 'courses-of-action') {
       csvData = R.pipe(
@@ -111,6 +131,44 @@ class StixDomainObjectAttackPatternsKillChainComponent extends Component {
               onSubmit={handleSearch.bind(this)}
             />
           </div>
+          <div
+            style={{ float: 'left', display: 'flex', margin: '-6px 4px 0 0' }}
+          >
+            <Tooltip
+              title={
+                currentModeOnlyActive
+                  ? t('Display the whole matrix')
+                  : t('Display only used techniques')
+              }
+            >
+              <span>
+                <IconButton
+                  color={currentModeOnlyActive ? 'secondary' : 'primary'}
+                  onClick={this.handleToggleModeOnlyActive.bind(this)}
+                  size="large"
+                >
+                  <FilterAltOutlined fontSize="medium" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip
+              title={
+                currentColorsReversed
+                  ? t('Disable invert colors')
+                  : t('Enable invert colors')
+              }
+            >
+              <span>
+                <IconButton
+                  color={currentColorsReversed ? 'secondary' : 'primary'}
+                  onClick={this.handleToggleColorsReversed.bind(this)}
+                  size="large"
+                >
+                  <InvertColorsOffOutlined fontSize="medium" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </div>
           <Filters
             availableFilterKeys={[
               'markedBy',
@@ -121,48 +179,12 @@ class StixDomainObjectAttackPatternsKillChainComponent extends Component {
             handleAddFilter={handleAddFilter}
             handleRemoveFilter={handleRemoveFilter}
           />
-          <div className={classes.filters}>
-            {map((currentFilter) => {
-              const label = `${truncate(t(`filter_${currentFilter[0]}`), 20)}`;
-              const values = (
-                <span>
-                  {map(
-                    (n) => (
-                      <span key={n.value}>
-                        {n.value && n.value.length > 0
-                          ? truncate(n.value, 15)
-                          : t('No label')}{' '}
-                        {last(currentFilter[1]).value !== n.value && (
-                          <code>OR</code>
-                        )}
-                      </span>
-                    ),
-                    currentFilter[1],
-                  )}
-                </span>
-              );
-              return (
-                <span>
-                  <Chip
-                    key={currentFilter[0]}
-                    classes={{ root: classes.fnoTopMarginilter }}
-                    label={
-                      <div>
-                        <strong>{label}</strong>: {values}
-                      </div>
-                    }
-                    onDelete={handleRemoveFilter.bind(this, currentFilter[0])}
-                  />
-                  {last(toPairs(filters))[0] !== currentFilter[0] && (
-                    <Chip
-                      classes={{ root: classes.operator }}
-                      label={t('AND')}
-                    />
-                  )}
-                </span>
-              );
-            }, toPairs(filters))}
-          </div>
+          <FilterIconButton
+            filters={filters}
+            handleRemoveFilter={handleRemoveFilter}
+            classNameNumber={6}
+            styleNumber={2}
+          />
           <div style={{ float: 'right', margin: 0 }}>
             <ToggleButtonGroup size="small" color="secondary" exclusive={true}>
               <Tooltip title={t('Matrix view')}>
@@ -195,6 +217,20 @@ class StixDomainObjectAttackPatternsKillChainComponent extends Component {
                   />
                 </ToggleButton>
               </Tooltip>
+              {typeof handleToggleExports === 'function' && (
+                <Tooltip title={t('Open export panel')}>
+                  <ToggleButton
+                    value="export"
+                    aria-label="export"
+                    onClick={handleToggleExports.bind(this)}
+                  >
+                    <FileDownloadOutlined
+                      fontSize="small"
+                      color={openExports ? 'secondary' : 'primary'}
+                    />
+                  </ToggleButton>
+                </Tooltip>
+              )}
             </ToggleButtonGroup>
             <div className={classes.export}>
               <ExportButtons
@@ -222,6 +258,15 @@ class StixDomainObjectAttackPatternsKillChainComponent extends Component {
               data={data}
               entityLink={entityLink}
               searchTerm={searchTerm}
+              handleToggleModeOnlyActive={this.handleToggleModeOnlyActive.bind(
+                this,
+              )}
+              handleToggleColorsReversed={this.handleToggleColorsReversed.bind(
+                this,
+              )}
+              currentColorsReversed={currentColorsReversed}
+              currentModeOnlyActive={currentModeOnlyActive}
+              handleAdd={this.handleAdd.bind(this)}
             />
           )}
           {currentView === 'courses-of-action' && (
@@ -244,6 +289,15 @@ class StixDomainObjectAttackPatternsKillChainComponent extends Component {
               paginationOptions={paginationOptions}
               defaultStartTime={defaultStartTime}
               defaultStopTime={defaultStopTime}
+              targetEntities={targetEntities}
+            />
+          </Security>
+          <Security needs={[KNOWLEDGE_KNGETEXPORT]}>
+            <StixCoreRelationshipsExports
+              open={openExports}
+              handleToggle={handleToggleExports.bind(this)}
+              paginationOptions={paginationOptions}
+              context={exportContext}
             />
           </Security>
         </div>
@@ -425,7 +479,9 @@ const stixDomainObjectAttackPatternsKillChainLines = createRefetchContainer(
                 edges {
                   node {
                     id
+                    definition_type
                     definition
+                    x_opencti_order
                     x_opencti_color
                   }
                 }

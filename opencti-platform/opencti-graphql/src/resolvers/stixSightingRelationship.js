@@ -1,4 +1,3 @@
-import * as R from 'ramda';
 import { withFilter } from 'graphql-subscriptions';
 import { BUS_TOPICS } from '../config/conf';
 import {
@@ -19,16 +18,18 @@ import {
   batchNotes,
   batchOpinions,
   batchReports,
+  batchCases,
 } from '../domain/stixSightingRelationship';
-import { fetchEditContext, pubsub } from '../database/redis';
+import { fetchEditContext, pubSubAsyncIterator } from '../database/redis';
 import withCancel from '../graphql/subscriptionWrapper';
 import { distributionRelations, timeSeriesRelations, batchLoader, stixLoadByIdStringify } from '../database/middleware';
 import { RELATION_CREATED_BY, RELATION_OBJECT_LABEL, RELATION_OBJECT_MARKING } from '../schema/stixMetaRelationship';
 import { STIX_SIGHTING_RELATIONSHIP } from '../schema/stixSightingRelationship';
-import { creator } from '../domain/log';
 import { buildRefRelationKey } from '../schema/general';
 import { elBatchIds } from '../database/engine';
 import { findById as findStatusById, getTypeStatuses } from '../domain/status';
+import { addOrganizationRestriction, batchObjectOrganizations, removeOrganizationRestriction } from '../domain/stix';
+import { batchCreators } from '../domain/user';
 
 const createdByLoader = batchLoader(batchCreatedBy);
 const markingDefinitionsLoader = batchLoader(batchMarkingDefinitions);
@@ -37,19 +38,22 @@ const externalReferencesLoader = batchLoader(batchExternalReferences);
 const notesLoader = batchLoader(batchNotes);
 const opinionsLoader = batchLoader(batchOpinions);
 const reportsLoader = batchLoader(batchReports);
-
+const casesLoader = batchLoader(batchCases);
+const creatorsLoader = batchLoader(batchCreators);
+const batchOrganizationsLoader = batchLoader(batchObjectOrganizations);
 const loadByIdLoader = batchLoader(elBatchIds);
 
 const stixSightingRelationshipResolvers = {
   Query: {
-    stixSightingRelationship: (_, { id }, { user }) => findById(user, id),
-    stixSightingRelationships: (_, args, { user }) => findAll(user, args),
-    stixSightingRelationshipsTimeSeries: (_, args, { user }) => timeSeriesRelations(user, args),
-    stixSightingRelationshipsDistribution: (_, args, { user }) => distributionRelations(
-      user,
-      R.pipe(R.assoc('relationship_type', 'stix-sighting-relationship'), R.assoc('isTo', true))(args)
+    stixSightingRelationship: (_, { id }, context) => findById(context, context.user, id),
+    stixSightingRelationships: (_, args, context) => findAll(context, context.user, args),
+    stixSightingRelationshipsTimeSeries: (_, args, context) => timeSeriesRelations(context, context.user, args),
+    stixSightingRelationshipsDistribution: (_, args, context) => distributionRelations(
+      context,
+      context.user,
+      { ...args, relationship_type: [STIX_SIGHTING_RELATIONSHIP] }
     ),
-    stixSightingRelationshipsNumber: (_, args, { user }) => stixSightingRelationshipsNumber(user, args),
+    stixSightingRelationshipsNumber: (_, args, context) => stixSightingRelationshipsNumber(context, context.user, args),
   },
   StixSightingRelationshipsFilter: {
     createdBy: buildRefRelationKey(RELATION_CREATED_BY),
@@ -58,49 +62,53 @@ const stixSightingRelationshipResolvers = {
   },
   StixSightingRelationship: {
     relationship_type: () => 'stix-sighting-relationship',
-    from: (rel, _, { user }) => loadByIdLoader.load(rel.fromId, user),
-    to: (rel, _, { user }) => loadByIdLoader.load(rel.toId, user),
-    toStix: (rel, _, { user }) => stixLoadByIdStringify(user, rel.id),
-    creator: (rel, _, { user }) => creator(user, rel.id, STIX_SIGHTING_RELATIONSHIP),
-    createdBy: (rel, _, { user }) => createdByLoader.load(rel.id, user),
-    objectMarking: (rel, _, { user }) => markingDefinitionsLoader.load(rel.id, user),
-    objectLabel: (rel, _, { user }) => labelsLoader.load(rel.id, user),
-    externalReferences: (rel, _, { user }) => externalReferencesLoader.load(rel.id, user),
-    reports: (rel, _, { user }) => reportsLoader.load(rel.id, user),
-    notes: (rel, _, { user }) => notesLoader.load(rel.id, user),
-    opinions: (rel, _, { user }) => opinionsLoader.load(rel.id, user),
+    from: (rel, _, context) => loadByIdLoader.load(rel.fromId, context, context.user),
+    to: (rel, _, context) => loadByIdLoader.load(rel.toId, context, context.user),
+    toStix: (rel, _, context) => stixLoadByIdStringify(context, context.user, rel.id),
+    creator: (rel, _, context) => creatorsLoader.load(rel.creator_id, context, context.user),
+    createdBy: (rel, _, context) => createdByLoader.load(rel.id, context, context.user),
+    objectMarking: (rel, _, context) => markingDefinitionsLoader.load(rel.id, context, context.user),
+    objectOrganization: (rel, _, context) => batchOrganizationsLoader.load(rel.id, context, context.user),
+    objectLabel: (rel, _, context) => labelsLoader.load(rel.id, context, context.user),
+    externalReferences: (rel, _, context) => externalReferencesLoader.load(rel.id, context, context.user),
+    reports: (rel, _, context) => reportsLoader.load(rel.id, context, context.user),
+    cases: (rel, _, context) => casesLoader.load(rel.id, context, context.user),
+    notes: (rel, _, context) => notesLoader.load(rel.id, context, context.user),
+    opinions: (rel, _, context) => opinionsLoader.load(rel.id, context, context.user),
     editContext: (rel) => fetchEditContext(rel.id),
-    status: (entity, _, { user }) => (entity.x_opencti_workflow_id ? findStatusById(user, entity.x_opencti_workflow_id) : null),
-    workflowEnabled: async (entity, _, { user }) => {
-      const statusesEdges = await getTypeStatuses(user, entity.entity_type);
+    status: (entity, _, context) => (entity.x_opencti_workflow_id ? findStatusById(context, context.user, entity.x_opencti_workflow_id) : null),
+    workflowEnabled: async (entity, _, context) => {
+      const statusesEdges = await getTypeStatuses(context, context.user, entity.entity_type);
       return statusesEdges.edges.length > 0;
     },
   },
   Mutation: {
-    stixSightingRelationshipEdit: (_, { id }, { user }) => ({
-      delete: () => stixSightingRelationshipDelete(user, id),
-      fieldPatch: ({ input }) => stixSightingRelationshipEditField(user, id, input),
-      contextPatch: ({ input }) => stixSightingRelationshipEditContext(user, id, input),
-      contextClean: () => stixSightingRelationshipCleanContext(user, id),
-      relationAdd: ({ input }) => stixSightingRelationshipAddRelation(user, id, input),
-      relationDelete: ({ toId, relationship_type: relationshipType }) => stixSightingRelationshipDeleteRelation(user, id, toId, relationshipType),
+    stixSightingRelationshipEdit: (_, { id }, context) => ({
+      delete: () => stixSightingRelationshipDelete(context, context.user, id),
+      fieldPatch: ({ input }) => stixSightingRelationshipEditField(context, context.user, id, input),
+      contextPatch: ({ input }) => stixSightingRelationshipEditContext(context, context.user, id, input),
+      contextClean: () => stixSightingRelationshipCleanContext(context, context.user, id),
+      relationAdd: ({ input }) => stixSightingRelationshipAddRelation(context, context.user, id, input),
+      relationDelete: ({ toId, relationship_type: relationshipType }) => stixSightingRelationshipDeleteRelation(context, context.user, id, toId, relationshipType),
+      restrictionOrganizationAdd: ({ organizationId }) => addOrganizationRestriction(context, context.user, id, organizationId),
+      restrictionOrganizationDelete: ({ organizationId }) => removeOrganizationRestriction(context, context.user, id, organizationId),
     }),
-    stixSightingRelationshipAdd: (_, { input }, { user }) => addStixSightingRelationship(user, input),
+    stixSightingRelationshipAdd: (_, { input }, context) => addStixSightingRelationship(context, context.user, input),
   },
   Subscription: {
     stixSightingRelationship: {
       resolve: /* istanbul ignore next */ (payload) => payload.instance,
-      subscribe: /* istanbul ignore next */ (_, { id }, { user }) => {
-        stixSightingRelationshipEditContext(user, id);
+      subscribe: /* istanbul ignore next */ (_, { id }, context) => {
+        stixSightingRelationshipEditContext(context, context.user, id);
         const filtering = withFilter(
-          () => pubsub.asyncIterator(BUS_TOPICS[STIX_SIGHTING_RELATIONSHIP].EDIT_TOPIC),
+          () => pubSubAsyncIterator(BUS_TOPICS[STIX_SIGHTING_RELATIONSHIP].EDIT_TOPIC),
           (payload) => {
             if (!payload) return false; // When disconnect, an empty payload is dispatched.
-            return payload.user.id !== user.id && payload.instance.id === id;
+            return payload.user.id !== context.user.id && payload.instance.id === id;
           }
-        )(_, { id }, { user });
+        )(_, { id }, context);
         return withCancel(filtering, () => {
-          stixSightingRelationshipCleanContext(user, id);
+          stixSightingRelationshipCleanContext(context, context.user, id);
         });
       },
     },

@@ -14,6 +14,7 @@ import TextField from '../../../../components/TextField';
 import CommitMessage from '../../common/form/CommitMessage';
 import { adaptFieldValue } from '../../../../utils/String';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
 
 const intrusionSetMutationFieldPatch = graphql`
   mutation IntrusionSetEditionDetailsFieldPatchMutation(
@@ -168,7 +169,6 @@ class IntrusionSetEditionDetailsComponent extends Component {
         {({
           submitForm,
           isSubmitting,
-          validateForm,
           setFieldValue,
           values,
         }) => (
@@ -207,8 +207,9 @@ class IntrusionSetEditionDetailsComponent extends Component {
               type="attack-resource-level-ov"
               name="resource_level"
               onFocus={this.handleChangeFocus.bind(this)}
-              onChange={this.handleSubmitField.bind(this)}
-              containerstyle={{ marginTop: 20, width: '100%' }}
+              onChange={(name, value) => setFieldValue(name, value)}
+              onSubmit={this.handleSubmitField.bind(this)}
+              containerStyle={fieldSpacingContainerStyle}
               variant="edit"
               multiple={false}
               editContext={context}
@@ -218,8 +219,9 @@ class IntrusionSetEditionDetailsComponent extends Component {
               type="attack-motivation-ov"
               name="primary_motivation"
               onFocus={this.handleChangeFocus.bind(this)}
-              onChange={this.handleSubmitField.bind(this)}
-              containerstyle={{ marginTop: 20, width: '100%' }}
+              onChange={(name, value) => setFieldValue(name, value)}
+              onSubmit={this.handleSubmitField.bind(this)}
+              containerStyle={fieldSpacingContainerStyle}
               variant="edit"
               multiple={false}
               editContext={context}
@@ -229,8 +231,9 @@ class IntrusionSetEditionDetailsComponent extends Component {
               type="attack-motivation-ov"
               name="secondary_motivations"
               onFocus={this.handleChangeFocus.bind(this)}
-              onChange={this.handleSubmitField.bind(this)}
-              containerstyle={{ marginTop: 20, width: '100%' }}
+              onSubmit={this.handleSubmitField.bind(this)}
+              onChange={(name, value) => setFieldValue(name, value)}
+              containerStyle={fieldSpacingContainerStyle}
               variant="edit"
               multiple={true}
               editContext={context}
@@ -254,9 +257,8 @@ class IntrusionSetEditionDetailsComponent extends Component {
               <CommitMessage
                 submitForm={submitForm}
                 disabled={isSubmitting}
-                validateForm={validateForm}
-                setFieldValue={setFieldValue}
-                values={values}
+                setFieldValue={setFieldValue}open={false}
+                values={values.references}
                 id={intrusionSet.id}
               />
             )}

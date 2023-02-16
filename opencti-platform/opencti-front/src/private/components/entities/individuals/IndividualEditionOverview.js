@@ -24,7 +24,11 @@ import ObjectMarkingField from '../../common/form/ObjectMarkingField';
 import MarkDownField from '../../../../components/MarkDownField';
 import CommitMessage from '../../common/form/CommitMessage';
 import { adaptFieldValue } from '../../../../utils/String';
-import { convertCreatedBy, convertMarkings, convertStatus } from '../../../../utils/Edition';
+import {
+  convertCreatedBy,
+  convertMarkings,
+  convertStatus,
+} from '../../../../utils/edition';
 import StatusField from '../../common/form/StatusField';
 
 const styles = (theme) => ({
@@ -103,7 +107,7 @@ const individualMutationRelationAdd = graphql`
 const individualMutationRelationDelete = graphql`
   mutation IndividualEditionOverviewRelationDeleteMutation(
     $id: ID!
-    $toId: String!
+    $toId: StixRef!
     $relationship_type: String!
   ) {
     individualEdit(id: $id) {
@@ -148,10 +152,7 @@ class IndividualEditionOverviewComponent extends Component {
       R.assoc('createdBy', values.createdBy?.value),
       R.assoc('objectMarking', R.pluck('value', values.objectMarking)),
       R.toPairs,
-      R.map((n) => ({
-        key: n[0],
-        value: adaptFieldValue(n[1]),
-      })),
+      R.map((n) => ({ key: n[0], value: adaptFieldValue(n[1]) })),
     )(values);
     commitMutation({
       mutation: individualMutationFieldPatch,
@@ -183,10 +184,7 @@ class IndividualEditionOverviewComponent extends Component {
             mutation: individualMutationFieldPatch,
             variables: {
               id: this.props.individual.id,
-              input: {
-                key: name,
-                value: finalValue ?? '',
-              },
+              input: { key: name, value: finalValue ?? '' },
             },
           });
         })
@@ -267,12 +265,11 @@ class IndividualEditionOverviewComponent extends Component {
         enableReinitialize={true}
         initialValues={initialValues}
         validationSchema={individualValidation(t)}
-        onSubmit={() => true}
+        onSubmit={this.onSubmit.bind(this)}
       >
         {({
           submitForm,
           isSubmitting,
-          validateForm,
           setFieldValue,
           values,
         }) => (
@@ -323,20 +320,20 @@ class IndividualEditionOverviewComponent extends Component {
               }
             />
             {individual.workflowEnabled && (
-                <StatusField
-                    name="x_opencti_workflow_id"
-                    type="Individual"
-                    onFocus={this.handleChangeFocus.bind(this)}
-                    onChange={this.handleSubmitField.bind(this)}
-                    setFieldValue={setFieldValue}
-                    style={{ marginTop: 20 }}
-                    helpertext={
-                      <SubscriptionFocus
-                          context={context}
-                          fieldName="x_opencti_workflow_id"
-                      />
-                    }
-                />
+              <StatusField
+                name="x_opencti_workflow_id"
+                type="Individual"
+                onFocus={this.handleChangeFocus.bind(this)}
+                onChange={this.handleSubmitField.bind(this)}
+                setFieldValue={setFieldValue}
+                style={{ marginTop: 20 }}
+                helpertext={
+                  <SubscriptionFocus
+                    context={context}
+                    fieldName="x_opencti_workflow_id"
+                  />
+                }
+              />
             )}
             <CreatedByField
               name="createdBy"
@@ -362,9 +359,9 @@ class IndividualEditionOverviewComponent extends Component {
               <CommitMessage
                 submitForm={submitForm}
                 disabled={isSubmitting}
-                validateForm={validateForm}
                 setFieldValue={setFieldValue}
-                values={values}
+                open={false}
+                values={values.references}
                 id={individual.id}
               />
             )}
@@ -381,6 +378,7 @@ IndividualEditionOverviewComponent.propTypes = {
   t: PropTypes.func,
   individual: PropTypes.object,
   context: PropTypes.array,
+  enableReferences: PropTypes.bool,
 };
 
 const IndividualEditionOverview = createFragmentContainer(
@@ -403,8 +401,10 @@ const IndividualEditionOverview = createFragmentContainer(
           edges {
             node {
               id
-              definition
               definition_type
+              definition
+              x_opencti_order
+              x_opencti_color
             }
           }
         }

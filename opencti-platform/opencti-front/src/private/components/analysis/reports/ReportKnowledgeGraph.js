@@ -33,6 +33,7 @@ import {
   reportKnowledgeGraphtMutationRelationAddMutation,
   reportKnowledgeGraphMutationRelationDeleteMutation,
   reportKnowledgeGraphQueryStixRelationshipDeleteMutation,
+  reportKnowledgeGraphQueryStixObjectDeleteMutation,
 } from './ReportKnowledgeGraphQuery';
 import ContainerHeader from '../../common/containers/ContainerHeader';
 import ReportPopover from './ReportPopover';
@@ -50,12 +51,29 @@ export const reportKnowledgeGraphQuery = graphql`
   }
 `;
 
-const reportKnowledgeGraphCheckRelationQuery = graphql`
-  query ReportKnowledgeGraphCheckRelationQuery($id: String!) {
-    stixRelationship(id: $id) {
-      id
-      is_inferred
+const reportKnowledgeGraphCheckObjectQuery = graphql`
+  query ReportKnowledgeGraphCheckObjectQuery($id: String!) {
+    stixObjectOrStixRelationship(id: $id) {
+      ... on BasicObject {
+        id
+      }
+      ... on StixCoreObject {
+        is_inferred
+        parent_types
+        reports {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+      ... on BasicRelationship {
+        id
+      }
       ... on StixCoreRelationship {
+        is_inferred
+        parent_types
         reports {
           edges {
             node {
@@ -65,6 +83,8 @@ const reportKnowledgeGraphCheckRelationQuery = graphql`
         }
       }
       ... on StixCyberObservableRelationship {
+        is_inferred
+        parent_types
         reports {
           edges {
             node {
@@ -74,6 +94,8 @@ const reportKnowledgeGraphCheckRelationQuery = graphql`
         }
       }
       ... on StixSightingRelationship {
+        is_inferred
+        parent_types
         reports {
           edges {
             node {
@@ -104,84 +126,131 @@ const reportKnowledgeGraphStixCoreObjectQuery = graphql`
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
+            x_opencti_color
           }
         }
       }
       ... on StixDomainObject {
-        created
+          created
       }
       ... on AttackPattern {
-        name
-        x_mitre_id
+          name
+          x_mitre_id
       }
       ... on Campaign {
-        name
-        first_seen
-        last_seen
+          name
+          first_seen
+          last_seen
       }
       ... on CourseOfAction {
-        name
+          name
+      }
+      ... on Note {
+          attribute_abstract
+          content
+      }
+      ... on ObservedData {
+          name
+          first_observed
+          last_observed
+      }
+      ... on Opinion {
+          opinion
+      }
+      ... on Report {
+          name
+          published
+      }
+      ... on Grouping {
+          name
+          description
       }
       ... on Individual {
-        name
+          name
       }
       ... on Organization {
-        name
+          name
       }
       ... on Sector {
-        name
+          name
+      }
+      ... on System {
+          name
       }
       ... on Indicator {
-        name
-        valid_from
+          name
+          valid_from
       }
       ... on Infrastructure {
-        name
+          name
       }
       ... on IntrusionSet {
-        name
-        first_seen
-        last_seen
+          name
+          first_seen
+          last_seen
       }
       ... on Position {
-        name
+          name
       }
       ... on City {
-        name
+          name
+      }
+      ... on AdministrativeArea {
+          name
       }
       ... on Country {
-        name
+          name
       }
       ... on Region {
-        name
+          name
       }
       ... on Malware {
-        name
-        first_seen
-        last_seen
+          name
+          first_seen
+          last_seen
       }
       ... on ThreatActor {
-        name
-        first_seen
-        last_seen
+          name
+          first_seen
+          last_seen
       }
       ... on Tool {
-        name
+          name
       }
       ... on Vulnerability {
-        name
+          name
       }
       ... on Incident {
-        name
-        first_seen
-        last_seen
+          name
+          first_seen
+          last_seen
       }
       ... on StixCyberObservable {
-        observable_value
+          observable_value
       }
       ... on StixFile {
-        observableName: name
+          observableName: name
+      }
+      ... on Event {
+          name
+      }
+      ... on Case {
+          name
+      }
+      ... on Narrative {
+          name
+      }
+      ... on DataComponent {
+          name
+      }
+      ... on DataSource {
+          name
+      }
+      ... on Language {
+          name
       }
     }
   }
@@ -242,7 +311,10 @@ const reportKnowledgeGraphStixRelationshipQuery = graphql`
           edges {
             node {
               id
+              definition_type
               definition
+              x_opencti_order
+              x_opencti_color
             }
           }
         }
@@ -288,7 +360,10 @@ const reportKnowledgeGraphStixRelationshipQuery = graphql`
           edges {
             node {
               id
+              definition_type
               definition
+              x_opencti_order
+              x_opencti_color
             }
           }
         }
@@ -342,7 +417,10 @@ const reportKnowledgeGraphStixRelationshipQuery = graphql`
           edges {
             node {
               id
+              definition_type
               definition
+              x_opencti_order
+              x_opencti_color
             }
           }
         }
@@ -365,7 +443,10 @@ class ReportKnowledgeGraphComponent extends Component {
       `view-report-${this.props.report.id}-knowledge`,
     );
     this.zoom = R.propOr(null, 'zoom', params);
-    this.graphObjects = R.map((n) => n.node, props.report.objects.edges);
+    this.graphObjects = props.report.objects.edges.map((n) => ({
+      ...n.node,
+      types: n.types,
+    }));
     this.graphData = buildGraphData(
       this.graphObjects,
       decodeGraphData(props.report.x_opencti_graph_data),
@@ -867,19 +948,20 @@ class ReportKnowledgeGraphComponent extends Component {
     });
   }
 
-  async handleDeleteSelected() {
+  async handleDeleteSelected(deleteObject = false) {
     // Remove selected links
     const selectedLinks = Array.from(this.selectedLinks);
     const selectedLinksIds = R.map((n) => n.id, selectedLinks);
     R.forEach((n) => {
-      fetchQuery(reportKnowledgeGraphCheckRelationQuery, {
+      fetchQuery(reportKnowledgeGraphCheckObjectQuery, {
         id: n.id,
       })
         .toPromise()
         .then(async (data) => {
           if (
-            !data.stixRelationship.is_inferred
-            && data.stixRelationship.reports.edges.length === 1
+            deleteObject
+            && !data.stixObjectOrStixRelationship.is_inferred
+            && data.stixObjectOrStixRelationship.reports.edges.length === 1
           ) {
             commitMutation({
               mutation: reportKnowledgeGraphQueryStixRelationshipDeleteMutation,
@@ -930,14 +1012,33 @@ class ReportKnowledgeGraphComponent extends Component {
       });
     }, relationshipsToRemove);
     R.forEach((n) => {
-      commitMutation({
-        mutation: reportKnowledgeGraphMutationRelationDeleteMutation,
-        variables: {
-          id: this.props.report.id,
-          toId: n.id,
-          relationship_type: 'object',
-        },
-      });
+      fetchQuery(reportKnowledgeGraphCheckObjectQuery, {
+        id: n.id,
+      })
+        .toPromise()
+        .then(async (data) => {
+          if (
+            deleteObject
+            && !data.stixObjectOrStixRelationship.is_inferred
+            && data.stixObjectOrStixRelationship.reports.edges.length === 1
+          ) {
+            commitMutation({
+              mutation: reportKnowledgeGraphQueryStixObjectDeleteMutation,
+              variables: {
+                id: n.id,
+              },
+            });
+          } else {
+            commitMutation({
+              mutation: reportKnowledgeGraphMutationRelationDeleteMutation,
+              variables: {
+                id: this.props.report.id,
+                toId: n.id,
+                relationship_type: 'object',
+              },
+            });
+          }
+        });
     }, selectedNodes);
     this.selectedNodes.clear();
     this.graphData = buildGraphData(
@@ -1133,7 +1234,7 @@ class ReportKnowledgeGraphComponent extends Component {
           container={report}
           PopoverComponent={<ReportPopover />}
           link={`/dashboard/analysis/reports/${report.id}/knowledge`}
-          modes={['graph', 'correlation', 'matrix']}
+          modes={['graph', 'timeline', 'correlation', 'matrix']}
           currentMode={mode}
           adjust={this.handleZoomToFit.bind(this)}
           knowledge={true}
@@ -1195,10 +1296,14 @@ class ReportKnowledgeGraphComponent extends Component {
             nodeThreeObjectExtend={true}
             nodeThreeObject={(node) => nodeThreePaint(node, theme.palette.text.primary)
             }
-            linkColor={(link) => (this.selectedLinks.has(link)
-              ? theme.palette.secondary.main
-              : theme.palette.primary.main)
-            }
+            linkColor={(link) => {
+              // eslint-disable-next-line no-nested-ternary
+              return this.selectedLinks.has(link)
+                ? theme.palette.secondary.main
+                : link.isNestedInferred
+                  ? theme.palette.warning.main
+                  : theme.palette.primary.main;
+            }}
             linkLineDash={[2, 1]}
             linkWidth={0.2}
             linkDirectionalArrowLength={3}
@@ -1288,8 +1393,17 @@ class ReportKnowledgeGraphComponent extends Component {
             onZoom={this.onZoom.bind(this)}
             onZoomEnd={this.handleZoomEnd.bind(this)}
             nodeRelSize={4}
-            nodeCanvasObject={
-              (node, ctx) => nodePaint(node, node.color, ctx, this.selectedNodes.has(node))
+            nodeCanvasObject={(node, ctx) => nodePaint(
+              {
+                selected: theme.palette.secondary.main,
+                inferred: theme.palette.warning.main,
+              },
+              node,
+              node.color,
+              ctx,
+              this.selectedNodes.has(node),
+              node.isNestedInferred,
+            )
             }
             nodePointerAreaPaint={nodeAreaPaint}
             // linkDirectionalParticles={(link) => (this.selectedLinks.has(link) ? 20 : 0)}
@@ -1300,11 +1414,16 @@ class ReportKnowledgeGraphComponent extends Component {
               ? linkPaint(link, ctx, theme.palette.text.primary)
               : null)
             }
-            linkColor={(link) => (this.selectedLinks.has(link)
-              ? theme.palette.secondary.main
-              : theme.palette.primary.main)
+            linkColor={(link) => {
+              // eslint-disable-next-line no-nested-ternary
+              return this.selectedLinks.has(link)
+                ? theme.palette.secondary.main
+                : link.isNestedInferred
+                  ? theme.palette.warning.main
+                  : theme.palette.primary.main;
+            }}
+            linkLineDash={(link) => (link.inferred || link.isNestedInferred ? [2, 1] : null)
             }
-            linkLineDash={(link) => (link.inferred ? [2, 1] : null)}
             linkDirectionalArrowLength={3}
             linkDirectionalArrowRelPos={0.99}
             onNodeClick={this.handleNodeClick.bind(this)}
@@ -1398,12 +1517,16 @@ const ReportKnowledgeGraph = createFragmentContainer(
           edges {
             node {
               id
+              definition_type
               definition
+              x_opencti_order
+              x_opencti_color
             }
           }
         }
         objects(all: true) {
           edges {
+            types
             node {
               ... on BasicObject {
                 id
@@ -1423,92 +1546,159 @@ const ReportKnowledgeGraph = createFragmentContainer(
                   edges {
                     node {
                       id
+                      definition_type
                       definition
+                      x_opencti_order
+                      x_opencti_color
                     }
                   }
                 }
               }
               ... on StixDomainObject {
-                is_inferred
-                created
+                  is_inferred
+                  created
               }
               ... on AttackPattern {
-                name
-                x_mitre_id
+                  name
+                  x_mitre_id
               }
               ... on Campaign {
-                name
-                first_seen
-                last_seen
+                  name
+                  first_seen
+                  last_seen
               }
               ... on ObservedData {
-                name
+                  name
               }
               ... on CourseOfAction {
-                name
+                  name
+              }
+              ... on Note {
+                  attribute_abstract
+                  content
+              }
+              ... on Opinion {
+                  opinion
+              }
+              ... on Report {
+                  name
+                  published
+              }
+              ... on Grouping {
+                  name
               }
               ... on Individual {
-                name
+                  name
               }
               ... on Organization {
-                name
+                  name
               }
               ... on Sector {
-                name
+                  name
               }
               ... on System {
-                name
+                  name
               }
               ... on Indicator {
-                name
-                valid_from
+                  name
+                  valid_from
               }
               ... on Infrastructure {
-                name
+                  name
               }
               ... on IntrusionSet {
-                name
-                first_seen
-                last_seen
+                  name
+                  first_seen
+                  last_seen
               }
               ... on Position {
-                name
+                  name
               }
               ... on City {
-                name
+                  name
+              }
+              ... on AdministrativeArea {
+                  name
               }
               ... on Country {
-                name
+                  name
               }
               ... on Region {
-                name
+                  name
               }
               ... on Malware {
-                name
-                first_seen
-                last_seen
+                  name
+                  first_seen
+                  last_seen
               }
               ... on ThreatActor {
-                name
-                first_seen
-                last_seen
+                  name
+                  first_seen
+                  last_seen
               }
               ... on Tool {
-                name
+                  name
               }
               ... on Vulnerability {
-                name
+                  name
               }
               ... on Incident {
-                name
-                first_seen
-                last_seen
+                  name
+                  first_seen
+                  last_seen
+              }
+              ... on Event {
+                  name
+                  description
+                  start_time
+                  stop_time
+              }
+              ... on Channel {
+                  name
+                  description
+              }
+              ... on Narrative {
+                  name
+                  description
+              }
+              ... on Language {
+                  name
+              }
+              ... on DataComponent {
+                  name
+              }
+              ... on DataSource {
+                  name
+              }
+              ... on Case {
+                  name
               }
               ... on StixCyberObservable {
-                observable_value
+                  observable_value
               }
               ... on StixFile {
-                observableName: name
+                  observableName: name
+              }
+              ... on Label {
+                  value
+                  color
+              }
+              ... on MarkingDefinition {
+                  definition
+                  x_opencti_color
+              }
+              ... on KillChainPhase {
+                  kill_chain_name
+                  phase_name
+              }
+              ... on ExternalReference {
+                  url
+                  source_name
+              }
+              ... on BasicRelationship {
+                  id
+                  entity_type
+                  parent_types
               }
               ... on BasicRelationship {
                 id
@@ -1564,7 +1754,10 @@ const ReportKnowledgeGraph = createFragmentContainer(
                   edges {
                     node {
                       id
+                      definition_type
                       definition
+                      x_opencti_order
+                      x_opencti_color
                     }
                   }
                 }
@@ -1610,7 +1803,10 @@ const ReportKnowledgeGraph = createFragmentContainer(
                   edges {
                     node {
                       id
+                      definition_type
                       definition
+                      x_opencti_order
+                      x_opencti_color
                     }
                   }
                 }
@@ -1664,7 +1860,10 @@ const ReportKnowledgeGraph = createFragmentContainer(
                   edges {
                     node {
                       id
+                      definition_type
                       definition
+                      x_opencti_order
+                      x_opencti_color
                     }
                   }
                 }
@@ -1672,6 +1871,7 @@ const ReportKnowledgeGraph = createFragmentContainer(
             }
           }
         }
+        ...ContainerHeader_container
       }
     `,
   },

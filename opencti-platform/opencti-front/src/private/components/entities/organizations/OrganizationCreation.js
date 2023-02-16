@@ -24,7 +24,7 @@ import CreatedByField from '../../common/form/CreatedByField';
 import ObjectLabelField from '../../common/form/ObjectLabelField';
 import ObjectMarkingField from '../../common/form/ObjectMarkingField';
 import MarkDownField from '../../../../components/MarkDownField';
-import ExternalReferencesField from '../../common/form/ExternalReferencesField';
+import { ExternalReferencesField } from '../../common/form/ExternalReferencesField';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -226,6 +226,7 @@ class OrganizationCreation extends Component {
                     rows="4"
                     style={{ marginTop: 20 }}
                   />
+                  { /* TODO Improve customization (vocab with letter range) 2662 */ }
                   <Field
                     component={SelectField}
                     variant="standard"

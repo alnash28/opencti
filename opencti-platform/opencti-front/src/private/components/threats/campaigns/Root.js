@@ -30,7 +30,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -48,13 +48,13 @@ const campaignQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
+    }
+    connectorsForImport {
+      ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
-    }
-    settings {
-      platform_enable_reference
     }
   }
 `;
@@ -79,7 +79,6 @@ class RootCampaign extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { campaignId },
       },
@@ -87,7 +86,7 @@ class RootCampaign extends Component {
     const link = `/dashboard/threats/campaigns/${campaignId}/knowledge`;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <Route path="/dashboard/threats/campaigns/:campaignId/knowledge">
           <StixCoreObjectKnowledgeBar
             stixCoreObjectLink={link}
@@ -97,6 +96,8 @@ class RootCampaign extends Component {
               'incidents',
               'malwares',
               'tools',
+              'channels',
+              'narratives',
               'attack_patterns',
               'vulnerabilities',
               'observables',
@@ -117,13 +118,7 @@ class RootCampaign extends Component {
                       exact
                       path="/dashboard/threats/campaigns/:campaignId"
                       render={(routeProps) => (
-                        <Campaign
-                          {...routeProps}
-                          campaign={props.campaign}
-                          enableReferences={props.settings.platform_enable_reference?.includes(
-                            'Campaign',
-                          )}
-                        />
+                        <Campaign {...routeProps} campaign={props.campaign} />
                       )}
                     />
                     <Route
@@ -150,11 +145,9 @@ class RootCampaign extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Campaign'}
                             stixDomainObject={props.campaign}
                             PopoverComponent={<CampaignPopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Campaign',
-                            )}
                           />
                           <StixCoreObjectOrStixCoreRelationshipContainers
                             {...routeProps}
@@ -171,9 +164,9 @@ class RootCampaign extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Campaign'}
                             stixDomainObject={props.campaign}
                             PopoverComponent={<CampaignPopover />}
-                            variant="noaliases"
                           />
                           <StixDomainObjectIndicators
                             {...routeProps}
@@ -199,13 +192,14 @@ class RootCampaign extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Campaign'}
                             stixDomainObject={props.campaign}
                             PopoverComponent={<CampaignPopover />}
                           />
                           <FileManager
                             {...routeProps}
                             id={campaignId}
-                            connectorsImport={[]}
+                            connectorsImport={props.connectorsForImport}
                             connectorsExport={props.connectorsForExport}
                             entity={props.campaign}
                           />
@@ -218,11 +212,9 @@ class RootCampaign extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Campaign'}
                             stixDomainObject={props.campaign}
                             PopoverComponent={<CampaignPopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Campaign',
-                            )}
                           />
                           <StixCoreObjectHistory
                             {...routeProps}
@@ -247,7 +239,6 @@ class RootCampaign extends Component {
 RootCampaign.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootCampaign);

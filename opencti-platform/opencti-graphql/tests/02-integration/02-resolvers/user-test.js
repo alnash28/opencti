@@ -1,5 +1,6 @@
+import { expect, it, describe } from 'vitest';
 import gql from 'graphql-tag';
-import { ADMIN_USER, queryAsAdmin } from '../../utils/testQuery';
+import { ADMIN_USER, testContext, queryAsAdmin } from '../../utils/testQuery';
 import { elLoadById } from '../../../src/database/engine';
 import { generateStandardId } from '../../../src/schema/identifier';
 import { ENTITY_TYPE_ROLE } from '../../../src/schema/internalObject';
@@ -131,9 +132,9 @@ describe('User resolver standard behavior', () => {
   });
   it('should user remove role', async () => {
     const roleStandardId = generateStandardId(ENTITY_TYPE_ROLE, { name: 'Default' });
-    const role = await elLoadById(ADMIN_USER, roleStandardId);
+    const role = await elLoadById(testContext, ADMIN_USER, roleStandardId);
     const REMOTE_ROLE_QUERY = gql`
-      mutation UserEditRemoveRole($id: ID!, $toId: String!, $relationship_type: String!) {
+      mutation UserEditRemoveRole($id: ID!, $toId: StixRef!, $relationship_type: String!) {
         userEdit(id: $id) {
           relationDelete(toId: $toId, relationship_type: $relationship_type) {
             id
@@ -280,7 +281,7 @@ describe('User resolver standard behavior', () => {
   });
   it('should delete relation in user', async () => {
     const RELATION_DELETE_QUERY = gql`
-      mutation UserEdit($id: ID!, $toId: String!, $relationship_type: String!) {
+      mutation UserEdit($id: ID!, $toId: StixRef!, $relationship_type: String!) {
         userEdit(id: $id) {
           relationDelete(toId: $toId, relationship_type: $relationship_type) {
             id

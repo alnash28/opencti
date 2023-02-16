@@ -16,8 +16,9 @@ import {
   saveViewParameters,
 } from '../../../utils/ListParameters';
 import StixDomainObjectsRightBar from '../common/stix_domain_objects/StixDomainObjectsRightBar';
-import { isUniqFilter } from '../common/lists/Filters';
-import { UserContext } from '../../../utils/Security';
+import { isUniqFilter } from '../../../utils/filters/filtersUtils';
+import { UserContext } from '../../../utils/hooks/useAuth';
+import ExportContextProvider from '../../../utils/ExportContextProvider';
 
 const styles = () => ({
   container: {
@@ -142,9 +143,31 @@ class Entities extends Component {
     this.setState({ numberOfElements });
   }
 
-  handleToggleSelectEntity(entity) {
+  handleToggleSelectEntity(entity, _, forceRemove = []) {
     const { selectedElements, deSelectedElements, selectAll } = this.state;
-    if (entity.id in (selectedElements || {})) {
+    if (Array.isArray(entity)) {
+      const currentIds = R.values(selectedElements).map((n) => n.id);
+      const givenIds = entity.map((n) => n.id);
+      const addedIds = givenIds.filter((n) => !currentIds.includes(n));
+      let newSelectedElements = {
+        ...selectedElements,
+        ...R.indexBy(
+          R.prop('id'),
+          entity.filter((n) => addedIds.includes(n.id)),
+        ),
+      };
+      if (forceRemove.length > 0) {
+        newSelectedElements = R.omit(
+          forceRemove.map((n) => n.id),
+          newSelectedElements,
+        );
+      }
+      this.setState({
+        selectAll: false,
+        selectedElements: newSelectedElements,
+        deSelectedElements: null,
+      });
+    } else if (entity.id in (selectedElements || {})) {
       const newSelectedElements = R.omit([entity.id], selectedElements);
       this.setState({
         selectAll: false,
@@ -191,7 +214,7 @@ class Entities extends Component {
     return {
       entity_type: {
         label: 'Type',
-        width: '10%',
+        width: '12%',
         isSortable: true,
       },
       name: {
@@ -201,12 +224,17 @@ class Entities extends Component {
       },
       createdBy: {
         label: 'Author',
-        width: '15%',
+        width: '12%',
+        isSortable: isRuntimeSort,
+      },
+      creator: {
+        label: 'Creator',
+        width: '12%',
         isSortable: isRuntimeSort,
       },
       objectLabel: {
         label: 'Labels',
-        width: '20%',
+        width: '15%',
         isSortable: false,
       },
       created_at: {
@@ -217,6 +245,7 @@ class Entities extends Component {
       objectMarking: {
         label: 'Marking',
         isSortable: isRuntimeSort,
+        width: '8%',
       },
     };
   }
@@ -265,12 +294,14 @@ class Entities extends Component {
               paginationOptions={paginationOptions}
               numberOfElements={numberOfElements}
               iconExtension={true}
+              secondaryAction={true}
               availableFilterKeys={[
                 'labelledBy',
                 'markedBy',
+                'createdBy',
+                'creator',
                 'created_start_date',
                 'created_end_date',
-                'createdBy',
               ]}
             >
               <QueryRenderer
@@ -315,7 +346,7 @@ class Entities extends Component {
               handleClearSelectedElements={this.handleClearSelectedElements.bind(
                 this,
               )}
-              withPaddingRight={true}
+              variant="large"
             />
           </div>
         )}
@@ -335,6 +366,7 @@ class Entities extends Component {
       orderMode: orderAsc ? 'asc' : 'desc',
     };
     return (
+      <ExportContextProvider>
       <div className={classes.container}>
         {view === 'lines' ? this.renderLines(paginationOptions) : ''}
         <StixDomainObjectsRightBar
@@ -343,6 +375,7 @@ class Entities extends Component {
           handleClear={this.handleClear.bind(this)}
         />
       </div>
+      </ExportContextProvider>
     );
   }
 }

@@ -30,7 +30,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -48,13 +48,13 @@ const intrusionSetQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
+    }
+    connectorsForImport {
+      ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
-    }
-    settings {
-      platform_enable_reference
     }
   }
 `;
@@ -79,7 +79,6 @@ class RootIntrusionSet extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { intrusionSetId },
       },
@@ -87,7 +86,7 @@ class RootIntrusionSet extends Component {
     const link = `/dashboard/threats/intrusion_sets/${intrusionSetId}/knowledge`;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <Route path="/dashboard/threats/intrusion_sets/:intrusionSetId/knowledge">
           <StixCoreObjectKnowledgeBar
             stixCoreObjectLink={link}
@@ -99,6 +98,8 @@ class RootIntrusionSet extends Component {
               'malwares',
               'attack_patterns',
               'tools',
+              'channels',
+              'narratives',
               'vulnerabilities',
               'observables',
               'infrastructures',
@@ -122,9 +123,6 @@ class RootIntrusionSet extends Component {
                         <IntrusionSet
                           {...routeProps}
                           intrusionSet={props.intrusionSet}
-                          enableReferences={props.settings.platform_enable_reference?.includes(
-                            'Intrusion-Set',
-                          )}
                         />
                       )}
                     />
@@ -152,11 +150,9 @@ class RootIntrusionSet extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Intrusion-Set'}
                             stixDomainObject={props.intrusionSet}
                             PopoverComponent={<IntrusionSetPopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Intrusion-Set',
-                            )}
                           />
                           <StixCoreObjectOrStixCoreRelationshipContainers
                             {...routeProps}
@@ -173,9 +169,9 @@ class RootIntrusionSet extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Intrusion-Set'}
                             stixDomainObject={props.intrusionSet}
                             PopoverComponent={<IntrusionSetPopover />}
-                            variant="noaliases"
                           />
                           <StixDomainObjectIndicators
                             {...routeProps}
@@ -201,16 +197,14 @@ class RootIntrusionSet extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Intrusion-Set'}
                             stixDomainObject={props.intrusionSet}
                             PopoverComponent={<IntrusionSetPopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Intrusion-Set',
-                            )}
                           />
                           <FileManager
                             {...routeProps}
                             id={intrusionSetId}
-                            connectorsImport={[]}
+                            connectorsImport={props.connectorsForImport}
                             connectorsExport={props.connectorsForExport}
                             entity={props.intrusionSet}
                           />
@@ -223,6 +217,7 @@ class RootIntrusionSet extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Intrusion-Set'}
                             stixDomainObject={props.intrusionSet}
                             PopoverComponent={<IntrusionSetPopover />}
                           />
@@ -249,7 +244,6 @@ class RootIntrusionSet extends Component {
 RootIntrusionSet.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootIntrusionSet);

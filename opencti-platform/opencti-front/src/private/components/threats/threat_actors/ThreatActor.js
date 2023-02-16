@@ -10,7 +10,8 @@ import ThreatActorEdition from './ThreatActorEdition';
 import ThreatActorPopover from './ThreatActorPopover';
 import StixCoreObjectOrStixCoreRelationshipLastReports from '../../analysis/reports/StixCoreObjectOrStixCoreRelationshipLastReports';
 import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
@@ -28,13 +29,13 @@ const styles = () => ({
 
 class ThreatActorComponent extends Component {
   render() {
-    const { classes, threatActor, enableReferences } = this.props;
+    const { classes, threatActor } = this.props;
     return (
       <div className={classes.container}>
         <StixDomainObjectHeader
+          entityType={'Threat-Actor'}
           stixDomainObject={threatActor}
           PopoverComponent={<ThreatActorPopover />}
-          enableReferences={enableReferences}
         />
         <Grid
           container={true}
@@ -42,10 +43,10 @@ class ThreatActorComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={threatActor} />
+            <ThreatActorDetails threatActor={threatActor} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <ThreatActorDetails threatActor={threatActor} />
+            <StixDomainObjectOverview stixDomainObject={threatActor} />
           </Grid>
         </Grid>
         <Grid
@@ -73,9 +74,7 @@ class ThreatActorComponent extends Component {
           style={{ marginTop: 25 }}
         >
           <Grid item={true} xs={6}>
-            <StixCoreObjectExternalReferences
-              stixCoreObjectId={threatActor.id}
-            />
+            <StixCoreObjectExternalReferences stixCoreObjectId={threatActor.id} />
           </Grid>
           <Grid item={true} xs={6}>
             <StixCoreObjectLatestHistory stixCoreObjectId={threatActor.id} />
@@ -83,6 +82,7 @@ class ThreatActorComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={threatActor.id}
+          defaultMarking={(threatActor.objectMarking?.edges ?? []).map((edge) => edge.node)}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <ThreatActorEdition threatActorId={threatActor.id} />
@@ -96,7 +96,6 @@ ThreatActorComponent.propTypes = {
   threatActor: PropTypes.object,
   classes: PropTypes.object,
   t: PropTypes.func,
-  enableReferences: PropTypes.bool,
 };
 
 const ThreatActor = createFragmentContainer(ThreatActorComponent, {
@@ -128,6 +127,9 @@ const ThreatActor = createFragmentContainer(ThreatActorComponent, {
           node {
             id
             definition
+            definition_type
+            definition
+            x_opencti_order
             x_opencti_color
           }
         }

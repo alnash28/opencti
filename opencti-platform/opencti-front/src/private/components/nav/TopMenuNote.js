@@ -4,12 +4,10 @@ import { withRouter, Link } from 'react-router-dom';
 import { compose } from 'ramda';
 import withStyles from '@mui/styles/withStyles';
 import Button from '@mui/material/Button';
-import { ArrowForwardIosOutlined, WorkOutline } from '@mui/icons-material';
+import { ArrowForwardIosOutlined, SubjectOutlined } from '@mui/icons-material';
 import inject18n from '../../../components/i18n';
-import Security, {
-  KNOWLEDGE_KNGETEXPORT,
-  KNOWLEDGE_KNUPLOAD,
-} from '../../../utils/Security';
+import Security from '../../../utils/Security';
+import { KNOWLEDGE_KNGETEXPORT, KNOWLEDGE_KNUPLOAD } from '../../../utils/hooks/useGranted';
 
 const styles = (theme) => ({
   buttonHome: {
@@ -54,7 +52,7 @@ class TopMenuNote extends Component {
           color="primary"
           classes={{ root: classes.buttonHome }}
         >
-          <WorkOutline className={classes.icon} fontSize="small" />
+          <SubjectOutlined className={classes.icon} fontSize="small" />
           {t('Notes')}
         </Button>
         <ArrowForwardIosOutlined

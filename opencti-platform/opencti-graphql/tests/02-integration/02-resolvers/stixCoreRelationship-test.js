@@ -1,5 +1,6 @@
+import { expect, it, describe } from 'vitest';
 import gql from 'graphql-tag';
-import { ADMIN_USER, queryAsAdmin } from '../../utils/testQuery';
+import { ADMIN_USER, testContext, queryAsAdmin } from '../../utils/testQuery';
 import { elLoadById } from '../../../src/database/engine';
 
 const READ_QUERY = gql`
@@ -61,21 +62,21 @@ describe('StixCoreRelationship resolver standard behavior', () => {
     expect(queryResult.data.stixCoreRelationship.id).toEqual(stixCoreRelationshipInternalId);
   });
   it('should stixCoreRelationship number to be accurate', async () => {
-    const campaign = await elLoadById(ADMIN_USER, 'campaign--92d46985-17a6-4610-8be8-cc70c82ed214');
+    const campaign = await elLoadById(testContext, ADMIN_USER, 'campaign--92d46985-17a6-4610-8be8-cc70c82ed214');
     const NUMBER_QUERY = gql`
-        query StixCoreRelationshipsNumber($type: String, $fromId: String) {
-            stixCoreRelationshipsNumber(type: $type, fromId: $fromId) {
+        query StixCoreRelationshipsNumber($relationship_type: [String], $fromId: [String]) {
+            stixCoreRelationshipsNumber(relationship_type: $relationship_type, fromId: $fromId) {
                 total
             }
         }
     `;
     const queryResult = await queryAsAdmin({
       query: NUMBER_QUERY,
-      variables: { type: 'uses', fromId: campaign.internal_id },
+      variables: { relationship_type: ['uses'], fromId: [campaign.internal_id] },
     });
     expect(queryResult.data.stixCoreRelationshipsNumber.total).toEqual(1);
-    const queryResult2 = await queryAsAdmin({ query: NUMBER_QUERY, variables: { type: 'stix_relation' } });
-    expect(queryResult2.data.stixCoreRelationshipsNumber.total).toEqual(22);
+    const queryResult2 = await queryAsAdmin({ query: NUMBER_QUERY, variables: { relationship_type: 'stix-relationship' } });
+    expect(queryResult2.data.stixCoreRelationshipsNumber.total).toEqual(23);
   });
   it('should update stixCoreRelationship', async () => {
     const UPDATE_QUERY = gql`
@@ -171,7 +172,7 @@ describe('StixCoreRelationship resolver standard behavior', () => {
   });
   it('should delete relation in stixCoreRelationship', async () => {
     const RELATION_DELETE_QUERY = gql`
-        mutation StixCoreRelationshipEdit($id: ID!, $toId: String!, $relationship_type: String!) {
+        mutation StixCoreRelationshipEdit($id: ID!, $toId: StixRef!, $relationship_type: String!) {
             stixCoreRelationshipEdit(id: $id) {
                 relationDelete(toId: $toId, relationship_type: $relationship_type) {
                     id

@@ -1,7 +1,6 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
 import { compose, propOr } from 'ramda';
-import { graphql } from 'react-relay';
 import { withRouter } from 'react-router-dom';
 import withStyles from '@mui/styles/withStyles';
 import { QueryRenderer } from '../../../relay/environment';
@@ -13,20 +12,8 @@ import inject18n from '../../../components/i18n';
 import SectorsLines, { sectorsLinesQuery } from './sectors/SectorsLines';
 import SectorCreation from './sectors/SectorCreation';
 import SearchInput from '../../../components/SearchInput';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../utils/Security';
-
-export const sectorsSearchQuery = graphql`
-  query SectorsSearchQuery($search: String) {
-    sectors(search: $search) {
-      edges {
-        node {
-          id
-          name
-        }
-      }
-    }
-  }
-`;
+import Security from '../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../utils/hooks/useGranted';
 
 const styles = () => ({
   parameters: {

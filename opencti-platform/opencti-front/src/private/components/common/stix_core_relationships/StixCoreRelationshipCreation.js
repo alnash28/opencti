@@ -27,8 +27,9 @@ import KillChainPhasesField from '../form/KillChainPhasesField';
 import CreatedByField from '../form/CreatedByField';
 import ObjectMarkingField from '../form/ObjectMarkingField';
 import ConfidenceField from '../form/ConfidenceField';
-import ExternalReferencesField from '../form/ExternalReferencesField';
+import { ExternalReferencesField } from '../form/ExternalReferencesField';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -199,7 +200,10 @@ export const stixCoreRelationshipCreationQuery = graphql`
             edges {
               node {
                 id
+                definition_type
                 definition
+                x_opencti_order
+                x_opencti_color
               }
             }
           }
@@ -264,7 +268,10 @@ export const stixCoreRelationshipCreationMutation = graphql`
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
+            x_opencti_color
           }
         }
       }
@@ -582,7 +589,7 @@ class StixCoreRelationshipCreation extends Component {
                 name="confidence"
                 label={t('Confidence level')}
                 fullWidth={true}
-                containerstyle={{ marginTop: 20, width: '100%' }}
+                containerStyle={fieldSpacingContainerStyle}
               />
               <Field
                 component={DateTimePickerField}

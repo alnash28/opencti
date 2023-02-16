@@ -22,7 +22,8 @@ import { v4 as uuid } from 'uuid';
 import { FIVE_SECONDS } from '../../../../utils/Time';
 import { commitMutation, MESSAGING$ } from '../../../../relay/environment';
 import inject18n from '../../../../components/i18n';
-import Security, { KNOWLEDGE_KNENRICHMENT } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNENRICHMENT } from '../../../../utils/hooks/useGranted';
 
 const interval$ = interval(FIVE_SECONDS);
 
@@ -87,8 +88,14 @@ const styles = (theme) => ({
   },
 });
 
-const StixCoreObjectEnrichment = (props) => {
-  const { stixCoreObject, connectorsForImport, relay, classes, t, nsdt } = props;
+const StixCoreObjectEnrichment = ({
+  stixCoreObject,
+  connectorsForImport,
+  relay,
+  classes,
+  t,
+  nsdt,
+}) => {
   const { id } = stixCoreObject;
   const file = stixCoreObject.importFiles && stixCoreObject.importFiles.edges.length > 0
     ? stixCoreObject.importFiles.edges[0].node

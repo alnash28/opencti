@@ -1,19 +1,19 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
-import { graphql, createFragmentContainer } from 'react-relay';
+import { createFragmentContainer, graphql } from 'react-relay';
 import withStyles from '@mui/styles/withStyles';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import { KeyboardArrowRight } from '@mui/icons-material';
-import { ArchiveOutline } from 'mdi-material-ui';
-import { compose, pathOr } from 'ramda';
+import { compose } from 'ramda';
 import Checkbox from '@mui/material/Checkbox';
 import Skeleton from '@mui/material/Skeleton';
 import inject18n from '../../../../components/i18n';
 import StixCoreObjectLabels from '../../common/stix_core_objects/StixCoreObjectLabels';
 import ItemMarkings from '../../../../components/ItemMarkings';
+import ItemIcon from '../../../../components/ItemIcon';
 
 const styles = (theme) => ({
   item: {
@@ -59,6 +59,8 @@ class ArtifactLineComponent extends Component {
       selectedElements,
       deSelectedElements,
       selectAll,
+      onToggleShiftEntity,
+      index,
     } = this.props;
     const file = node.importFiles.edges.length > 0
       ? node.importFiles.edges[0].node
@@ -74,7 +76,10 @@ class ArtifactLineComponent extends Component {
         <ListItemIcon
           classes={{ root: classes.itemIcon }}
           style={{ minWidth: 40 }}
-          onClick={onToggleEntity.bind(this, node)}
+          onClick={(event) => (event.shiftKey
+            ? onToggleShiftEntity(index, node, event)
+            : onToggleEntity(node, event))
+          }
         >
           <Checkbox
             edge="start"
@@ -86,7 +91,7 @@ class ArtifactLineComponent extends Component {
           />
         </ListItemIcon>
         <ListItemIcon classes={{ root: classes.itemIcon }}>
-          <ArchiveOutline />
+          <ItemIcon type="Artifact" />
         </ListItemIcon>
         <ListItemText
           primary={
@@ -136,13 +141,9 @@ class ArtifactLineComponent extends Component {
                 style={{ width: dataColumns.objectMarking.width }}
               >
                 <ItemMarkings
-                  markingDefinitions={pathOr(
-                    [],
-                    ['objectMarking', 'edges'],
-                    node,
-                  )}
-                  limit={1}
                   variant="inList"
+                  markingDefinitionsEdges={node.objectMarking.edges ?? []}
+                  limit={1}
                 />
               </div>
             </div>
@@ -181,7 +182,9 @@ const ArtifactLineFragment = createFragmentContainer(ArtifactLineComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }

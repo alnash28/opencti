@@ -16,12 +16,12 @@ import IndicatorsLines, {
 } from './indicators/IndicatorsLines';
 import IndicatorCreation from './indicators/IndicatorCreation';
 import IndicatorsRightBar from './indicators/IndicatorsRightBar';
-import Security, {
-  UserContext,
-  KNOWLEDGE_KNUPDATE,
-} from '../../../utils/Security';
+import Security from '../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../utils/hooks/useGranted';
+import { UserContext } from '../../../utils/hooks/useAuth';
 import ToolBar from '../data/ToolBar';
-import { isUniqFilter } from '../common/lists/Filters';
+import { isUniqFilter } from '../../../utils/filters/filtersUtils';
+import ExportContextProvider from '../../../utils/ExportContextProvider';
 
 const styles = () => ({
   container: {
@@ -120,11 +120,33 @@ class Indicators extends Component {
     this.setState({ observableTypes: [] }, () => this.saveView());
   }
 
-  handleToggleSelectEntity(entity, event) {
+  handleToggleSelectEntity(entity, event, forceRemove = []) {
     event.stopPropagation();
     event.preventDefault();
     const { selectedElements, deSelectedElements, selectAll } = this.state;
-    if (entity.id in (selectedElements || {})) {
+    if (Array.isArray(entity)) {
+      const currentIds = R.values(selectedElements).map((n) => n.id);
+      const givenIds = entity.map((n) => n.id);
+      const addedIds = givenIds.filter((n) => !currentIds.includes(n));
+      let newSelectedElements = {
+        ...selectedElements,
+        ...R.indexBy(
+          R.prop('id'),
+          entity.filter((n) => addedIds.includes(n.id)),
+        ),
+      };
+      if (forceRemove.length > 0) {
+        newSelectedElements = R.omit(
+          forceRemove.map((n) => n.id),
+          newSelectedElements,
+        );
+      }
+      this.setState({
+        selectAll: false,
+        selectedElements: newSelectedElements,
+        deSelectedElements: null,
+      });
+    } else if (entity.id in (selectedElements || {})) {
       const newSelectedElements = R.omit([entity.id], selectedElements);
       this.setState({
         selectAll: false,
@@ -228,12 +250,17 @@ class Indicators extends Component {
       },
       objectLabel: {
         label: 'Labels',
-        width: '20%',
+        width: '10%',
         isSortable: false,
       },
       created: {
         label: 'Creation date',
-        width: '18%',
+        width: '15%',
+        isSortable: true,
+      },
+      creator: {
+        label: 'Creator',
+        width: '10%',
         isSortable: true,
       },
       valid_until: {
@@ -268,24 +295,21 @@ class Indicators extends Component {
         - Object.keys(deSelectedElements || {}).length;
     }
     let finalFilters = filters;
-    finalFilters = R.assoc(
-      'entity_type',
-      [{ id: 'Indicator', value: 'Indicator' }],
-      finalFilters,
-    );
+    finalFilters = {
+      ...finalFilters,
+      entity_type: [{ id: 'Indicator', value: 'Indicator' }],
+    };
     if (indicatorTypes.length) {
-      finalFilters = R.assoc(
-        'pattern_type',
-        R.map((n) => ({ id: n, value: n }), indicatorTypes),
-        finalFilters,
-      );
+      finalFilters = {
+        ...finalFilters,
+        pattern_type: indicatorTypes.map((n) => ({ id: n, value: n })),
+      };
     }
     if (observableTypes.length) {
-      finalFilters = R.assoc(
-        'x_opencti_main_observable_type',
-        R.map((n) => ({ id: n, value: n }), observableTypes),
-        finalFilters,
-      );
+      finalFilters = {
+        ...finalFilters,
+        x_opencti_main_observable_type: observableTypes.map((n) => ({ id: n, value: n })),
+      };
     }
     return (
       <UserContext.Consumer>
@@ -317,13 +341,14 @@ class Indicators extends Component {
                 'created_end_date',
                 'valid_from_start_date',
                 'valid_until_end_date',
-                'x_opencti_score_gt',
-                'x_opencti_score_lte',
+                'x_opencti_score',
                 'createdBy',
-                'x_opencti_detection',
                 'sightedBy',
+                'x_opencti_detection',
                 'basedOn',
                 'revoked',
+                'creator',
+                'confidence',
               ]}
             >
               <QueryRenderer
@@ -355,7 +380,7 @@ class Indicators extends Component {
               handleClearSelectedElements={this.handleClearSelectedElements.bind(
                 this,
               )}
-              withPaddingRight={true}
+              variant="large"
               type="Indicator"
             />
           </div>
@@ -400,6 +425,7 @@ class Indicators extends Component {
       orderMode: orderAsc ? 'asc' : 'desc',
     };
     return (
+      <ExportContextProvider>
       <div className={classes.container}>
         {view === 'lines' ? this.renderLines(paginationOptions) : ''}
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
@@ -421,6 +447,7 @@ class Indicators extends Component {
           openExports={openExports}
         />
       </div>
+      </ExportContextProvider>
     );
   }
 }

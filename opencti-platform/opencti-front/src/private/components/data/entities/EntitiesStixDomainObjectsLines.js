@@ -136,10 +136,28 @@ export const entitiesStixDomainObjectsLinesSearchQuery = graphql`
             name
             description
           }
+          ... on Grouping {
+            name
+            description
+          }
           ... on CourseOfAction {
             name
             description
             x_opencti_aliases
+          }
+          ... on DataComponent {
+            name
+            aliases
+            description
+          }
+          ... on DataSource {
+            name
+            aliases
+            description
+          }
+          ... on Case {
+            name
+            description
           }
           ... on Individual {
             name
@@ -184,6 +202,11 @@ export const entitiesStixDomainObjectsLinesSearchQuery = graphql`
             description
             x_opencti_aliases
           }
+          ... on AdministrativeArea {
+            name
+            description
+            x_opencti_aliases
+          }
           ... on Country {
             name
             description
@@ -217,6 +240,34 @@ export const entitiesStixDomainObjectsLinesSearchQuery = graphql`
             name
             aliases
             description
+          }
+          ... on Event {
+            name
+            aliases
+            description
+          }
+          ... on Channel {
+            name
+            aliases
+            description
+          }
+          ... on Narrative {
+            name
+            aliases
+            description
+          }
+          ... on Language {
+            name
+            aliases
+          }
+          ... on DataComponent {
+            name
+          }
+          ... on DataSource {
+            name
+          }
+          ... on Case {
+            name
           }
           createdBy {
             ... on Identity {
@@ -267,6 +318,8 @@ export default createPaginationContainer(
                   node {
                     id
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }

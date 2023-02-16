@@ -22,6 +22,7 @@ import {
   saveViewParameters,
 } from '../../../../utils/ListParameters';
 import StixCoreObjectKnowledgeBar from '../../common/stix_core_objects/StixCoreObjectKnowledgeBar';
+import EntityStixSightingRelationships from '../../events/stix_sighting_relationships/EntityStixSightingRelationships';
 
 const subscription = graphql`
   subscription RootSystemsSubscription($id: ID!) {
@@ -33,7 +34,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -49,13 +50,13 @@ const systemQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
+    }
+    connectorsForImport {
+      ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
-    }
-    settings {
-      platform_enable_reference
     }
   }
 `;
@@ -107,7 +108,6 @@ class RootSystem extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { systemId },
       },
@@ -116,7 +116,7 @@ class RootSystem extends Component {
     const link = `/dashboard/entities/systems/${systemId}/knowledge`;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <Route path="/dashboard/entities/systems/:systemId/knowledge">
           {viewAs === 'knowledge' && (
             <StixCoreObjectKnowledgeBar
@@ -124,6 +124,7 @@ class RootSystem extends Component {
               availableSections={[
                 'systems',
                 'systems',
+                'threats',
                 'threat_actors',
                 'intrusion_sets',
                 'campaigns',
@@ -132,7 +133,6 @@ class RootSystem extends Component {
                 'attack_patterns',
                 'tools',
                 'observables',
-                'sightings',
               ]}
             />
           )}
@@ -191,10 +191,11 @@ class RootSystem extends Component {
                     />
                     <Route
                       exact
-                      path="/dashboard/entities/systems/:systemId/files"
+                      path="/dashboard/entities/systems/:systemId/sightings"
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            disableSharing={true}
                             stixDomainObject={props.system}
                             PopoverComponent={<SystemPopover />}
                             onViewAs={this.handleChangeViewAs.bind(this)}
@@ -202,10 +203,32 @@ class RootSystem extends Component {
                               'System',
                             )}
                           />
+                          <EntityStixSightingRelationships
+                            entityId={props.system.id}
+                            entityLink={link}
+                            noPadding={true}
+                            isTo={true}
+                            {...routeProps}
+                          />
+                        </React.Fragment>
+                      )}
+                    />
+                    <Route
+                      exact
+                      path="/dashboard/entities/systems/:systemId/files"
+                      render={(routeProps) => (
+                        <React.Fragment>
+                          <StixDomainObjectHeader
+                            entityType={'System'}
+                            disableSharing={true}
+                            stixDomainObject={props.system}
+                            PopoverComponent={<SystemPopover />}
+                            onViewAs={this.handleChangeViewAs.bind(this)}
+                          />
                           <FileManager
                             {...routeProps}
                             id={systemId}
-                            connectorsImport={[]}
+                            connectorsImport={props.connectorsForImport}
                             connectorsExport={props.connectorsForExport}
                             entity={props.system}
                           />
@@ -218,11 +241,10 @@ class RootSystem extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'System'}
+                            disableSharing={true}
                             stixDomainObject={props.system}
                             PopoverComponent={<SystemPopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'System',
-                            )}
                           />
                           <StixCoreObjectHistory
                             {...routeProps}
@@ -247,7 +269,6 @@ class RootSystem extends Component {
 RootSystem.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootSystem);

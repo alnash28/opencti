@@ -19,12 +19,15 @@ import { graphql, createRefetchContainer } from 'react-relay';
 import Chart from 'react-apexcharts';
 import { commitMutation, QueryRenderer } from '../../../../relay/environment';
 import inject18n from '../../../../components/i18n';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import { opinionCreationMutation } from './OpinionCreation';
 import MarkDownField from '../../../../components/MarkDownField';
 import { adaptFieldValue } from '../../../../utils/String';
 import { opinionMutationFieldPatch } from './OpinionEditionOverview';
 import { radarChartOptions } from '../../../../utils/Charts';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
+import ConfidenceField from '../../common/form/ConfidenceField';
 
 const styles = () => ({
   paper: {
@@ -105,6 +108,7 @@ class StixCoreObjectOpinionsRadarComponent extends Component {
     if (alreadyExistingOpinion) {
       const inputValues = R.pipe(
         R.dissoc('alreadyExistingOpinion'),
+        R.assoc('confidence', parseInt(values.confidence, 10)),
         R.assoc('opinion', opinions[(currentOpinion || 3) - 1]),
         R.assoc('objectMarking', defaultMarking),
         R.toPairs,
@@ -128,6 +132,7 @@ class StixCoreObjectOpinionsRadarComponent extends Component {
     } else {
       const adaptedValues = R.pipe(
         R.dissoc('alreadyExistingOpinion'),
+        R.assoc('confidence', parseInt(values.confidence, 10)),
         R.assoc('opinion', opinions[(currentOpinion || 3) - 1]),
         R.assoc('objectMarking', defaultMarking),
         R.assoc('objects', [stixCoreObjectId]),
@@ -188,13 +193,13 @@ class StixCoreObjectOpinionsRadarComponent extends Component {
       ];
       return (
         <Chart
-          options={radarChartOptions(theme, labels, [
-            '#ff5722',
-            '#ffc107',
-            '#cddc39',
-            '#8bc34a',
-            '#4caf50',
-          ])}
+          options={radarChartOptions(
+            theme,
+            labels,
+            ['#ff5722', '#ffc107', '#cddc39', '#8bc34a', '#4caf50'],
+            true,
+            true,
+          )}
           series={chartData}
           type="radar"
           width="100%"
@@ -298,6 +303,7 @@ class StixCoreObjectOpinionsRadarComponent extends Component {
                       initialValues={{
                         alreadyExistingOpinion: props.myOpinion?.id || '',
                         explanation,
+                        confidence: 75,
                       }}
                       onSubmit={this.onSubmit.bind(this)}
                       onReset={this.onReset.bind(this)}
@@ -326,6 +332,12 @@ class StixCoreObjectOpinionsRadarComponent extends Component {
                               multiline={true}
                               rows="4"
                               style={{ marginTop: 20 }}
+                            />
+                            <ConfidenceField
+                              name="confidence"
+                              label={t('Confidence')}
+                              fullWidth={true}
+                              containerStyle={fieldSpacingContainerStyle}
                             />
                           </DialogContent>
                           <DialogActions>

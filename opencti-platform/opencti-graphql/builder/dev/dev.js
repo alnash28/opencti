@@ -1,15 +1,16 @@
 const esbuild = require('esbuild');
 const {default: importGlobPlugin} = require('esbuild-plugin-import-glob');
 const {default: graphqlLoaderPlugin} = require('@luckycatfactory/esbuild-graphql-loader');
-const outputRunPlugin = require("../plugin/output.run.plugin");
+const nativeNodePlugin = require("../plugin/native.node.plugin");
 
 esbuild.build({
     logLevel: 'info',
     define: {'process.env.NODE_ENV': '\"development\"'},
-    plugins: [importGlobPlugin(), graphqlLoaderPlugin(), outputRunPlugin()],
+    plugins: [importGlobPlugin(), graphqlLoaderPlugin(), nativeNodePlugin()],
     entryPoints: [
-        'src/index.js',
-        'script/script-clean-relations.js'
+        'src/back.js',
+        'script/script-clean-relations.js',
+        'script/script-insert-dataset.js'
     ],
     entryNames: "[name]",
     bundle: true,
@@ -18,13 +19,8 @@ esbuild.build({
     target: ['node14'],
     minify: false,
     keepNames: true,
-    sourcemap: true,
-    sourceRoot: 'src',
-    sourcesContent: true,
+    sourcemap: 'inline',
     outdir: 'build',
-    incremental: true,
-    watch: true,
-}).catch((error) => {
-    console.error(error);
-    process.exit(1);
+    incremental: false,
+    watch: false,
 });

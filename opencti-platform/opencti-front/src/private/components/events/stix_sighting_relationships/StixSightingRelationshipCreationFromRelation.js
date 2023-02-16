@@ -39,6 +39,7 @@ import ConfidenceField from '../../common/form/ConfidenceField';
 import SwitchField from '../../../../components/SwitchField';
 import MarkDownField from '../../../../components/MarkDownField';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -229,6 +230,10 @@ const stixSightingRelationshipCreationFromRelationQuery = graphql`
         ... on City {
           name
         }
+        ... on AdministrativeArea {
+          name
+          description
+        }
         ... on Country {
           name
         }
@@ -297,6 +302,9 @@ const stixSightingRelationshipCreationFromRelationQuery = graphql`
           name
         }
         ... on City {
+          name
+        }
+        ... on AdministrativeArea {
           name
         }
         ... on Country {
@@ -481,13 +489,13 @@ class StixSightingRelationshipCreationFromRelation extends Component {
   }
 
   renderSelectEntity() {
-    const { classes, t, targetStixDomainObjectTypes, onlyObservables } = this.props;
+    const { classes, t, stixCoreObjectTypes, onlyObservables } = this.props;
     const stixDomainObjectsPaginationOptions = {
       search: this.state.search,
-      types: targetStixDomainObjectTypes
+      types: stixCoreObjectTypes
         ? filter(
           (n) => n !== 'Stix-Cyber-Observable',
-          targetStixDomainObjectTypes,
+          stixCoreObjectTypes,
         )
         : null,
       orderBy: 'created_at',
@@ -544,7 +552,7 @@ class StixSightingRelationshipCreationFromRelation extends Component {
             }
             variables={{
               search: this.state.search,
-              types: targetStixDomainObjectTypes,
+              types: stixCoreObjectTypes,
               count: 50,
               orderBy: 'created_at',
               orderMode: 'desc',
@@ -567,10 +575,9 @@ class StixSightingRelationshipCreationFromRelation extends Component {
           />
           <StixDomainObjectCreation
             display={this.state.open}
-            contextual={true}
             inputValue={this.state.search}
             paginationOptions={stixDomainObjectsPaginationOptions}
-            targetStixDomainObjectTypes={targetStixDomainObjectTypes}
+            stixDomainObjectTypes={stixCoreObjectTypes}
           />
         </div>
       </div>
@@ -748,7 +755,7 @@ class StixSightingRelationshipCreationFromRelation extends Component {
                 name="confidence"
                 label={t('Confidence level')}
                 fullWidth={true}
-                containerstyle={{ marginTop: 20, width: '100%' }}
+                containerStyle={fieldSpacingContainerStyle}
               />
               <Field
                 component={DateTimePickerField}
@@ -908,7 +915,7 @@ class StixSightingRelationshipCreationFromRelation extends Component {
 StixSightingRelationshipCreationFromRelation.propTypes = {
   entityId: PropTypes.string,
   isFrom: PropTypes.bool,
-  targetStixDomainObjectTypes: PropTypes.array,
+  stixCoreObjectTypes: PropTypes.array,
   paginationOptions: PropTypes.object,
   classes: PropTypes.object,
   t: PropTypes.func,

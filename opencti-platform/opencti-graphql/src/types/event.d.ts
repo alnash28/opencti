@@ -1,37 +1,52 @@
 import type { Operation } from 'fast-json-patch';
 import { StixCoreObject } from './stix-common';
 import { UserOrigin } from './user';
+import type { StoreRelation } from './store';
 
 interface CommitContext {
   message: string;
-  references: Array<string>;
+  external_references: Array<string>;
 }
 
-interface CreateEventOpts {
+interface EventOpts {
+  publishStreamEvent?: boolean;
+}
+
+interface CreateEventOpts extends EventOpts {
   withoutMessage?: boolean;
-  publishStreamEvent?: boolean;
 }
 
-interface UpdateEventOpts {
-  commit?: CommitContext | undefined,
-  publishStreamEvent?: boolean;
+interface UpdateEventOpts extends EventOpts {
+  commit?: CommitContext | undefined;
 }
 
-interface DeleteEventOpts {
-  publishStreamEvent?: boolean;
+interface RelationCreation {
+  element: StoreRelation;
+  event: BaseEvent | undefined;
+  isCreation: boolean;
 }
 
 // stream
-interface Event {
-  id?: string;
-  version: string;
+interface BaseEvent {
   type: string;
-  origin: Partial<UserOrigin>;
-  message: string;
-  data: StixCoreObject;
+  version: string;
 }
 
-interface UpdateEvent extends Event {
+interface StreamNotifEvent extends BaseEvent {
+  notification_id: string
+  type: 'live' | 'digest';
+}
+
+interface StreamDataEvent extends BaseEvent {
+  scope: 'internal' | 'external';
+  type: 'update' | 'create' | 'delete';
+  origin: Partial<UserOrigin>;
+  message: string;
+  data: StixCoreObject
+}
+
+interface UpdateEvent extends StreamDataEvent {
+  type: 'update';
   commit: CommitContext | undefined;
   context: {
     patch: Array<Operation>;
@@ -39,13 +54,15 @@ interface UpdateEvent extends Event {
   };
 }
 
-interface DeleteEvent extends Event {
+interface DeleteEvent extends StreamDataEvent {
+  type: 'delete';
   context: {
     deletions: Array<StixCoreObject>;
   };
 }
 
-interface MergeEvent extends Event {
+interface MergeEvent extends StreamDataEvent {
+  type: 'merge';
   context: {
     patch: Array<Operation>;
     reverse_patch: Array<Operation>;
@@ -55,8 +72,17 @@ interface MergeEvent extends Event {
   };
 }
 
-interface StreamEvent {
-  id: string;
-  event: 'update' | 'create' | 'delete';
-  data: Event
+interface DependenciesDeleteEvent extends BaseEvent {
+  type: 'delete-dependencies';
+  data: {
+    ids: Array<string>
+  };
 }
+
+export interface SseEvent<T extends BaseEvent> {
+  id: string;
+  event: string;
+  data: T;
+}
+
+type DataEvent = UpdateEvent | DataEvent | MergeEvent;

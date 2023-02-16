@@ -18,8 +18,9 @@ import ThreatActorsLines, {
   threatActorsLinesQuery,
 } from './threat_actors/ThreatActorsLines';
 import ThreatActorCreation from './threat_actors/ThreatActorCreation';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../utils/Security';
-import { isUniqFilter } from '../common/lists/Filters';
+import Security from '../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../utils/hooks/useGranted';
+import { isUniqFilter } from '../../../utils/filters/filtersUtils';
 
 class ThreatActors extends Component {
   constructor(props) {
@@ -117,7 +118,6 @@ class ThreatActors extends Component {
       name: {
         label: 'Name',
       },
-
       created: {
         label: 'Creation date',
       },
@@ -149,6 +149,7 @@ class ThreatActors extends Component {
           'created_end_date',
           'createdBy',
           'revoked',
+          'confidence',
         ]}
       >
         <QueryRenderer
@@ -223,6 +224,7 @@ class ThreatActors extends Component {
           'created_start_date',
           'created_end_date',
           'createdBy',
+          'confidence',
         ]}
       >
         <QueryRenderer

@@ -9,7 +9,7 @@ const error = (type, message, data) => {
 };
 
 export const AUTH_FAILURE = 'AuthFailure';
-export const AuthenticationFailure = (reason, data) => error(AUTH_FAILURE, reason || 'Wrong name or password', {
+export const AuthenticationFailure = (reason, data) => error(AUTH_FAILURE, reason || 'Bad login or password', {
   http_status: 401,
   category: CATEGORY_TECHNICAL,
   ...data,
@@ -24,7 +24,14 @@ export const AuthRequired = (data) => error(AUTH_REQUIRED, 'You must be logged i
 });
 
 export const OTP_REQUIRED = 'OtpRequired';
-export const OtpRequired = (data) => error(OTP_REQUIRED, 'You must validate your accout with 2FA.', {
+export const OtpRequired = (data) => error(OTP_REQUIRED, 'You must validate your account with 2FA.', {
+  http_status: 401,
+  category: CATEGORY_TECHNICAL,
+  ...data,
+});
+
+export const OTP_REQUIRED_ACTIVATION = 'OtpRequiredActivation';
+export const OtpRequiredActivation = (data) => error(OTP_REQUIRED_ACTIVATION, 'You must activate your account with 2FA.', {
   http_status: 401,
   category: CATEGORY_TECHNICAL,
   ...data,
@@ -80,9 +87,25 @@ export const FunctionalError = (reason, data) => error('FunctionalError', 'Busin
   ...data,
 });
 
+export const ALREADY_DELETED_ERROR = 'AlreadyDeletedError';
+export const AlreadyDeletedError = (data) => error(ALREADY_DELETED_ERROR, 'Business validation', {
+  reason: 'Already deleted elements',
+  http_status: 400,
+  category: CATEGORY_BUSINESS,
+  ...data,
+});
+
+const TYPE_LOCK = 'LockError';
 export const TYPE_LOCK_ERROR = 'ExecutionError';
-export const LockTimeoutError = (data, reason) => error('LockError', 'Lock timeout', {
+export const LockTimeoutError = (data, reason) => error(TYPE_LOCK, 'Lock timeout', {
   reason: reason ?? 'Execution timeout, too many concurrent call on the same entities',
+  http_status: 500,
+  category: CATEGORY_BUSINESS,
+  ...data,
+});
+
+export const EngineShardsError = (data) => error(TYPE_LOCK, 'Engine shards failure', {
+  reason: 'Engine execution fail, some shards are not available, please check your engine status',
   http_status: 500,
   category: CATEGORY_BUSINESS,
   ...data,

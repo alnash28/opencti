@@ -1,7 +1,7 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
 import { compose } from 'ramda';
-import { graphql, createFragmentContainer } from 'react-relay';
+import { createFragmentContainer, graphql } from 'react-relay';
 import withStyles from '@mui/styles/withStyles';
 import Grid from '@mui/material/Grid';
 import inject18n from '../../../../components/i18n';
@@ -10,7 +10,11 @@ import NoteDetails from './NoteDetails';
 import NoteEdition from './NoteEdition';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../external_references/StixCoreObjectExternalReferences';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security, { CollaborativeSecurity } from '../../../../utils/Security';
+import {
+  KNOWLEDGE_KNPARTICIPATE,
+  KNOWLEDGE_KNUPDATE_KNDELETE,
+} from '../../../../utils/hooks/useGranted';
 import StixCoreObjectLatestHistory from '../../common/stix_core_objects/StixCoreObjectLatestHistory';
 import NotePopover from './NotePopover';
 import ContainerStixObjectsOrStixRelationships from '../../common/containers/ContainerStixObjectsOrStixRelationships';
@@ -29,17 +33,32 @@ class NoteComponent extends Component {
     const { classes, note } = this.props;
     return (
       <div className={classes.container}>
-        <ContainerHeader container={note} PopoverComponent={<NotePopover />} />
+        <CollaborativeSecurity
+          data={note}
+          needs={[KNOWLEDGE_KNUPDATE_KNDELETE]}
+          placeholder={
+            <ContainerHeader
+              container={note}
+              PopoverComponent={<NotePopover note={note} />}
+            />
+          }
+        >
+          <ContainerHeader
+            container={note}
+            PopoverComponent={<NotePopover note={note} />}
+            popoverSecurity={[KNOWLEDGE_KNPARTICIPATE]}
+          />
+        </CollaborativeSecurity>
         <Grid
           container={true}
           spacing={3}
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={note} />
+            <NoteDetails note={note} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <ContainerStixObjectsOrStixRelationships container={note} />
+            <StixDomainObjectOverview stixDomainObject={note} />
           </Grid>
         </Grid>
         <Grid
@@ -49,7 +68,10 @@ class NoteComponent extends Component {
           style={{ marginTop: 25 }}
         >
           <Grid item={true} xs={12}>
-            <NoteDetails note={note} />
+            <ContainerStixObjectsOrStixRelationships
+              isSupportParticipation={true}
+              container={note}
+            />
           </Grid>
         </Grid>
         <Grid
@@ -65,7 +87,7 @@ class NoteComponent extends Component {
             <StixCoreObjectLatestHistory stixCoreObjectId={note.id} />
           </Grid>
         </Grid>
-        <Security needs={[KNOWLEDGE_KNUPDATE]}>
+        <Security needs={[KNOWLEDGE_KNPARTICIPATE]}>
           <NoteEdition noteId={note.id} />
         </Security>
       </div>
@@ -93,15 +115,24 @@ const Note = createFragmentContainer(NoteComponent, {
       created_at
       updated_at
       createdBy {
-        ... on Identity {
-          id
-          name
-          entity_type
-        }
+        id
+        name
+        entity_type
       }
       creator {
         id
         name
+      }
+      objectMarking {
+        edges {
+          node {
+            id
+            definition_type
+            definition
+            x_opencti_order
+            x_opencti_color
+          }
+        }
       }
       objectLabel {
         edges {

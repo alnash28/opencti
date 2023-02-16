@@ -1,5 +1,6 @@
+import { expect, it, describe } from 'vitest';
 import gql from 'graphql-tag';
-import { ADMIN_USER, queryAsAdmin } from '../../utils/testQuery';
+import { ADMIN_USER, testContext, queryAsAdmin } from '../../utils/testQuery';
 import { elLoadById } from '../../../src/database/engine';
 
 const LIST_QUERY = gql`
@@ -41,7 +42,7 @@ const TIMESERIES_QUERY = gql`
     $startDate: DateTime!
     $endDate: DateTime!
     $interval: String!
-    $relationship_type: String
+    $relationship_type: [String]
   ) {
     campaignsTimeSeries(
       objectId: $objectId
@@ -135,7 +136,7 @@ describe('Campaign resolver standard behavior', () => {
     expect(queryResult.data.campaignsTimeSeries[2].value).toEqual(1);
   });
   it("should timeseries of an entity's campaigns", async () => {
-    const intrusionSet = await elLoadById(ADMIN_USER, 'intrusion-set--18854f55-ac7c-4634-bd9a-352dd07613b7');
+    const intrusionSet = await elLoadById(testContext, ADMIN_USER, 'intrusion-set--18854f55-ac7c-4634-bd9a-352dd07613b7');
     const queryResult = await queryAsAdmin({
       query: TIMESERIES_QUERY,
       variables: {
@@ -145,7 +146,7 @@ describe('Campaign resolver standard behavior', () => {
         startDate: '2020-01-01T00:00:00+00:00',
         endDate: '2021-01-01T00:00:00+00:00',
         interval: 'month',
-        relationship_type: 'attributed-to',
+        relationship_type: ['attributed-to'],
       },
     });
     expect(queryResult.data.campaignsTimeSeries.length).toEqual(13);
@@ -235,7 +236,7 @@ describe('Campaign resolver standard behavior', () => {
   });
   it('should delete relation in campaign', async () => {
     const RELATION_DELETE_QUERY = gql`
-      mutation CampaignEdit($id: ID!, $toId: String!, $relationship_type: String!) {
+      mutation CampaignEdit($id: ID!, $toId: StixRef!, $relationship_type: String!) {
         campaignEdit(id: $id) {
           relationDelete(toId: $toId, relationship_type: $relationship_type) {
             id

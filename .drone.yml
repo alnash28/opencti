@@ -4,9 +4,9 @@ name: opencti-tests
 
 steps:
   - name: api-tests
-    image: node:16.10.0-alpine
+    image: node:18-alpine
     environment:
-      APP__BASE_URL: http://api-tests:4000/
+      APP__BASE_URL: http://api-tests:4010/
       APP__ADMIN__PASSWORD: admin
       APP__SYNC_RAW_START_REMOTE_URI: http://opencti-raw-start:4100/graphql
       APP__SYNC_LIVE_START_REMOTE_URI: http://opencti-live-start:4200/graphql
@@ -25,7 +25,7 @@ steps:
       SMTP__PASSWORD: frhJ2mSPTfaEutpbug
       PYTHONUNBUFFERED: 1
     commands:
-      - apk add build-base git libffi-dev python3
+      - apk add build-base git libffi-dev python3 python3-dev
       - ln -sf python3 /usr/bin/python
       - python3 -m ensurepip
       - pip3 install --no-cache --upgrade pip setuptools
@@ -33,6 +33,7 @@ steps:
       - cd opencti-platform/opencti-graphql
       - yarn install
       - yarn build
+      - yarn check-ts
       - yarn lint
       - pip3 install --upgrade --force --no-cache-dir git+https://github.com/OpenCTI-Platform/client-python@master
       - sleep 60
@@ -46,11 +47,12 @@ steps:
         - opencti-platform/opencti-graphql/coverage
 
   - name: frontend-tests
-    image: nikolaik/python-nodejs:python3.10-nodejs16-alpine
+    image: node:16-alpine
     commands:
       - cd opencti-platform/opencti-front
       - yarn install
       - yarn build
+      - yarn check-ts
       - yarn lint
       - NODE_OPTIONS=--max_old_space_size=8192 yarn test
 
@@ -96,22 +98,23 @@ steps:
 
 services:
   - name: redis
-    image: redis:7.0.0
+    image: redis:7.0.8
   - name: elastic
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.3
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.6.1
     environment:
       discovery.type: single-node
+      xpack.security.enabled: false
       ES_JAVA_OPTS: -Xms2g -Xmx2g
   - name: minio
-    image: minio/minio:RELEASE.2022-05-19T18-20-59Z
+    image: minio/minio:RELEASE.2023-01-31T02-24-19Z
     environment:
       MINIO_ROOT_USER: ChangeMe
       MINIO_ROOT_PASSWORD: ChangeMe
     command: [server, /data]
   - name: rabbitmq
-    image: rabbitmq:3.10-management
+    image: rabbitmq:3.11-management
   - name: opencti-raw-start
-    image: nikolaik/python-nodejs:python3.10-nodejs16-alpine
+    image: nikolaik/python-nodejs:python3.10-nodejs18-alpine
     environment:
       APP__PORT: 4100
       APP__ADMIN__PASSWORD: admin
@@ -135,7 +138,7 @@ services:
       - pip3 install --upgrade --force --no-cache-dir git+https://github.com/OpenCTI-Platform/client-python@master
       - NODE_OPTIONS=--max_old_space_size=8192 yarn start
   - name: opencti-live-start
-    image: nikolaik/python-nodejs:python3.10-nodejs16-alpine
+    image: nikolaik/python-nodejs:python3.10-nodejs18-alpine
     environment:
       APP__PORT: 4200
       APP__ADMIN__PASSWORD: admin
@@ -151,15 +154,15 @@ services:
       SUBSCRIPTION_SCHEDULER__ENABLED: false
     commands:
       - sleep 90
-      - apk add build-base git libffi-dev
+      - apk add build-base git libffi-dev python3-dev
       - cp -a opencti-platform /tmp/live-start-platform
       - cd /tmp/live-start-platform/opencti-graphql
       - yarn install
       - yarn install:python
       - pip3 install --upgrade --force --no-cache-dir git+https://github.com/OpenCTI-Platform/client-python@master
-      - NODE_OPTIONS=--max_old_space_size=12288 yarn start
+      - NODE_OPTIONS=--max_old_space_size=8192 yarn start
   - name: opencti-direct-start
-    image: nikolaik/python-nodejs:python3.10-nodejs16-alpine
+    image: nikolaik/python-nodejs:python3.10-nodejs18-alpine
     environment:
       APP__PORT: 4300
       APP__ADMIN__PASSWORD: admin
@@ -175,15 +178,29 @@ services:
       SUBSCRIPTION_SCHEDULER__ENABLED: false
     commands:
       - sleep 60
-      - apk add build-base git libffi-dev
+      - apk add build-base git libffi-dev python3-dev
       - cp -a opencti-platform /tmp/direct-start-platform
       - cd /tmp/direct-start-platform/opencti-graphql
       - yarn install
       - yarn install:python
       - pip3 install --upgrade --force --no-cache-dir git+https://github.com/OpenCTI-Platform/client-python@master
-      - NODE_OPTIONS=--max_old_space_size=12288 yarn start
+      - NODE_OPTIONS=--max_old_space_size=8192 yarn start
+  - name: opencti-direct-worker
+    image: nikolaik/python-nodejs:python3.10-nodejs18-alpine
+    environment:
+      OPENCTI_URL: http://opencti-direct-start:4300
+      OPENCTI_TOKEN: bfa014e0-e02e-4aa6-a42b-603b19dcf159
+      WORKER_LOG_LEVEL: info
+    commands:
+      - sleep 180
+      - apk add build-base git libffi-dev
+      - cp -a opencti-worker /tmp/direct-start-worker
+      - cd /tmp/direct-start-worker
+      - pip3 install -r src/requirements.txt
+      - pip3 install --upgrade --force --no-cache-dir git+https://github.com/OpenCTI-Platform/client-python@master
+      - python3 src/worker.py
   - name: opencti-restore-start
-    image: nikolaik/python-nodejs:python3.10-nodejs16-alpine
+    image: nikolaik/python-nodejs:python3.10-nodejs18-alpine
     environment:
       APP__PORT: 4400
       APP__ADMIN__PASSWORD: admin
@@ -199,10 +216,10 @@ services:
       SUBSCRIPTION_SCHEDULER__ENABLED: false
     commands:
       - sleep 120
-      - apk add build-base git libffi-dev
+      - apk add build-base git libffi-dev python3-dev
       - cp -a opencti-platform /tmp/restore-start-platform
       - cd /tmp/restore-start-platform/opencti-graphql
       - yarn install
       - yarn install:python
       - pip3 install --upgrade --force --no-cache-dir git+https://github.com/OpenCTI-Platform/client-python@master
-      - NODE_OPTIONS=--max_old_space_size=12288 yarn start
+      - NODE_OPTIONS=--max_old_space_size=8192 yarn start

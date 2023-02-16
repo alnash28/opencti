@@ -1,21 +1,21 @@
 /* eslint-disable camelcase */
-import { createInferredRelation, deleteInferredRuleElement, internalLoadById } from '../../database/middleware';
+import { createInferredRelation, deleteInferredRuleElement } from '../../database/middleware';
 import { buildPeriodFromDates, computeRangeIntersection } from '../../utils/format';
 import { RELATION_TARGETS } from '../../schema/stixCoreRelationship';
 import def from './LocalizationOfTargetsDefinition';
-import { createRuleContent, RULE_MANAGER_USER } from '../rules';
+import { createRuleContent } from '../rules';
 import { computeAverage } from '../../database/utils';
 import type { StixRelation } from '../../types/stix-sro';
-import type { Event } from '../../types/event';
 import { STIX_EXT_OCTI } from '../../types/stix-extensions';
-import type { BasicStoreObject, BasicStoreRelation } from '../../types/store';
+import type { BasicStoreObject, BasicStoreRelation, StoreObject } from '../../types/store';
 import { RELATION_OBJECT_MARKING } from '../../schema/stixMetaRelationship';
-import type { StixObject } from '../../types/stix-common';
+import { executionContext, RULE_MANAGER_USER } from '../../utils/access';
+import { internalLoadById } from '../../database/middleware-loader';
 
 const ruleLocalizationOfTargetsBuilder = () => {
   // Execution
-  const applyUpsert = async (data: StixRelation): Promise<Array<Event>> => {
-    const events: Array<Event> = [];
+  const applyUpsert = async (data: StixRelation): Promise<void> => {
+    const context = executionContext(def.name, RULE_MANAGER_USER);
     const { extensions } = data;
     const createdId = extensions[STIX_EXT_OCTI].id;
     const sourceRef = extensions[STIX_EXT_OCTI].source_ref;
@@ -23,7 +23,7 @@ const ruleLocalizationOfTargetsBuilder = () => {
     const { object_marking_refs: markings } = data;
     const { confidence: createdConfidence, start_time: startTime, stop_time: stopTime } = data;
     const creationRange = buildPeriodFromDates(startTime, stopTime);
-    const internalSource = await internalLoadById(RULE_MANAGER_USER, sourceRef) as unknown as BasicStoreObject;
+    const internalSource = await internalLoadById(context, RULE_MANAGER_USER, sourceRef) as unknown as BasicStoreObject;
     if (internalSource.entity_type === RELATION_TARGETS) {
       const resolvedSource = internalSource as BasicStoreRelation;
       const { internal_id: foundRelationId, fromId: foundFrom, toId: foundTo, [RELATION_OBJECT_MARKING]: object_marking_refs } = resolvedSource;
@@ -43,22 +43,17 @@ const ruleLocalizationOfTargetsBuilder = () => {
         stop_time: range.end,
         objectMarking: elementMarkings,
       });
-      const event = await createInferredRelation(input, ruleContent) as Event;
-      // Re inject event if needed
-      if (event) {
-        events.push(event);
-      }
+      await createInferredRelation(context, input, ruleContent);
     }
-    return events;
   };
   // Contract
-  const clean = async (element: StixObject, deletedDependencies: Array<string>): Promise<Array<Event>> => {
-    return deleteInferredRuleElement(def.id, element, deletedDependencies) as Promise<Array<Event>>;
+  const clean = async (element: StoreObject, deletedDependencies: Array<string>): Promise<void> => {
+    await deleteInferredRuleElement(def.id, element, deletedDependencies);
   };
-  const insert = async (element: StixRelation): Promise<Array<Event>> => {
+  const insert = async (element: StixRelation): Promise<void> => {
     return applyUpsert(element);
   };
-  const update = async (element: StixRelation): Promise<Array<Event>> => {
+  const update = async (element: StixRelation): Promise<void> => {
     return applyUpsert(element);
   };
   return { ...def, insert, update, clean };

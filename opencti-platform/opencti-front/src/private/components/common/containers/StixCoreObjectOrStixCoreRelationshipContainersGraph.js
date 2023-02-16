@@ -681,8 +681,16 @@ class StixCoreObjectOrStixCoreRelationshipContainersGraphComponent extends Compo
             onZoom={this.onZoom.bind(this)}
             onZoomEnd={this.handleZoomEnd.bind(this)}
             nodeRelSize={4}
-            nodeCanvasObject={
-              (node, ctx) => nodePaint(node, node.color, ctx, this.selectedNodes.has(node))
+            nodeCanvasObject={(node, ctx) => nodePaint(
+              {
+                selected: theme.palette.secondary.main,
+                inferred: theme.palette.warning.main,
+              },
+              node,
+              node.color,
+              ctx,
+              this.selectedNodes.has(node),
+            )
             }
             nodePointerAreaPaint={nodeAreaPaint}
             // linkDirectionalParticles={(link) => (this.selectedLinks.has(link) ? 20 : 0)}
@@ -814,7 +822,10 @@ const StixCoreObjectOrStixCoreRelationshipContainersGraph = createRefetchContain
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -834,6 +845,10 @@ const StixCoreObjectOrStixCoreRelationshipContainersGraph = createRefetchContain
                 ... on Report {
                   name
                   published
+                }
+                ... on Grouping {
+                  name
+                  created
                 }
                 ... on CourseOfAction {
                   name
@@ -868,6 +883,9 @@ const StixCoreObjectOrStixCoreRelationshipContainersGraph = createRefetchContain
                 ... on City {
                   name
                 }
+                ... on AdministrativeArea {
+                  name
+                }
                 ... on Country {
                   name
                 }
@@ -894,6 +912,29 @@ const StixCoreObjectOrStixCoreRelationshipContainersGraph = createRefetchContain
                   name
                   first_seen
                   last_seen
+                }
+                ... on Event {
+                  name
+                  start_time
+                  stop_time
+                }
+                ... on Channel {
+                  name
+                }
+                ... on Narrative {
+                  name
+                }
+                ... on Language {
+                  name
+                }
+                ... on DataComponent {
+                  name
+                }
+                ... on DataSource {
+                  name
+                }
+                ... on Case {
+                  name
                 }
                 ... on StixCyberObservable {
                   observable_value
@@ -959,7 +1000,10 @@ const StixCoreObjectOrStixCoreRelationshipContainersGraph = createRefetchContain
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }

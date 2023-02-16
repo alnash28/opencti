@@ -17,7 +17,8 @@ import StixCyberObservableEntitiesLines, {
   stixCyberObservableEntitiesLinesQuery,
 } from './StixCyberObservableEntitiesLines';
 import StixCoreRelationshipCreationFromEntity from '../../common/stix_core_relationships/StixCoreRelationshipCreationFromEntity';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import SearchInput from '../../../../components/SearchInput';
 import { TEN_SECONDS } from '../../../../utils/Time';
 
@@ -74,40 +75,52 @@ const inlineStylesHeaders = {
   },
   relationship_type: {
     float: 'left',
-    width: '15%',
+    width: '10%',
     fontSize: 12,
     fontWeight: '700',
     cursor: 'pointer',
   },
   entity_tyoe: {
     float: 'left',
-    width: '20%',
+    width: '10%',
     fontSize: 12,
     fontWeight: '700',
   },
   name: {
     float: 'left',
-    width: '20%',
+    width: '22%',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  createdBy: {
+    float: 'left',
+    width: '12%',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  creator: {
+    float: 'left',
+    width: '12%',
     fontSize: 12,
     fontWeight: '700',
   },
   start_time: {
     float: 'left',
-    width: '15%',
+    width: '10%',
     fontSize: 12,
     fontWeight: '700',
     cursor: 'pointer',
   },
   stop_time: {
     float: 'left',
-    width: '15%',
+    width: '10%',
     fontSize: 12,
     fontWeight: '700',
     cursor: 'pointer',
   },
   confidence: {
     float: 'left',
-    width: '15%',
+    width: '12%',
     fontSize: 12,
     fontWeight: '700',
     cursor: 'pointer',
@@ -212,6 +225,9 @@ class StixCyberObservableEntities extends Component {
               'Country',
               'City',
               'Position',
+              'Attack-Pattern',
+              'Narrative',
+              'Channel',
             ]}
             targetStixCyberObservableTypes={['Stix-Cyber-Observable']}
             defaultStartTime={defaultStartTime}
@@ -250,6 +266,8 @@ class StixCyberObservableEntities extends Component {
                     {this.SortHeader('relationship_type', 'Relationship', true)}
                     {this.SortHeader('entity_tyoe', 'Entity type', false)}
                     {this.SortHeader('name', 'Name', false)}
+                    {this.SortHeader('createdBy', 'Author', false)}
+                    {this.SortHeader('creator', 'Creator', false)}
                     {this.SortHeader('start_time', 'First obs.', true)}
                     {this.SortHeader('stop_time', 'Last obs.', true)}
                     {this.SortHeader('confidence', 'Confidence level', true)}

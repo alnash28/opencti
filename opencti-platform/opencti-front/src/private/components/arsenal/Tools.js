@@ -12,8 +12,9 @@ import inject18n from '../../../components/i18n';
 import ListLines from '../../../components/list_lines/ListLines';
 import ToolsLines, { toolsLinesQuery } from './tools/ToolsLines';
 import ToolCreation from './tools/ToolCreation';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../utils/Security';
-import { isUniqFilter } from '../common/lists/Filters';
+import Security from '../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../utils/hooks/useGranted';
+import { isUniqFilter } from '../../../utils/filters/filtersUtils';
 
 class Tools extends Component {
   constructor(props) {
@@ -147,6 +148,7 @@ class Tools extends Component {
           'created_start_date',
           'created_end_date',
           'createdBy',
+          'confidence',
         ]}
       >
         <QueryRenderer

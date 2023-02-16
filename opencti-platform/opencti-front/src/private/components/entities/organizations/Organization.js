@@ -10,7 +10,8 @@ import OrganizationEdition from './OrganizationEdition';
 import OrganizationPopover from './OrganizationPopover';
 import StixCoreObjectOrStixCoreRelationshipLastReports from '../../analysis/reports/StixCoreObjectOrStixCoreRelationshipLastReports';
 import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
@@ -35,6 +36,8 @@ class OrganizationComponent extends Component {
     return (
       <div className={classes.container}>
         <StixDomainObjectHeader
+          entityType={'Organization'}
+          disableSharing={true}
           stixDomainObject={organization}
           isOpenctiAlias={true}
           PopoverComponent={<OrganizationPopover />}
@@ -47,10 +50,10 @@ class OrganizationComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={organization} />
+            <OrganizationDetails organization={organization} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <OrganizationDetails organization={organization} />
+            <StixDomainObjectOverview stixDomainObject={organization} />
           </Grid>
         </Grid>
         <Grid
@@ -90,6 +93,7 @@ class OrganizationComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={organization.id}
+          defaultMarking={(organization.objectMarking?.edges ?? []).map((edge) => edge.node)}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <OrganizationEdition organizationId={organization.id} />
@@ -135,7 +139,9 @@ const Organization = createFragmentContainer(OrganizationComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }

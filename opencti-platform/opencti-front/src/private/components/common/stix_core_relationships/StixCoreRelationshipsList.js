@@ -1,30 +1,24 @@
-import React, { Component } from 'react';
-import * as PropTypes from 'prop-types';
+import React from 'react';
 import * as R from 'ramda';
 import { graphql } from 'react-relay';
-import withTheme from '@mui/styles/withTheme';
-import withStyles from '@mui/styles/withStyles';
 import CircularProgress from '@mui/material/CircularProgress';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import ListItem from '@mui/material/ListItem';
 import { Link } from 'react-router-dom';
-import Tooltip from '@mui/material/Tooltip';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import List from '@mui/material/List';
-import Chip from '@mui/material/Chip';
+import makeStyles from '@mui/styles/makeStyles';
 import ItemIcon from '../../../../components/ItemIcon';
-import inject18n from '../../../../components/i18n';
+import { useFormatter } from '../../../../components/i18n';
 import { QueryRenderer } from '../../../../relay/environment';
 import { resolveLink } from '../../../../utils/Entity';
 import { defaultValue } from '../../../../utils/Graph';
 import { convertFilters } from '../../../../utils/ListParameters';
-import Filters, { isUniqFilter } from '../lists/Filters';
-import { truncate } from '../../../../utils/String';
 import ItemMarkings from '../../../../components/ItemMarkings';
 
-const styles = (theme) => ({
+const useStyles = makeStyles((theme) => ({
   container: {
     width: '100%',
     height: '100%',
@@ -85,11 +79,41 @@ const styles = (theme) => ({
   chip: {
     margin: theme.spacing(1) / 4,
   },
-});
+}));
+
+export const stixCoreRelationshipsListSearchQuery = graphql`
+  query StixCoreRelationshipsListSearchQuery(
+    $search: String
+    $fromId: [String]
+    $toId: [String]
+    $relationship_type: [String]
+    $count: Int!
+    $filters: [StixCoreRelationshipsFiltering]
+  ) {
+    stixCoreRelationships(
+      search: $search
+      fromId: $fromId
+      toId: $toId
+      relationship_type: $relationship_type
+      first: $count
+      filters: $filters
+    ) {
+      edges {
+        node {
+          id
+          standard_id
+          entity_type
+          parent_types
+          relationship_type
+        }
+      }
+    }
+  }
+`;
 
 const stixCoreRelationshipsListQuery = graphql`
   query StixCoreRelationshipsListQuery(
-    $search: String
+    $relationship_type: [String]
     $fromId: [String]
     $toId: [String]
     $fromTypes: [String]
@@ -98,9 +122,10 @@ const stixCoreRelationshipsListQuery = graphql`
     $orderBy: StixCoreRelationshipsOrdering
     $orderMode: OrderingMode
     $filters: [StixCoreRelationshipsFiltering]
+    $search: String
   ) {
     stixCoreRelationships(
-      search: $search
+      relationship_type: $relationship_type
       fromId: $fromId
       toId: $toId
       fromTypes: $fromTypes
@@ -109,6 +134,7 @@ const stixCoreRelationshipsListQuery = graphql`
       orderBy: $orderBy
       orderMode: $orderMode
       filters: $filters
+      search: $search
     ) {
       edges {
         node {
@@ -135,6 +161,7 @@ const stixCoreRelationshipsListQuery = graphql`
               node {
                 id
                 definition
+                x_opencti_order
                 x_opencti_color
               }
             }
@@ -202,6 +229,9 @@ const stixCoreRelationshipsListQuery = graphql`
                 name
               }
               ... on City {
+                name
+              }
+              ... on AdministrativeArea {
                 name
               }
               ... on Country {
@@ -289,6 +319,9 @@ const stixCoreRelationshipsListQuery = graphql`
                   ... on City {
                     name
                   }
+                  ... on AdministrativeArea {
+                    name
+                  }
                   ... on Country {
                     name
                   }
@@ -334,6 +367,8 @@ const stixCoreRelationshipsListQuery = graphql`
                                 node {
                                   id
                                   definition
+                                  x_opencti_order
+                                  x_opencti_color
                                 }
                               }
                             }
@@ -363,6 +398,10 @@ const stixCoreRelationshipsListQuery = graphql`
                             name
                             description
                             published
+                          }
+                          ... on Grouping {
+                            name
+                            description
                           }
                           ... on CourseOfAction {
                             name
@@ -404,6 +443,10 @@ const stixCoreRelationshipsListQuery = graphql`
                             description
                           }
                           ... on City {
+                            name
+                            description
+                          }
+                          ... on AdministrativeArea {
                             name
                             description
                           }
@@ -508,6 +551,9 @@ const stixCoreRelationshipsListQuery = graphql`
                         name
                       }
                       ... on City {
+                        name
+                      }
+                      ... on AdministrativeArea {
                         name
                       }
                       ... on Country {
@@ -628,6 +674,8 @@ const stixCoreRelationshipsListQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -657,6 +705,10 @@ const stixCoreRelationshipsListQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -848,6 +900,8 @@ const stixCoreRelationshipsListQuery = graphql`
                                 node {
                                   id
                                   definition
+                                  x_opencti_order
+                                  x_opencti_color
                                 }
                               }
                             }
@@ -877,6 +931,10 @@ const stixCoreRelationshipsListQuery = graphql`
                             name
                             description
                             published
+                          }
+                          ... on Grouping {
+                            name
+                            description
                           }
                           ... on CourseOfAction {
                             name
@@ -1071,6 +1129,8 @@ const stixCoreRelationshipsListQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -1100,6 +1160,10 @@ const stixCoreRelationshipsListQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -1288,6 +1352,8 @@ const stixCoreRelationshipsListQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -1317,6 +1383,10 @@ const stixCoreRelationshipsListQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -1512,6 +1582,8 @@ const stixCoreRelationshipsListQuery = graphql`
                                 node {
                                   id
                                   definition
+                                  x_opencti_order
+                                  x_opencti_color
                                 }
                               }
                             }
@@ -1541,6 +1613,10 @@ const stixCoreRelationshipsListQuery = graphql`
                             name
                             description
                             published
+                          }
+                          ... on Grouping {
+                            name
+                            description
                           }
                           ... on CourseOfAction {
                             name
@@ -1806,6 +1882,8 @@ const stixCoreRelationshipsListQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -1835,6 +1913,10 @@ const stixCoreRelationshipsListQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -2026,6 +2108,8 @@ const stixCoreRelationshipsListQuery = graphql`
                                 node {
                                   id
                                   definition
+                                  x_opencti_order
+                                  x_opencti_color
                                 }
                               }
                             }
@@ -2055,6 +2139,10 @@ const stixCoreRelationshipsListQuery = graphql`
                             name
                             description
                             published
+                          }
+                          ... on Grouping {
+                            name
+                            description
                           }
                           ... on CourseOfAction {
                             name
@@ -2249,6 +2337,8 @@ const stixCoreRelationshipsListQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -2278,6 +2368,10 @@ const stixCoreRelationshipsListQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -2466,6 +2560,8 @@ const stixCoreRelationshipsListQuery = graphql`
                                     node {
                                       id
                                       definition
+                                      x_opencti_order
+                                      x_opencti_color
                                     }
                                   }
                                 }
@@ -2495,6 +2591,10 @@ const stixCoreRelationshipsListQuery = graphql`
                                 name
                                 description
                                 published
+                              }
+                              ... on Grouping {
+                                name
+                                description
                               }
                               ... on CourseOfAction {
                                 name
@@ -2599,6 +2699,7 @@ const stixCoreRelationshipsListQuery = graphql`
               node {
                 id
                 definition
+                x_opencti_order
                 x_opencti_color
               }
             }
@@ -2704,6 +2805,8 @@ const stixCoreRelationshipsListQuery = graphql`
                           node {
                             id
                             definition
+                            x_opencti_order
+                            x_opencti_color
                           }
                         }
                       }
@@ -2733,6 +2836,10 @@ const stixCoreRelationshipsListQuery = graphql`
                       name
                       description
                       published
+                    }
+                    ... on Grouping {
+                      name
+                      description
                     }
                     ... on CourseOfAction {
                       name
@@ -3081,6 +3188,8 @@ const stixCoreRelationshipsListQuery = graphql`
                           node {
                             id
                             definition
+                            x_opencti_order
+                            x_opencti_color
                           }
                         }
                       }
@@ -3110,6 +3219,10 @@ const stixCoreRelationshipsListQuery = graphql`
                       name
                       description
                       published
+                    }
+                    ... on Grouping {
+                      name
+                      description
                     }
                     ... on CourseOfAction {
                       name
@@ -3355,76 +3468,50 @@ const stixCoreRelationshipsListQuery = graphql`
   }
 `;
 
-class StixCoreRelationshipsList extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      filters: R.propOr({}, 'filters', props.config),
-    };
-  }
-
-  handleSaveConfig() {
-    const { config, onConfigChange } = this.props;
-    const { filters } = this.state;
-    onConfigChange({ ...config, filters });
-  }
-
-  handleAddFilter(key, id, value, event = null) {
-    if (event) {
-      event.stopPropagation();
-      event.preventDefault();
+const StixCoreRelationshipsList = ({
+  variant,
+  height,
+  startDate,
+  endDate,
+  dataSelection,
+  parameters = {},
+}) => {
+  const classes = useStyles();
+  const { t, fsd } = useFormatter();
+  const renderContent = () => {
+    if (!dataSelection) {
+      return 'No data selection';
     }
-    if (this.state.filters[key] && this.state.filters[key].length > 0) {
-      this.setState(
-        {
-          filters: R.assoc(
-            key,
-            isUniqFilter(key)
-              ? [{ id, value }]
-              : R.uniqBy(R.prop('id'), [
-                { id, value },
-                ...this.state.filters[key],
-              ]),
-            this.state.filters,
-          ),
-        },
-        () => this.handleSaveConfig(),
-      );
-    } else {
-      this.setState(
-        {
-          filters: R.assoc(key, [{ id, value }], this.state.filters),
-        },
-        () => this.handleSaveConfig(),
-      );
-    }
-  }
-
-  handleRemoveFilter(key) {
-    this.setState({ filters: R.dissoc(key, this.state.filters) }, () => this.handleSaveConfig());
-  }
-
-  renderContent() {
-    const { filters } = this.state;
-    const { t, fsd, dateAttribute, classes, startDate, endDate } = this.props;
-    let finalFilters = convertFilters(filters);
+    const selection = dataSelection[0];
+    let finalFilters = convertFilters(selection.filters);
+    const relationshipType = R.head(finalFilters.filter((n) => n.key === 'relationship_type'))
+      ?.values || null;
     const fromId = R.head(finalFilters.filter((n) => n.key === 'fromId'))?.values || null;
     const toId = R.head(finalFilters.filter((n) => n.key === 'toId'))?.values || null;
     const fromTypes = R.head(finalFilters.filter((n) => n.key === 'fromTypes'))?.values || null;
     const toTypes = R.head(finalFilters.filter((n) => n.key === 'toTypes'))?.values || null;
     finalFilters = finalFilters.filter(
-      (n) => !['fromId', 'toId', 'fromTypes', 'toTypes'].includes(n.key),
+      (n) => ![
+        'relationship_type',
+        'fromId',
+        'toId',
+        'fromTypes',
+        'toTypes',
+      ].includes(n.key),
     );
+    const dateAttribute = selection.date_attribute && selection.date_attribute.length > 0
+      ? selection.date_attribute
+      : 'created_at';
     if (startDate) {
       finalFilters.push({
-        key: 'created',
+        key: dateAttribute,
         values: [startDate],
         operator: 'gt',
       });
     }
     if (endDate) {
       finalFilters.push({
-        key: 'created',
+        key: dateAttribute,
         values: [endDate],
         operator: 'lt',
       });
@@ -3433,6 +3520,7 @@ class StixCoreRelationshipsList extends Component {
       <QueryRenderer
         query={stixCoreRelationshipsListQuery}
         variables={{
+          relationship_type: relationshipType,
           fromId,
           toId,
           fromTypes,
@@ -3578,13 +3666,12 @@ class StixCoreRelationshipsList extends Component {
                               </div>
                               <div className={classes.bodyItem}>
                                 <ItemMarkings
-                                  markingDefinitions={R.pathOr(
-                                    [],
-                                    ['objectMarking', 'edges'],
-                                    stixCoreRelationship,
-                                  )}
-                                  limit={1}
                                   variant="inList"
+                                  markingDefinitionsEdges={
+                                    stixCoreRelationship.objectMarking.edges
+                                    ?? []
+                                  }
+                                  limit={1}
                                 />
                               </div>
                             </div>
@@ -3628,135 +3715,27 @@ class StixCoreRelationshipsList extends Component {
         }}
       />
     );
-  }
-
-  render() {
-    const { filters } = this.state;
-    const { t, classes, title, variant, height, onConfigChange } = this.props;
-    return (
-      <div style={{ height: height || '100%' }}>
-        <div
-          className={classes.parameters}
-          style={{
-            margin: variant !== 'inLine' ? '0 0 10px 0' : '-10px 0 10px -7px',
-          }}
-        >
-          <Typography
-            variant="h4"
-            gutterBottom={true}
-            style={{
-              float: 'left',
-              margin: '2px 20px 0 0',
-            }}
-          >
-            {title || t('Reports list')}
-          </Typography>
-          {onConfigChange && (
-            <div style={{ marginTop: -4, float: 'left' }}>
-              <Filters
-                availableFilterKeys={[
-                  'fromId',
-                  'toId',
-                  'fromTypes',
-                  'toTypes',
-                  'markedBy',
-                  'createdBy',
-                  'labelledBy',
-                  'confidence_gt',
-                ]}
-                handleAddFilter={this.handleAddFilter.bind(this)}
-                handleRemoveFilter={this.handleRemoveFilter.bind(this)}
-                size="small"
-                noDirectFilters={true}
-              />
-            </div>
-          )}
-          <div className={classes.filters}>
-            {R.map((currentFilter) => {
-              const label = `${truncate(t(`filter_${currentFilter[0]}`), 20)}`;
-              const values = (
-                <span>
-                  {R.map(
-                    (n) => (
-                      <span key={n.value}>
-                        {n.value && n.value.length > 0
-                          ? truncate(n.value, 15)
-                          : t('No label')}{' '}
-                        {R.last(currentFilter[1]).value !== n.value && (
-                          <code>OR</code>
-                        )}
-                      </span>
-                    ),
-                    currentFilter[1],
-                  )}
-                </span>
-              );
-              return (
-                <Tooltip
-                  title={
-                    <div>
-                      <strong>{label}</strong>: {values}
-                    </div>
-                  }
-                >
-                  <span>
-                    <Chip
-                      key={currentFilter[0]}
-                      label={
-                        <div>
-                          <strong>{label}</strong>: {values}
-                        </div>
-                      }
-                      onDelete={this.handleRemoveFilter.bind(
-                        this,
-                        currentFilter[0],
-                      )}
-                      size="small"
-                    />
-                    {R.last(R.toPairs(filters))[0] !== currentFilter[0] && (
-                      <Chip
-                        size="small"
-                        classes={{ root: classes.operator }}
-                        label={t('AND')}
-                      />
-                    )}
-                  </span>
-                </Tooltip>
-              );
-            }, R.toPairs(filters))}
-          </div>
-          <div className="clearfix" />
-        </div>
-        {variant !== 'inLine' ? (
-          <Paper classes={{ root: classes.paper }} variant="outlined">
-            {this.renderContent()}
-          </Paper>
-        ) : (
-          this.renderContent()
-        )}
-      </div>
-    );
-  }
-}
-
-StixCoreRelationshipsList.propTypes = {
-  title: PropTypes.string,
-  containerId: PropTypes.string,
-  types: PropTypes.array,
-  classes: PropTypes.object,
-  theme: PropTypes.object,
-  t: PropTypes.func,
-  height: PropTypes.number,
-  dateAttribute: PropTypes.string,
-  variant: PropTypes.string,
-  config: PropTypes.object,
-  onConfigChange: PropTypes.func,
-  startDate: PropTypes.string,
-  endDate: PropTypes.string,
+  };
+  return (
+    <div style={{ height: height || '100%' }}>
+      <Typography
+        variant="h4"
+        gutterBottom={true}
+        style={{
+          margin: variant !== 'inLine' ? '0 0 10px 0' : '-10px 0 10px -7px',
+        }}
+      >
+        {parameters.title ?? t('Relationships list')}
+      </Typography>
+      {variant !== 'inLine' ? (
+        <Paper classes={{ root: classes.paper }} variant="outlined">
+          {renderContent()}
+        </Paper>
+      ) : (
+        renderContent()
+      )}
+    </div>
+  );
 };
 
-export default R.compose(
-  inject18n,
-  withTheme,
-  withStyles(styles),
-)(StixCoreRelationshipsList);
+export default StixCoreRelationshipsList;

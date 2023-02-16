@@ -1,134 +1,156 @@
 import * as R from 'ramda';
+import { Promise as BluePromise } from 'bluebird';
 import {
   createEntity,
   distributionEntities,
-  internalLoadById,
-  storeLoadById,
+  internalDeleteElementById,
+  listAllThings,
   timeSeriesEntities,
 } from '../database/middleware';
-import { listEntities } from '../database/middleware-loader';
+import { countAllThings, internalLoadById, listEntities, storeLoadById } from '../database/middleware-loader';
 import { BUS_TOPICS } from '../config/conf';
 import { notify } from '../database/redis';
 import { ENTITY_TYPE_CONTAINER_REPORT } from '../schema/stixDomainObject';
 import { RELATION_CREATED_BY, RELATION_OBJECT } from '../schema/stixMetaRelationship';
-import { ABSTRACT_STIX_DOMAIN_OBJECT, buildRefRelationKey } from '../schema/general';
-import { elCount } from '../database/engine';
-import { READ_INDEX_STIX_DOMAIN_OBJECTS } from '../database/utils';
+import {
+  ABSTRACT_STIX_CORE_OBJECT,
+  ABSTRACT_STIX_DOMAIN_OBJECT,
+  ABSTRACT_STIX_RELATIONSHIP,
+  buildRefRelationKey
+} from '../schema/general';
+import { elCount, ES_MAX_CONCURRENCY } from '../database/engine';
+import { READ_DATA_INDICES_WITHOUT_INFERRED, READ_INDEX_STIX_DOMAIN_OBJECTS } from '../database/utils';
 import { isStixId } from '../schema/schemaUtils';
+import { stixDomainObjectDelete } from './stixDomainObject';
 
-export const STATUS_STATUS_NEW = 0;
-export const STATUS_STATUS_PROGRESS = 1;
-export const STATUS_STATUS_ANALYZED = 2;
-export const STATUS_STATUS_CLOSED = 3;
-
-export const findById = (user, reportId) => {
-  return storeLoadById(user, reportId, ENTITY_TYPE_CONTAINER_REPORT);
+export const findById = (context, user, reportId) => {
+  return storeLoadById(context, user, reportId, ENTITY_TYPE_CONTAINER_REPORT);
 };
 
-export const findAll = async (user, args) => {
-  return listEntities(user, [ENTITY_TYPE_CONTAINER_REPORT], args);
+export const findAll = async (context, user, args) => {
+  return listEntities(context, user, [ENTITY_TYPE_CONTAINER_REPORT], args);
 };
 
 // Entities tab
-export const reportContainsStixObjectOrStixRelationship = async (user, reportId, thingId) => {
-  const resolvedThingId = isStixId(thingId) ? (await internalLoadById(user, thingId)).id : thingId;
+export const reportContainsStixObjectOrStixRelationship = async (context, user, reportId, thingId) => {
+  const resolvedThingId = isStixId(thingId) ? (await internalLoadById(context, user, thingId)).id : thingId;
   const args = {
     filters: [
       { key: 'internal_id', values: [reportId] },
       { key: buildRefRelationKey(RELATION_OBJECT), values: [resolvedThingId] },
     ],
   };
-  const reportFound = await findAll(user, args);
+  const reportFound = await findAll(context, user, args);
   return reportFound.edges.length > 0;
 };
 
 // region series
-export const reportsTimeSeries = (user, args) => {
+export const reportsTimeSeries = (context, user, args) => {
   const { reportClass } = args;
-  const filters = reportClass ? [{ isRelation: false, type: 'report_class', value: args.reportClass }] : [];
-  return timeSeriesEntities(user, ENTITY_TYPE_CONTAINER_REPORT, filters, args);
+  const filters = reportClass ? [{ key: ['report_class'], values: [args.reportClass] }, ...(args.filters || [])] : args.filters;
+  return timeSeriesEntities(context, user, [ENTITY_TYPE_CONTAINER_REPORT], { ...args, filters });
 };
 
-export const reportsNumber = (user, args) => ({
-  count: elCount(user, READ_INDEX_STIX_DOMAIN_OBJECTS, R.assoc('types', [ENTITY_TYPE_CONTAINER_REPORT], args)),
-  total: elCount(
-    user,
-    READ_INDEX_STIX_DOMAIN_OBJECTS,
-    R.pipe(R.assoc('types', [ENTITY_TYPE_CONTAINER_REPORT]), R.dissoc('endDate'))(args)
-  ),
-});
-
-export const reportsTimeSeriesByEntity = (user, args) => {
-  const filters = [{ isRelation: true, type: RELATION_OBJECT, value: args.objectId }];
-  return timeSeriesEntities(user, ENTITY_TYPE_CONTAINER_REPORT, filters, args);
+export const reportsNumber = (context, user, args) => {
+  return {
+    count: elCount(context, user, READ_INDEX_STIX_DOMAIN_OBJECTS, { ...args, types: [ENTITY_TYPE_CONTAINER_REPORT] }),
+    total: elCount(
+      context,
+      user,
+      READ_INDEX_STIX_DOMAIN_OBJECTS,
+      { ...R.dissoc('endDate', args), types: [ENTITY_TYPE_CONTAINER_REPORT] }
+    ),
+  };
 };
 
-export const reportsTimeSeriesByAuthor = async (user, args) => {
-  const { authorId, reportClass } = args;
-  const filters = [{ isRelation: true, type: RELATION_CREATED_BY, value: authorId }];
-  if (reportClass) filters.push({ isRelation: false, type: 'report_class', value: reportClass });
-  return timeSeriesEntities(user, ENTITY_TYPE_CONTAINER_REPORT, filters, args);
-};
-
-export const reportsNumberByEntity = (user, args) => ({
-  count: elCount(
-    user,
-    READ_INDEX_STIX_DOMAIN_OBJECTS,
-    R.pipe(
-      R.assoc('isMetaRelationship', true),
-      R.assoc('types', [ENTITY_TYPE_CONTAINER_REPORT]),
-      R.assoc('relationshipType', RELATION_OBJECT),
-      R.assoc('fromId', args.objectId)
-    )(args)
-  ),
-  total: elCount(
-    user,
-    READ_INDEX_STIX_DOMAIN_OBJECTS,
-    R.pipe(
-      R.assoc('isMetaRelationship', true),
-      R.assoc('types', [ENTITY_TYPE_CONTAINER_REPORT]),
-      R.assoc('relationshipType', RELATION_OBJECT),
-      R.assoc('fromId', args.objectId),
-      R.dissoc('endDate')
-    )(args)
-  ),
-});
-
-export const reportsNumberByAuthor = (user, args) => ({
-  count: elCount(
-    user,
-    READ_INDEX_STIX_DOMAIN_OBJECTS,
-    R.pipe(
-      R.assoc('isMetaRelationship', true),
-      R.assoc('types', [ENTITY_TYPE_CONTAINER_REPORT]),
-      R.assoc('relationshipType', RELATION_CREATED_BY),
-      R.assoc('fromId', args.authorId)
-    )(args)
-  ),
-  total: elCount(
-    user,
-    READ_INDEX_STIX_DOMAIN_OBJECTS,
-    R.pipe(
-      R.assoc('isMetaRelationship', true),
-      R.assoc('types', [ENTITY_TYPE_CONTAINER_REPORT]),
-      R.assoc('relationshipType', RELATION_CREATED_BY),
-      R.assoc('fromId', args.authorId),
-      R.dissoc('endDate')
-    )(args)
-  ),
-});
-
-export const reportsDistributionByEntity = async (user, args) => {
+export const reportsTimeSeriesByEntity = (context, user, args) => {
   const { objectId } = args;
-  const filters = [{ isRelation: true, type: RELATION_OBJECT, value: objectId }];
-  return distributionEntities(user, ENTITY_TYPE_CONTAINER_REPORT, filters, args);
+  const filters = [{ key: [buildRefRelationKey(RELATION_OBJECT, '*')], values: [objectId] }, ...(args.filters || [])];
+  return timeSeriesEntities(context, user, [ENTITY_TYPE_CONTAINER_REPORT], { ...args, filters });
+};
+
+export const reportsTimeSeriesByAuthor = async (context, user, args) => {
+  const { authorId } = args;
+  const filters = [{ key: [buildRefRelationKey(RELATION_CREATED_BY, '*')], values: [authorId] }, ...(args.filters || [])];
+  return timeSeriesEntities(context, user, [ENTITY_TYPE_CONTAINER_REPORT], { ...args, filters });
+};
+
+export const reportsNumberByEntity = (context, user, args) => {
+  const { objectId } = args;
+  const filters = [{ key: [buildRefRelationKey(RELATION_OBJECT, '*')], values: [objectId] }, ...(args.filters || [])];
+  return {
+    count: elCount(
+      context,
+      user,
+      READ_INDEX_STIX_DOMAIN_OBJECTS,
+      { ...args, filters, types: [ENTITY_TYPE_CONTAINER_REPORT] },
+    ),
+    total: elCount(
+      context,
+      user,
+      READ_INDEX_STIX_DOMAIN_OBJECTS,
+      { ...R.dissoc('endDate', args), filters, types: [ENTITY_TYPE_CONTAINER_REPORT] },
+    ),
+  };
+};
+
+export const reportsNumberByAuthor = (context, user, args) => {
+  const { authorId } = args;
+  const filters = [{ key: [buildRefRelationKey(RELATION_CREATED_BY, '*')], values: [authorId] }, ...(args.filters || [])];
+  return {
+    count: elCount(
+      context,
+      user,
+      READ_INDEX_STIX_DOMAIN_OBJECTS,
+      { ...args, filters, types: [ENTITY_TYPE_CONTAINER_REPORT] },
+    ),
+    total: elCount(
+      context,
+      user,
+      READ_INDEX_STIX_DOMAIN_OBJECTS,
+      { ...R.dissoc('endDate', args), filters, types: [ENTITY_TYPE_CONTAINER_REPORT] },
+    ),
+  };
+};
+
+export const reportsDistributionByEntity = async (context, user, args) => {
+  const { objectId } = args;
+  const filters = [{ key: [buildRefRelationKey(RELATION_OBJECT, '*')], values: [objectId] }, ...(args.filters || [])];
+  return distributionEntities(context, user, [ENTITY_TYPE_CONTAINER_REPORT], { ...args, filters });
 };
 // endregion
 
 // region mutations
-export const addReport = async (user, report) => {
+export const addReport = async (context, user, report) => {
   const finalReport = R.assoc('created', report.published, report);
-  const created = await createEntity(user, finalReport, ENTITY_TYPE_CONTAINER_REPORT);
+  const created = await createEntity(context, user, finalReport, ENTITY_TYPE_CONTAINER_REPORT);
   return notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].ADDED_TOPIC, created, user);
+};
+
+// Delete all report contained entities if no other reports are linked
+const buildReportDeleteElementsFilter = (reportId) => {
+  const refKey = buildRefRelationKey(RELATION_OBJECT);
+  return [
+    { key: [refKey], values: [reportId] },
+    { key: [refKey], values: [`doc['${refKey}.keyword'].length == 1`], operator: 'script' }
+  ];
+};
+export const reportDeleteWithElements = async (context, user, reportId) => {
+  // Load all entities and see if they no longer have any report
+  const callback = async (objects) => {
+    await BluePromise.map(objects, (object) => {
+      return internalDeleteElementById(context, context.user, object.id);
+    }, { concurrency: ES_MAX_CONCURRENCY });
+  };
+  // Load all report objects with a callback
+  const args = { filters: buildReportDeleteElementsFilter(reportId), callback };
+  await listAllThings(context, user, [ABSTRACT_STIX_CORE_OBJECT, ABSTRACT_STIX_RELATIONSHIP], args);
+  // Delete the report
+  await stixDomainObjectDelete(context, user, reportId);
+  return reportId;
+};
+export const reportDeleteElementsCount = async (context, user, reportId) => {
+  const filters = buildReportDeleteElementsFilter(reportId);
+  return countAllThings(context, user, { indices: READ_DATA_INDICES_WITHOUT_INFERRED, filters });
 };
 // endregion

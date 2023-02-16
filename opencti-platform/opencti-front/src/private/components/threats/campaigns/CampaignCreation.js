@@ -23,7 +23,8 @@ import ObjectLabelField from '../../common/form/ObjectLabelField';
 import ObjectMarkingField from '../../common/form/ObjectMarkingField';
 import MarkDownField from '../../../../components/MarkDownField';
 import ConfidenceField from '../../common/form/ConfidenceField';
-import ExternalReferencesField from '../../common/form/ExternalReferencesField';
+import { ExternalReferencesField } from '../../common/form/ExternalReferencesField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -222,7 +223,7 @@ class CampaignCreation extends Component {
                     name="confidence"
                     label={t('Confidence')}
                     fullWidth={true}
-                    containerstyle={{ width: '100%', marginTop: 20 }}
+                    containerStyle={fieldSpacingContainerStyle}
                   />
                   <Field
                     component={MarkDownField}

@@ -1,36 +1,27 @@
 import * as R from 'ramda';
 
 // General
+export const KNOWLEDGE_ORGANIZATION_RESTRICT = 'KNORGARESTRICT';
 export const KNOWLEDGE_DELETE = 'KNDELETE';
+export const KNOWLEDGE_UPDATE = 'KNUPDATE';
+export const KNOWLEDGE_COLLABORATION = 'KNPARTICIPATE';
 
 export const ID_INTERNAL = 'internal_id';
+export const ID_INFERRED = 'inferred_id';
 export const ID_STANDARD = 'standard_id';
 export const INTERNAL_IDS_ALIASES = 'i_aliases_ids';
 export const IDS_STIX = 'x_opencti_stix_ids';
 export const BASE_TYPE_RELATION = 'RELATION';
 export const BASE_TYPE_ENTITY = 'ENTITY';
 
-const MARKING_TLP_WHITE = '613f2e26-407d-48c7-9eca-b8e91df99dc9';
-const MARKING_TLP_GREEN = '34098fce-860f-48ae-8e50-ebd3cc5e41da';
-const MARKING_TLP_AMBER = 'f88d31f6-486f-44da-b317-01333bde0b82';
-const MARKING_TLP_RED = '5e57c739-391a-4eb3-b6be-7d15ca92d5ed';
-const STATIC_STANDARD_IDS = [
-  { id: MARKING_TLP_WHITE, data: { definition_type: 'TLP', definition: 'TLP:WHITE' } },
-  { id: MARKING_TLP_GREEN, data: { definition_type: 'TLP', definition: 'TLP:GREEN' } },
-  { id: MARKING_TLP_AMBER, data: { definition_type: 'TLP', definition: 'TLP:AMBER' } },
-  { id: MARKING_TLP_RED, data: { definition_type: 'TLP', definition: 'TLP:RED' } }
-];
-export const getStaticIdFromData = (data) => {
-  const findStatic = R.find((s) => R.equals(s.data, data), STATIC_STANDARD_IDS);
-  return findStatic?.id;
-};
-
 // Inputs
+export const INPUT_GRANTED_REFS = 'objectOrganization'; // granted_refs
 export const INPUT_EXTERNAL_REFS = 'externalReferences'; // external_references
 export const INPUT_KILLCHAIN = 'killChainPhases'; // kill_chain_phases
 export const INPUT_CREATED_BY = 'createdBy'; // created_by_ref
 export const INPUT_LABELS = 'objectLabel'; // labels
 export const INPUT_MARKINGS = 'objectMarking'; // object_marking_refs
+export const INPUT_ASSIGNEE = 'objectAssignee'; // object_assignee_refs (OCTI)
 export const INPUT_OBJECTS = 'objects'; // object_refs
 export const INPUT_DOMAIN_FROM = 'from'; // source_ref
 export const INPUT_DOMAIN_TO = 'to'; // target_ref
@@ -41,6 +32,8 @@ export const MULTIPLE_META_RELATIONSHIPS_INPUTS = [
   INPUT_EXTERNAL_REFS,
   INPUT_KILLCHAIN,
   INPUT_OBJECTS,
+  INPUT_GRANTED_REFS,
+  INPUT_ASSIGNEE,
 ];
 export const STIX_META_RELATIONSHIPS_INPUTS = [INPUT_CREATED_BY, ...MULTIPLE_META_RELATIONSHIPS_INPUTS];
 
@@ -49,7 +42,7 @@ export const REL_INDEX_PREFIX = 'rel_';
 export const INTERNAL_PREFIX = 'i_';
 export const RULE_PREFIX = 'i_rule_';
 export const buildRefRelationKey = (type, field = ID_INTERNAL) => `${REL_INDEX_PREFIX}${type}.${field}`;
-export const buildRefRelationSearchKey = (type) => `${buildRefRelationKey(type)}.keyword`;
+export const buildRefRelationSearchKey = (type, field = ID_INTERNAL) => `${buildRefRelationKey(type, field)}.keyword`;
 
 // Connectors
 export const CONNECTOR_INTERNAL_ENRICHMENT = 'INTERNAL_ENRICHMENT'; // Entity types to support (Report, Hash, ...) -> enrich-
@@ -86,6 +79,8 @@ export const ENTITY_TYPE_CONTAINER = 'Container';
 export const ENTITY_TYPE_IDENTITY = 'Identity';
 export const ENTITY_TYPE_LOCATION = 'Location';
 
+export const DEPS_KEYS = 'depsKeys';
+
 // Abstract
 export const ABSTRACT_TYPES = [
   ABSTRACT_BASIC_OBJECT,
@@ -110,14 +105,28 @@ export const isAbstract = (type) => R.includes(type, ABSTRACT_TYPES);
 export const schemaTypes = {
   types: {},
   attributes: {},
+  upsertAttributes: {},
   relationshipsMapping: {},
   // eslint-disable-next-line object-shorthand,func-names
   register: function (type, children) {
     this.types[type] = children;
   },
   // eslint-disable-next-line object-shorthand,func-names
+  add: function (type, children) {
+    const values = Array.isArray(children) ? children : [children];
+    this.types[type] = [...(this.get(type)), ...values];
+  },
+  // eslint-disable-next-line object-shorthand,func-names
   get: function (type) {
-    return this.types[type] || [];
+    return this.types[type] ?? [];
+  },
+  // eslint-disable-next-line object-shorthand,func-names
+  registerUpsertAttributes: function (type, children) {
+    this.upsertAttributes[type] = children;
+  },
+  // eslint-disable-next-line object-shorthand,func-names
+  getUpsertAttributes: function (type) {
+    return this.upsertAttributes[type] ?? [];
   },
   // eslint-disable-next-line object-shorthand,func-names
   registerAttributes: function (type, children) {
@@ -125,7 +134,7 @@ export const schemaTypes = {
   },
   // eslint-disable-next-line object-shorthand,func-names
   getAttributes: function (type) {
-    return this.attributes[type] || [];
+    return this.attributes[type] ?? [];
   },
 };
 // region utils

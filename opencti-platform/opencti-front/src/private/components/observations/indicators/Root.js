@@ -11,12 +11,14 @@ import StixCoreRelationship from '../../common/stix_core_relationships/StixCoreR
 import Indicator from './Indicator';
 import Loader from '../../../../components/Loader';
 import StixCoreObjectHistory from '../../common/stix_core_objects/StixCoreObjectHistory';
-import IndicatorHeader from './IndicatorHeader';
 import EntityStixSightingRelationships from '../../events/stix_sighting_relationships/EntityStixSightingRelationships';
 import IndicatorEntities from './IndicatorEntities';
 import ErrorNotFound from '../../../../components/ErrorNotFound';
 import StixSightingRelationship from '../../events/stix_sighting_relationships/StixSightingRelationship';
 import FileManager from '../../common/files/FileManager';
+import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
+import IndicatorPopover from './IndicatorPopover';
+import StixCoreObjectOrStixCoreRelationshipContainers from '../../common/containers/StixCoreObjectOrStixCoreRelationshipContainers';
 
 const subscription = graphql`
   subscription RootIndicatorSubscription($id: ID!) {
@@ -28,7 +30,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -40,18 +42,17 @@ const indicatorQuery = graphql`
       standard_id
       name
       ...Indicator_indicator
-      ...IndicatorHeader_indicator
       ...IndicatorDetails_indicator
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
+    }
+    connectorsForImport {
+      ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
-    }
-    settings {
-      platform_enable_reference
     }
   }
 `;
@@ -76,14 +77,13 @@ class RootIndicator extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { indicatorId },
       },
     } = this.props;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <QueryRenderer
           query={indicatorQuery}
           variables={{ id: indicatorId, relationship_type: 'indicates' }}
@@ -99,10 +99,26 @@ class RootIndicator extends Component {
                         <Indicator
                           {...routeProps}
                           indicator={props.indicator}
-                          enableReferences={props.settings.platform_enable_reference?.includes(
-                            'Indicator',
-                          )}
                         />
+                      )}
+                    />
+                    <Route
+                      exact
+                      path="/dashboard/observations/indicators/:indicatorId/analysis"
+                      render={(routeProps) => (
+                        <React.Fragment>
+                          <StixDomainObjectHeader
+                            stixDomainObject={props.indicator}
+                            PopoverComponent={<IndicatorPopover />}
+                            noAliases={true}
+                          />
+                          <StixCoreObjectOrStixCoreRelationshipContainers
+                            {...routeProps}
+                            stixDomainObjectOrStixCoreRelationship={
+                              props.indicator
+                            }
+                          />
+                        </React.Fragment>
                       )}
                     />
                     <Route
@@ -110,15 +126,20 @@ class RootIndicator extends Component {
                       path="/dashboard/observations/indicators/:indicatorId/sightings"
                       render={(routeProps) => (
                         <React.Fragment>
-                          <IndicatorHeader indicator={props.indicator} />
+                          <StixDomainObjectHeader
+                            stixDomainObject={props.indicator}
+                            PopoverComponent={<IndicatorPopover />}
+                            noAliases={true}
+                          />
                           <EntityStixSightingRelationships
                             {...routeProps}
                             entityId={indicatorId}
                             noPadding={true}
-                            targetStixDomainObjectTypes={[
+                            stixCoreObjectTypes={[
                               'Region',
                               'Country',
                               'City',
+                              'Sector',
                               'Organization',
                               'Individual',
                               'System',
@@ -132,11 +153,15 @@ class RootIndicator extends Component {
                       path="/dashboard/observations/indicators/:indicatorId/files"
                       render={(routeProps) => (
                         <React.Fragment>
-                          <IndicatorHeader indicator={props.indicator} />
+                          <StixDomainObjectHeader
+                            stixDomainObject={props.indicator}
+                            PopoverComponent={<IndicatorPopover />}
+                            noAliases={true}
+                          />
                           <FileManager
                             {...routeProps}
                             id={indicatorId}
-                            connectorsImport={[]}
+                            connectorsImport={props.connectorsForImport}
                             connectorsExport={props.connectorsForExport}
                             entity={props.indicator}
                           />
@@ -148,7 +173,11 @@ class RootIndicator extends Component {
                       path="/dashboard/observations/indicators/:indicatorId/history"
                       render={(routeProps) => (
                         <React.Fragment>
-                          <IndicatorHeader indicator={props.indicator} />
+                          <StixDomainObjectHeader
+                            stixDomainObject={props.indicator}
+                            PopoverComponent={<IndicatorPopover />}
+                            noAliases={true}
+                          />
                           <StixCoreObjectHistory
                             {...routeProps}
                             stixCoreObjectId={indicatorId}
@@ -161,7 +190,11 @@ class RootIndicator extends Component {
                       path="/dashboard/observations/indicators/:indicatorId/knowledge"
                       render={(routeProps) => (
                         <React.Fragment>
-                          <IndicatorHeader indicator={props.indicator} />
+                          <StixDomainObjectHeader
+                            stixDomainObject={props.indicator}
+                            PopoverComponent={<IndicatorPopover />}
+                            noAliases={true}
+                          />
                           <IndicatorEntities
                             {...routeProps}
                             indicatorId={indicatorId}
@@ -173,20 +206,34 @@ class RootIndicator extends Component {
                       exact
                       path="/dashboard/observations/indicators/:indicatorId/knowledge/relations/:relationId"
                       render={(routeProps) => (
-                        <StixCoreRelationship
-                          entityId={indicatorId}
-                          {...routeProps}
-                        />
+                        <React.Fragment>
+                          <StixDomainObjectHeader
+                            stixDomainObject={props.indicator}
+                            PopoverComponent={<IndicatorPopover />}
+                            noAliases={true}
+                          />
+                          <StixCoreRelationship
+                            entityId={indicatorId}
+                            {...routeProps}
+                          />
+                        </React.Fragment>
                       )}
                     />
                     <Route
                       exact
                       path="/dashboard/observations/indicators/:indicatorId/knowledge/sightings/:sightingId"
                       render={(routeProps) => (
-                        <StixSightingRelationship
-                          entityId={indicatorId}
-                          {...routeProps}
-                        />
+                        <React.Fragment>
+                          <StixDomainObjectHeader
+                            stixDomainObject={props.indicator}
+                            PopoverComponent={<IndicatorPopover />}
+                            noAliases={true}
+                          />
+                          <StixSightingRelationship
+                            entityId={indicatorId}
+                            {...routeProps}
+                          />
+                        </React.Fragment>
                       )}
                     />
                   </div>
@@ -205,7 +252,6 @@ class RootIndicator extends Component {
 RootIndicator.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootIndicator);

@@ -302,6 +302,10 @@ const StixCoreRelationshipCreationFromEntityStixDomainObjectsLines = createPagin
                   name
                   description
                 }
+                ... on AdministrativeArea {
+                  name
+                  description
+                }
                 ... on Country {
                   name
                   description
@@ -330,6 +334,30 @@ const StixCoreRelationshipCreationFromEntityStixDomainObjectsLines = createPagin
                   name
                   description
                 }
+                ... on Event {
+                  name
+                  description
+                }
+                ... on Channel {
+                  name
+                  description
+                }
+                ... on Narrative {
+                  name
+                  description
+                }
+                ... on Language {
+                  name
+                }
+                ... on DataComponent {
+                  name
+                }
+                ... on DataSource {
+                  name
+                }
+                ... on Case {
+                  name
+                }
                 ... on ObservedData {
                   objects(first: 1) {
                     edges {
@@ -350,7 +378,10 @@ const StixCoreRelationshipCreationFromEntityStixDomainObjectsLines = createPagin
                             edges {
                               node {
                                 id
+                                definition_type
                                 definition
+                                x_opencti_order
+                                x_opencti_color
                               }
                             }
                           }
@@ -380,6 +411,10 @@ const StixCoreRelationshipCreationFromEntityStixDomainObjectsLines = createPagin
                           name
                           description
                           published
+                        }
+                        ... on Grouping {
+                          name
+                          description
                         }
                         ... on CourseOfAction {
                           name
@@ -424,6 +459,10 @@ const StixCoreRelationshipCreationFromEntityStixDomainObjectsLines = createPagin
                           name
                           description
                         }
+                        ... on AdministrativeArea {
+                          name
+                          description
+                        }
                         ... on Country {
                           name
                           description
@@ -457,6 +496,32 @@ const StixCoreRelationshipCreationFromEntityStixDomainObjectsLines = createPagin
                           description
                           first_seen
                           last_seen
+                        }
+                        ... on Event {
+                          name
+                          start_time
+                          stop_time
+                          description
+                        }
+                        ... on Channel {
+                          name
+                          description
+                        }
+                        ... on Narrative {
+                          name
+                          description
+                        }
+                        ... on Language {
+                          name
+                        }
+                        ... on DataComponent {
+                          name
+                        }
+                        ... on DataSource {
+                          name
+                        }
+                        ... on Case {
+                          name
                         }
                         ... on StixCyberObservable {
                           observable_value

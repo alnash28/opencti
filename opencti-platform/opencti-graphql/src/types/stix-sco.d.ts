@@ -1,14 +1,14 @@
-import type { StixCyberObject, StixId } from './stix-common';
+import type { StixCyberObject, StixDate, StixId } from './stix-common';
 import { CyberObjectExtension, StixOpenctiExtension } from './stix-common';
 import { STIX_EXT_OCTI, STIX_EXT_OCTI_SCO } from './stix-extensions';
 import { StixInternalExternalReference } from './stix-smo';
 
 // Artifact Object Specific Properties
-interface ArtifactExtension extends CyberObjectExtension {
+export interface ArtifactExtension extends CyberObjectExtension {
   additional_names: Array<string>;
 }
 // mime_type, payload_bin, url, hashes, encryption_algorithm, decryption_key
-interface StixArtifact extends StixCyberObject {
+export interface StixArtifact extends StixCyberObject {
   mime_type: string; // optional
   payload_bin: string; // optional
   url: string; // optional
@@ -23,7 +23,7 @@ interface StixArtifact extends StixCyberObject {
 
 // AS Object Specific Properties
 // number, name, rir
-interface StixAutonomousSystem extends StixCyberObject {
+export interface StixAutonomousSystem extends StixCyberObject {
   number: number;
   name: string; // optional
   rir: string; // optional
@@ -31,39 +31,39 @@ interface StixAutonomousSystem extends StixCyberObject {
 
 // Directory Object Specific Properties
 // path, path_enc, ctime, mtime, atime, contains_refs
-interface StixDirectory extends StixCyberObject {
+export interface StixDirectory extends StixCyberObject {
   path: string;
   path_enc: string; // optional
-  ctime: Date; // optional
-  mtime: Date; // optional
-  atime: Date; // optional
+  ctime: StixDate; // optional
+  mtime: StixDate; // optional
+  atime: StixDate; // optional
   contains_refs: Array<StixId>; // optional
 }
 
 // Domain Name Object Specific Properties
 // value, resolves_to_refs
-interface StixDomainName extends StixCyberObject {
+export interface StixDomainName extends StixCyberObject {
   value: string;
   resolves_to_refs: Array<StixId>; // optional
 }
 
 // Email Address Object Specific Properties
 // value, display_name, belongs_to_ref
-interface StixEmailAddress extends StixCyberObject {
+export interface StixEmailAddress extends StixCyberObject {
   value: string;
   display_name: string; // optional
   belongs_to_ref: StixId; // optional
 }
 
 // Email Message Object Specific Properties
-interface StixInternalEmailBodyMultipart {
+export interface StixInternalEmailBodyMultipart {
   content_type: string;
   content_disposition: string;
   body: string;
   body_raw_ref: StixId | undefined;
 }
 
-interface StixEmailBodyMultipart extends StixInternalEmailBodyMultipart, StixCyberObject {
+export interface StixEmailBodyMultipart extends StixInternalEmailBodyMultipart, StixCyberObject {
   labels: Array<string>;
   description: string;
   score: number;
@@ -77,9 +77,9 @@ interface StixEmailBodyMultipart extends StixInternalEmailBodyMultipart, StixCyb
 
 // is_multipart, date, content_type, from_ref, sender_ref, to_refs, cc_refs, bcc_refs,
 // subject, received_lines, additional_header_fields, body, body_multipart, raw_email_ref
-interface StixEmailMessage extends StixCyberObject {
+export interface StixEmailMessage extends StixCyberObject {
   is_multipart: boolean;
-  date: Date; // optional - attribute_date
+  date: StixDate; // optional - attribute_date
   content_type: string; // optional
   from_ref: StixId | undefined; // optional
   sender_ref: StixId | undefined; // optional
@@ -96,21 +96,21 @@ interface StixEmailMessage extends StixCyberObject {
 }
 
 // File Object Specific Properties
-interface FileExtension extends CyberObjectExtension {
+export interface FileExtension extends CyberObjectExtension {
   additional_names: Array<string>;
 }
 // hashes, size, name, name_enc, magic_number_hex, mime_type, ctime, mtime, atime,
 // parent_directory_ref, contains_refs, content_ref
-interface StixFile extends StixCyberObject {
+export interface StixFile extends StixCyberObject {
   hashes: object; // optional
   size: number; // optional
   name: string; // optional
   name_enc: string; // optional
   magic_number_hex: string; // optional
   mime_type: string; // optional
-  ctime: Date; // optional
-  mtime: Date; // optional
-  atime: Date; // optional
+  ctime: StixDate; // optional
+  mtime: StixDate; // optional
+  atime: StixDate; // optional
   parent_directory_ref: StixId | undefined; // optional
   contains_refs: Array<StixId>; // optional
   content_ref : StixId | undefined; // optional
@@ -162,7 +162,7 @@ interface StixFile extends StixCyberObject {
 
 // Custom object extension - Cryptocurrency Wallet
 // value
-interface StixCryptocurrencyWallet extends StixCyberObject {
+export interface StixCryptocurrencyWallet extends StixCyberObject {
   value: string;
   description: string;
   score: number;
@@ -179,7 +179,7 @@ interface StixCryptocurrencyWallet extends StixCyberObject {
 // Simple custom object extension
 // Custom object extension - Cryptographic Key
 // value
-interface StixCryptographicKey extends StixCyberObject {
+export interface StixCryptographicKey extends StixCyberObject {
   value: string;
   description: string;
   score: number;
@@ -195,7 +195,7 @@ interface StixCryptographicKey extends StixCyberObject {
 
 // Custom object extension - Hostname
 // value
-interface StixHostname extends StixCyberObject {
+export interface StixHostname extends StixCyberObject {
   value: string;
   description: string;
   score: number;
@@ -211,7 +211,7 @@ interface StixHostname extends StixCyberObject {
 
 // Custom object extension - Text
 // value
-interface StixText extends StixCyberObject {
+export interface StixText extends StixCyberObject {
   value: string;
   description: string;
   score: number;
@@ -227,8 +227,61 @@ interface StixText extends StixCyberObject {
 
 // Custom object extension - User Agent
 // value
-interface StixUserAgent extends StixCyberObject {
+export interface StixUserAgent extends StixCyberObject {
   value: string;
+  description: string;
+  score: number;
+  labels: Array<string>;
+  created_by_ref: StixId | undefined,
+  object_marking_refs: Array<StixId>;
+  external_references: Array<StixInternalExternalReference>;
+  extensions: {
+    [STIX_EXT_OCTI]: StixOpenctiExtension
+    [STIX_EXT_OCTI_SCO]: { extension_type : 'new-sco' }
+  }
+}
+
+// Custom object extension - Bank Account
+// iban, bic, number
+export interface StixBankAccount extends StixCyberObject {
+  iban: string;
+  bic: string;
+  account_number: string;
+  description: string;
+  score: number;
+  labels: Array<string>;
+  created_by_ref: StixId | undefined,
+  object_marking_refs: Array<StixId>;
+  external_references: Array<StixInternalExternalReference>;
+  extensions: {
+    [STIX_EXT_OCTI]: StixOpenctiExtension
+    [STIX_EXT_OCTI_SCO]: { extension_type : 'new-sco' }
+  }
+}
+
+// Custom object extension - Phone number
+// value
+export interface StixPhoneNumber extends StixCyberObject {
+  value: string;
+  description: string;
+  score: number;
+  labels: Array<string>;
+  created_by_ref: StixId | undefined,
+  object_marking_refs: Array<StixId>;
+  external_references: Array<StixInternalExternalReference>;
+  extensions: {
+    [STIX_EXT_OCTI]: StixOpenctiExtension
+    [STIX_EXT_OCTI_SCO]: { extension_type : 'new-sco' }
+  }
+}
+
+// Custom object extension - Credit Card
+// number, expiration_date, cvv, holder_name
+export interface StixPaymentCard extends StixCyberObject {
+  card_number: string;
+  expiration_date: StixDate;
+  cvv: number;
+  holder_name: string;
   description: string;
   score: number;
   labels: Array<string>;
@@ -245,7 +298,7 @@ type StixExtendedObservable = StixCryptographicKey | StixHostname | StixText | S
 
 // IPv4 Address Object Specific Properties
 // value, resolves_to_refs, belongs_to_refs
-interface StixIPv4Address extends StixCyberObject {
+export interface StixIPv4Address extends StixCyberObject {
   value: string;
   resolves_to_refs: Array<StixId>; // optional
   belongs_to_refs: Array<StixId>; // optional
@@ -253,7 +306,7 @@ interface StixIPv4Address extends StixCyberObject {
 
 // IPv6 Address Object Specific Properties
 // value, resolves_to_refs, belongs_to_refs
-interface StixIPv6Address extends StixCyberObject {
+export interface StixIPv6Address extends StixCyberObject {
   value: string;
   resolves_to_refs: Array<StixId>; // optional
   belongs_to_refs: Array<StixId>; // optional
@@ -261,13 +314,13 @@ interface StixIPv6Address extends StixCyberObject {
 
 // MAC Address Object Specific Properties
 // value
-interface StixMacAddress extends StixCyberObject {
+export interface StixMacAddress extends StixCyberObject {
   value: string;
 }
 
 // Mutex Object Specific Properties
 // name
-interface StixMutex extends StixCyberObject {
+export interface StixMutex extends StixCyberObject {
   name: string;
 }
 
@@ -278,9 +331,9 @@ interface StixMutex extends StixCyberObject {
 // http-request-ext | icmp-ext | socket-ext | tcp-ext
 type network_socket_address_family_enum = 'AF_UNSPEC' | 'AF_INET' | 'AF_IPX' | 'AF_APPLETALK' | 'AF_NETBIOS' | 'AF_INET6' | 'AF_IRDA' | 'AF_BTH';
 type network_socket_type_enum = 'SOCK_STREAM' | 'AF_ISOCK_DGRAMNET' | 'SOCK_RAW' | 'SOCK_RDM' | 'SOCK_SEQPACKET';
-interface StixNetworkTraffic extends StixCyberObject {
-  start: Date; // optional
-  end: Date; // optional
+export interface StixNetworkTraffic extends StixCyberObject {
+  start: StixDate; // optional
+  end: StixDate; // optional
   is_active: boolean; // optional
   src_ref: StixId | undefined; // optional
   dst_ref: StixId | undefined; // optional
@@ -339,10 +392,10 @@ type windows_integrity_level_enum = 'low' | 'medium' | 'high' | 'system';
 type windows_service_start_type_enum = 'SERVICE_AUTO_START' | 'SERVICE_BOOT_START' | 'SERVICE_DEMAND_START' | 'SERVICE_DISABLED' | 'SERVICE_SYSTEM_ALERT';
 type windows_service_type_enum = 'SERVICE_KERNEL_DRIVER' | 'SERVICE_FILE_SYSTEM_DRIVER' | 'SERVICE_WIN32_OWN_PROCESS' | 'SERVICE_WIN32_SHARE_PROCESS';
 type windows_service_status_enum = 'SERVICE_CONTINUE_PENDING' | 'SERVICE_PAUSE_PENDING' | 'SERVICE_PAUSED' | 'SERVICE_RUNNING' | 'SERVICE_START_PENDING' | 'SERVICE_STOP_PENDING' | 'SERVICE_STOPPED';
-interface StixProcess extends StixCyberObject {
+export interface StixProcess extends StixCyberObject {
   is_hidden: boolean; // optional
   pid: number; // optional
-  created_time: Date; // optional
+  created_time: StixDate; // optional
   cwd: string; // optional
   command_line: string; // optional
   environment_variables: object; // optional
@@ -355,7 +408,7 @@ interface StixProcess extends StixCyberObject {
     [STIX_EXT_OCTI]: StixOpenctiExtension
     [STIX_EXT_OCTI_SCO]: CyberObjectExtension
     // Windows™ Process Extension
-    'windows-process-ext'?: {
+    'windows-process-ext': {
       aslr_enabled: boolean; // optional
       dep_enabled: boolean; // optional
       priority: string; // optional
@@ -365,7 +418,7 @@ interface StixProcess extends StixCyberObject {
       integrity_level: windows_integrity_level_enum; // optional
     }
     // Windows™ Service Extension
-    'windows-service-ext'?: {
+    'windows-service-ext': {
       service_name: string; // optional
       descriptions: Array<string>; // optional
       display_name: string; // optional
@@ -380,7 +433,7 @@ interface StixProcess extends StixCyberObject {
 
 // Software Object Specific Properties
 // name, cpe, swid, languages, vendor, version
-interface StixSoftware extends StixCyberObject {
+export interface StixSoftware extends StixCyberObject {
   name: string;
   cpe: string; // optional
   swid: string; // optional
@@ -391,7 +444,8 @@ interface StixSoftware extends StixCyberObject {
 
 // URL Object Specific Properties
 // value
-interface StixURL extends StixCyberObject {
+export interface StixURL extends StixCyberObject {
+  score: number;
   value: string; // optional
 }
 
@@ -400,7 +454,7 @@ interface StixURL extends StixCyberObject {
 // can_escalate_privs, is_disabled, account_created, account_expires, credential_last_changed,
 // account_first_login, account_last_login
 // unix-account-ext
-interface StixUserAccount extends StixCyberObject {
+export interface StixUserAccount extends StixCyberObject {
   user_id: string; // optional
   credential: string; // optional
   account_login: string; // optional
@@ -410,11 +464,11 @@ interface StixUserAccount extends StixCyberObject {
   is_privileged: boolean; // optional
   can_escalate_privs: boolean; // optional
   is_disabled: boolean; // optional
-  account_created: Date; // optional
-  account_expires: Date; // optional
-  credential_last_changed: Date; // optional
-  account_first_login: Date; // optional
-  account_last_login: Date; // optional
+  account_created: StixDate; // optional
+  account_expires: StixDate; // optional
+  credential_last_changed: StixDate; // optional
+  account_first_login: StixDate; // optional
+  account_last_login: StixDate; // optional
   extensions: {
     [STIX_EXT_OCTI]: StixOpenctiExtension
     [STIX_EXT_OCTI_SCO]: CyberObjectExtension
@@ -429,12 +483,12 @@ interface StixUserAccount extends StixCyberObject {
 }
 
 // Windows™ Registry Value Type
-interface StixInternalWindowsRegistryValueType {
+export interface StixInternalWindowsRegistryValueType {
   name: string;
   data: string;
   data_type: string;
 }
-interface StixWindowsRegistryValueType extends StixInternalWindowsRegistryValueType, StixCyberObject {
+export interface StixWindowsRegistryValueType extends StixInternalWindowsRegistryValueType, StixCyberObject {
   labels: Array<string>;
   description: string;
   score: number;
@@ -448,10 +502,10 @@ interface StixWindowsRegistryValueType extends StixInternalWindowsRegistryValueT
 
 // WindowsTM Registry Key Object Specific Properties
 // key, values, modified_time, creator_user_ref, number_of_subkeys
-interface StixWindowsRegistryKey extends StixCyberObject {
+export interface StixWindowsRegistryKey extends StixCyberObject {
   key: string; // optional
   values: Array<StixInternalWindowsRegistryValueType>; // optional
-  modified_time: Date; // optional
+  modified_time: StixDate; // optional
   creator_user_ref: StixId | undefined; // optional
   number_of_subkeys: number; // optional
 }
@@ -459,15 +513,15 @@ interface StixWindowsRegistryKey extends StixCyberObject {
 // is_self_signed, hashes, version, serial_number, signature_algorithm, issuer, validity_not_before,
 // validity_not_after, subject, subject_public_key_algorithm, subject_public_key_modulus,
 // subject_public_key_exponent, x509_v3_extensions
-interface StixX509Certificate extends StixCyberObject {
+export interface StixX509Certificate extends StixCyberObject {
   is_self_signed: boolean; // optional
   hashes: object; // optional
   version: string; // optional
   serial_number: string; // optional
   signature_algorithm: string; // optional
   issuer: string; // optional
-  validity_not_before: Date; // optional
-  validity_not_after: Date; // optional
+  validity_not_before: StixDate; // optional
+  validity_not_after: StixDate; // optional
   subject: string; // optional
   subject_public_key_algorithm: string; // optional
   subject_public_key_modulus: string; // optional
@@ -485,9 +539,29 @@ interface StixX509Certificate extends StixCyberObject {
     subject_directory_attributes: string; // optional
     crl_distribution_points: string; // optional
     inhibit_any_policy: string; // optional
-    private_key_usage_period_not_before: Date; // optional
-    private_key_usage_period_not_after: Date; // optional
+    private_key_usage_period_not_before: StixDate; // optional
+    private_key_usage_period_not_after: StixDate; // optional
     certificate_policies: string; // optional
     policy_mappings: string; // optional
+  }
+}
+
+// Custom object extension - Media Content
+// value
+export interface StixMediaContent extends StixCyberObject {
+  title: string;
+  description: string;
+  content: string;
+  media_category: string;
+  url: string;
+  publication_date: StixDate;
+  score: number;
+  labels: Array<string>;
+  created_by_ref: StixId | undefined,
+  object_marking_refs: Array<StixId>;
+  external_references: Array<StixInternalExternalReference>;
+  extensions: {
+    [STIX_EXT_OCTI]: StixOpenctiExtension
+    [STIX_EXT_OCTI_SCO]: { extension_type : 'new-sco' }
   }
 }

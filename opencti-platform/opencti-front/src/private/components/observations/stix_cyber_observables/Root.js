@@ -28,7 +28,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -46,7 +46,10 @@ const stixCyberObservableQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
+    }
+    connectorsForImport {
+      ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
@@ -74,7 +77,6 @@ class RootStixCyberObservable extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { observableId },
       },
@@ -82,7 +84,7 @@ class RootStixCyberObservable extends Component {
     const link = `/dashboard/observations/observables/${observableId}/knowledge`;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <QueryRenderer
           query={stixCyberObservableQuery}
           variables={{ id: observableId, relationship_type: 'indicates' }}
@@ -113,7 +115,7 @@ class RootStixCyberObservable extends Component {
                     />
                     <Route
                       exact
-                      path="/dashboard/observations/observables/:observableId/containers"
+                      path="/dashboard/observations/observables/:observableId/analysis"
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixCyberObservableHeader
@@ -142,7 +144,7 @@ class RootStixCyberObservable extends Component {
                             entityLink={link}
                             noRightBar={true}
                             noPadding={true}
-                            targetStixDomainObjectTypes={[
+                            stixCoreObjectTypes={[
                               'Region',
                               'Country',
                               'City',
@@ -167,7 +169,7 @@ class RootStixCyberObservable extends Component {
                           <FileManager
                             {...routeProps}
                             id={observableId}
-                            connectorsImport={[]}
+                            connectorsImport={props.connectorsForImport}
                             connectorsExport={props.connectorsForExport}
                             entity={props.stixCyberObservable}
                           />
@@ -235,7 +237,6 @@ class RootStixCyberObservable extends Component {
 RootStixCyberObservable.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootStixCyberObservable);

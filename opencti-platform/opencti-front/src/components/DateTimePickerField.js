@@ -10,12 +10,16 @@ import { parse } from '../utils/Time';
 const dateTimeFormatsMap = {
   'en-us': 'yyyy-MM-dd hh:mm a',
   'fr-fr': 'dd/MM/yyyy HH:mm',
+  'es-es': 'dd/MM/yyyy HH:mm',
+  'ja-jp': 'yyyy/MM/dd hh:mm a',
   'zg-cn': 'yyyy-MM-dd hh:mm a',
 };
 
 const dateTimeFormatsMapWithSeconds = {
   'en-us': 'yyyy-MM-dd hh:mm:ss a',
   'fr-fr': 'dd/MM/yyyy HH:mm:ss',
+  'es-es': 'dd/MM/yyyy HH:mm:ss',
+  'ja-jp': 'yyyy/MM/dd hh:mm:ss a',
   'zg-cn': 'yyyy-MM-dd hh:mm:ss a',
 };
 
@@ -42,15 +46,15 @@ const DateTimePickerField = (props) => {
   );
   const internalOnChange = React.useCallback(
     (date) => {
-      setFieldValue(name, date);
+      setFieldValue(name, date ?? null);
       if (typeof onChange === 'function') {
-        onChange(name, date || null);
+        onChange(name, date ?? null);
       }
     },
     [setFieldValue, onChange, name],
   );
   const internalOnFocus = React.useCallback(() => {
-    if (typeof onFocus === 'function') {
+    if (typeof onFocus === 'function' && name) {
       onFocus(name);
     }
   }, [onFocus, name]);
@@ -60,7 +64,7 @@ const DateTimePickerField = (props) => {
     if (typeof onSubmit === 'function') {
       onSubmit(name, value ? parse(value).toISOString() : null);
     }
-  }, [setTouched, onSubmit, name]);
+  }, [setTouched, onSubmit, name, field]);
   if (withSeconds) {
     return (
       <DateTimePicker
@@ -72,7 +76,9 @@ const DateTimePickerField = (props) => {
         onAccept={internalOnAccept}
         onChange={internalOnChange}
         views={['year', 'month', 'day', 'hours', 'minutes', 'seconds']}
-        inputFormat={dateTimeFormatsMapWithSeconds[intl.locale]}
+        inputFormat={
+          dateTimeFormatsMapWithSeconds[intl.locale] || 'yyyy-MM-dd hh:mm:ss a'
+        }
         renderInput={(params) => (
           <TextField
             {...params}
@@ -97,7 +103,7 @@ const DateTimePickerField = (props) => {
       onAccept={internalOnAccept}
       onChange={internalOnChange}
       views={['year', 'month', 'day', 'hours', 'minutes']}
-      inputFormat={dateTimeFormatsMap[intl.locale]}
+      inputFormat={dateTimeFormatsMap[intl.locale] || 'yyyy-MM-dd hh:mm a'}
       renderInput={(params) => (
         <TextField
           {...params}

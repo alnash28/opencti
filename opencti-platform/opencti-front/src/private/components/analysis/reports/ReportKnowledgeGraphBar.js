@@ -6,47 +6,39 @@ import withTheme from '@mui/styles/withTheme';
 import withStyles from '@mui/styles/withStyles';
 import IconButton from '@mui/material/IconButton';
 import {
-  AspectRatio,
-  FilterListOutlined,
   AccountBalanceOutlined,
-  DeleteOutlined,
-  LinkOutlined,
+  AspectRatio,
   CenterFocusStrongOutlined,
-  EditOutlined,
-  InfoOutlined,
-  ScatterPlotOutlined,
   DateRangeOutlined,
-  VisibilityOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  FilterListOutlined,
+  InfoOutlined,
+  LinkOutlined,
   ReadMoreOutlined,
+  ScatterPlotOutlined,
+  VisibilityOutlined,
 } from '@mui/icons-material';
-import {
-  Video3d,
-  SelectAll,
-  SelectGroup,
-  FamilyTree,
-  AutoFix,
-} from 'mdi-material-ui';
+import { AutoFix, FamilyTree, SelectAll, SelectGroup, Video3d } from 'mdi-material-ui';
 import Tooltip from '@mui/material/Tooltip';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
+import Typography from '@mui/material/Typography';
+import FormGroup from '@mui/material/FormGroup';
+import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
 import Drawer from '@mui/material/Drawer';
 import Popover from '@mui/material/Popover';
+import Alert from '@mui/material/Alert';
+import AlertTitle from '@mui/material/AlertTitle';
 import Divider from '@mui/material/Divider';
 import TimeRange from 'react-timeline-range-slider';
-import {
-  ResponsiveContainer,
-  Scatter,
-  ScatterChart,
-  YAxis,
-  ZAxis,
-} from 'recharts';
+import { ResponsiveContainer, Scatter, ScatterChart, YAxis, ZAxis } from 'recharts';
 import Badge from '@mui/material/Badge';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
-import DialogContentText from '@mui/material/DialogContentText';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
 import Slide from '@mui/material/Slide';
@@ -59,11 +51,16 @@ import StixCoreRelationshipEdition from '../../common/stix_core_relationships/St
 import StixDomainObjectEdition from '../../common/stix_domain_objects/StixDomainObjectEdition';
 import { resolveLink } from '../../../../utils/Entity';
 import { parseDomain } from '../../../../utils/Graph';
-import StixSightingRelationshipCreation from '../../events/stix_sighting_relationships/StixSightingRelationshipCreation';
+import StixSightingRelationshipCreation
+  from '../../events/stix_sighting_relationships/StixSightingRelationshipCreation';
 import StixSightingRelationshipEdition from '../../events/stix_sighting_relationships/StixSightingRelationshipEdition';
 import SearchInput from '../../../../components/SearchInput';
-import StixCyberObservableRelationshipCreation from '../../common/stix_cyber_observable_relationships/StixCyberObservableRelationshipCreation';
-import StixCyberObservableRelationshipEdition from '../../common/stix_cyber_observable_relationships/StixCyberObservableRelationshipEdition';
+import StixCyberObservableRelationshipCreation
+  from '../../common/stix_cyber_observable_relationships/StixCyberObservableRelationshipCreation';
+import StixCyberObservableRelationshipEdition
+  from '../../common/stix_cyber_observable_relationships/StixCyberObservableRelationshipEdition';
+import { MESSAGING$ } from '../../../../relay/environment';
+import StixCyberObservableEdition from '../../observations/stix_cyber_observables/StixCyberObservableEdition';
 
 const styles = () => ({
   bottomNav: {
@@ -105,9 +102,22 @@ class ReportKnowledgeGraphBar extends Component {
       openEditRelation: false,
       openEditSighting: false,
       openEditNested: false,
-      openEditEntity: false,
+      openEditDomainObject: false,
+      openEditObservable: false,
       displayRemove: false,
+      deleteObject: false,
+      navOpen: localStorage.getItem('navOpen') === 'true',
     };
+  }
+
+  componentDidMount() {
+    this.subscription = MESSAGING$.toggleNav.subscribe({
+      next: () => this.setState({ navOpen: localStorage.getItem('navOpen') === 'true' }),
+    });
+  }
+
+  componentWillUnmount() {
+    this.subscription.unsubscribe();
   }
 
   handleOpenRemove() {
@@ -115,7 +125,11 @@ class ReportKnowledgeGraphBar extends Component {
   }
 
   handleCloseRemove() {
-    this.setState({ displayRemove: false });
+    this.setState({ displayRemove: false, deleteObject: false });
+  }
+
+  handleToggleDeleteObject() {
+    this.setState({ deleteObject: !this.state.deleteObject });
   }
 
   handleOpenStixCoreObjectsTypes(event) {
@@ -208,8 +222,14 @@ class ReportKnowledgeGraphBar extends Component {
     if (
       this.props.numberOfSelectedNodes === 1
       && !this.props.selectedNodes[0].parent_types.includes('basic-relationship')
+      && !this.props.selectedNodes[0].parent_types.includes('Stix-Cyber-Observable')
     ) {
-      this.setState({ openEditEntity: true });
+      this.setState({ openEditDomainObject: true });
+    } else if (
+      this.props.numberOfSelectedNodes === 1
+      && this.props.selectedNodes[0].parent_types.includes('Stix-Cyber-Observable')
+    ) {
+      this.setState({ openEditObservable: true });
     } else if (
       (this.props.numberOfSelectedLinks === 1
         && this.props.selectedLinks[0].parent_types.includes(
@@ -244,31 +264,38 @@ class ReportKnowledgeGraphBar extends Component {
     }
   }
 
-  handleCloseEntityEdition() {
-    this.setState({ openEditEntity: false });
+  handleCloseDomainObjectEdition() {
+    this.setState({ openEditDomainObject: false });
     this.props.handleCloseEntityEdition(
-      R.propOr(null, 'id', this.props.selectedNodes[0]),
+      this.props.selectedNodes[0]?.id ?? null,
+    );
+  }
+
+  handleCloseObservableEdition() {
+    this.setState({ openEditObservable: false });
+    this.props.handleCloseEntityEdition(
+      this.props.selectedNodes[0]?.id ?? null,
     );
   }
 
   handleCloseRelationEdition() {
     this.setState({ openEditRelation: false });
     this.props.handleCloseRelationEdition(
-      R.propOr(null, 'id', this.props.selectedLinks[0]),
+      this.props.selectedLinks[0]?.id ?? null,
     );
   }
 
   handleCloseSightingEdition() {
     this.setState({ openEditSighting: false });
     this.props.handleCloseRelationEdition(
-      R.propOr(null, 'id', this.props.selectedLinks[0]),
+      this.props.selectedLinks[0]?.id ?? null,
     );
   }
 
   handleCloseNestedEdition() {
     this.setState({ openEditNested: false });
     this.props.handleCloseRelationEdition(
-      R.propOr(null, 'id', this.props.selectedLinks[0]),
+      this.props.selectedLinks[0]?.id ?? null,
     );
   }
 
@@ -335,14 +362,19 @@ class ReportKnowledgeGraphBar extends Component {
       nestedReversed,
       openEditRelation,
       openEditSighting,
-      openEditEntity,
+      openEditDomainObject,
+      openEditObservable,
       openEditNested,
+      deleteObject,
+      navOpen,
     } = this.state;
     const viewEnabled = (numberOfSelectedNodes === 1 && numberOfSelectedLinks === 0)
       || (numberOfSelectedNodes === 0 && numberOfSelectedLinks === 1);
     let viewLink = null;
-    const isInferred = R.filter((n) => n.inferred, selectedNodes).length > 0
-      || R.filter((n) => n.inferred, selectedLinks).length > 0;
+    const isInferred = selectedNodes.filter((n) => n.inferred || n.isNestedInferred).length
+        > 0
+      || selectedLinks.filter((n) => n.inferred || n.isNestedInferred).length
+        > 0;
     if (viewEnabled) {
       if (numberOfSelectedNodes === 1 && selectedNodes.length === 1) {
         if (
@@ -379,13 +411,14 @@ class ReportKnowledgeGraphBar extends Component {
     const editionEnabled = (!isInferred
         && numberOfSelectedNodes === 1
         && numberOfSelectedLinks === 0
-        && selectedNodes.length === 1
-        && !selectedNodes[0].isObservable)
+        && selectedNodes.length === 1)
       || (!isInferred
         && numberOfSelectedNodes === 0
         && numberOfSelectedLinks === 1
         && selectedLinks.length === 1
         && !selectedLinks[0].parent_types.includes('stix-meta-relationship'));
+    const deletionEnabled = !isInferred
+      && (numberOfSelectedNodes !== 0 || numberOfSelectedLinks !== 0);
     const fromSelectedTypes = numberOfSelectedNodes >= 2 && selectedNodes.length >= 2
       ? R.uniq(R.map((n) => n.entity_type, R.init(selectedNodes)))
       : [];
@@ -430,7 +463,10 @@ class ReportKnowledgeGraphBar extends Component {
         anchor="bottom"
         variant="permanent"
         classes={{ paper: classes.bottomNav }}
-        PaperProps={{ variant: 'elevation', elevation: 1 }}
+        PaperProps={{
+          variant: 'elevation',
+          elevation: 1,
+        }}
       >
         <div
           style={{
@@ -450,7 +486,7 @@ class ReportKnowledgeGraphBar extends Component {
             <div
               style={{
                 float: 'left',
-                marginLeft: 185,
+                marginLeft: navOpen ? 185 : 60,
                 height: '100%',
                 display: 'flex',
               }}
@@ -814,10 +850,9 @@ class ReportKnowledgeGraphBar extends Component {
                     containerId={report.id}
                     containerStixCoreObjects={report.objects.edges}
                     knowledgeGraph={true}
-                    defaultCreatedBy={R.propOr(null, 'createdBy', report)}
-                    defaultMarkingDefinitions={R.map(
+                    defaultCreatedBy={report.createdBy ?? null}
+                    defaultMarkingDefinitions={(report.objectMarking?.edges ?? []).map(
                       (n) => n.node,
-                      R.pathOr([], ['objectMarking', 'edges'], report),
                     )}
                     targetStixCoreObjectTypes={[
                       'Stix-Domain-Object',
@@ -855,16 +890,21 @@ class ReportKnowledgeGraphBar extends Component {
                   </span>
                 </Tooltip>
                 <StixDomainObjectEdition
-                  open={openEditEntity}
-                  stixDomainObjectId={R.propOr(null, 'id', selectedNodes[0])}
-                  handleClose={this.handleCloseEntityEdition.bind(this)}
+                  open={openEditDomainObject}
+                  stixDomainObjectId={selectedNodes[0]?.id ?? null}
+                  handleClose={this.handleCloseDomainObjectEdition.bind(this)}
                   noStoreUpdate={true}
+                />
+                <StixCyberObservableEdition
+                  open={openEditObservable}
+                  stixCyberObservableId={selectedNodes[0]?.id ?? null}
+                  handleClose={this.handleCloseObservableEdition.bind(this)}
                 />
                 <StixCoreRelationshipEdition
                   open={openEditRelation}
                   stixCoreRelationshipId={
-                    R.propOr(null, 'id', selectedNodes[0])
-                    || R.propOr(null, 'id', selectedLinks[0])
+                    (selectedNodes[0]?.id ?? null)
+                    || (selectedLinks[0]?.id ?? null)
                   }
                   handleClose={this.handleCloseRelationEdition.bind(this)}
                   noStoreUpdate={true}
@@ -872,8 +912,8 @@ class ReportKnowledgeGraphBar extends Component {
                 <StixSightingRelationshipEdition
                   open={openEditSighting}
                   stixSightingRelationshipId={
-                    R.propOr(null, 'id', selectedNodes[0])
-                    || R.propOr(null, 'id', selectedLinks[0])
+                    (selectedNodes[0]?.id ?? null)
+                    || (selectedLinks[0]?.id ?? null)
                   }
                   handleClose={this.handleCloseSightingEdition.bind(this)}
                   noStoreUpdate={true}
@@ -881,8 +921,8 @@ class ReportKnowledgeGraphBar extends Component {
                 <StixCyberObservableRelationshipEdition
                   open={openEditNested}
                   stixCyberObservableRelationshipId={
-                    R.propOr(null, 'id', selectedNodes[0])
-                    || R.propOr(null, 'id', selectedLinks[0])
+                    (selectedNodes[0]?.id ?? null)
+                    || (selectedLinks[0]?.id ?? null)
                   }
                   handleClose={this.handleCloseNestedEdition.bind(this)}
                   noStoreUpdate={true}
@@ -916,10 +956,9 @@ class ReportKnowledgeGraphBar extends Component {
                     handleReverseRelation={this.handleReverseRelation.bind(
                       this,
                     )}
-                    defaultCreatedBy={R.propOr(null, 'createdBy', report)}
-                    defaultMarkingDefinitions={R.map(
+                    defaultCreatedBy={report.createdBy ?? null}
+                    defaultMarkingDefinitions={(report.objectMarking?.edges ?? []).map(
                       (n) => n.node,
-                      R.pathOr([], ['objectMarking', 'edges'], report),
                     )}
                   />
                 )}
@@ -950,9 +989,8 @@ class ReportKnowledgeGraphBar extends Component {
                     handleClose={this.handleCloseCreateNested.bind(this)}
                     handleResult={onAddRelation}
                     handleReverseRelation={this.handleReverseNested.bind(this)}
-                    defaultMarkingDefinitions={R.map(
+                    defaultMarkingDefinitions={(report.objectMarking?.edges ?? []).map(
                       (n) => n.node,
-                      R.pathOr([], ['objectMarking', 'edges'], report),
                     )}
                   />
                 )}
@@ -985,10 +1023,9 @@ class ReportKnowledgeGraphBar extends Component {
                     handleReverseSighting={this.handleReverseSighting.bind(
                       this,
                     )}
-                    defaultCreatedBy={R.propOr(null, 'createdBy', report)}
-                    defaultMarkingDefinitions={R.map(
+                    defaultCreatedBy={report.createdBy ?? null}
+                    defaultMarkingDefinitions={(report.objectMarking?.edges ?? []).map(
                       (n) => n.node,
-                      R.pathOr([], ['objectMarking', 'edges'], report),
                     )}
                   />
                 )}
@@ -998,10 +1035,7 @@ class ReportKnowledgeGraphBar extends Component {
                       <IconButton
                         color="primary"
                         onClick={this.handleOpenRemove.bind(this)}
-                        disabled={
-                          numberOfSelectedNodes === 0
-                          && numberOfSelectedLinks === 0
-                        }
+                        disabled={!deletionEnabled}
                         size="large"
                       >
                         <DeleteOutlined />
@@ -1017,11 +1051,33 @@ class ReportKnowledgeGraphBar extends Component {
                   onClose={this.handleCloseRemove.bind(this)}
                 >
                   <DialogContent>
-                    <DialogContentText>
+                    <Typography variant="body">
                       {t(
                         'Do you want to remove these elements from this report?',
                       )}
-                    </DialogContentText>
+                    </Typography>
+                    <Alert
+                      severity="warning"
+                      variant="outlined"
+                      style={{ marginTop: 20 }}
+                    >
+                      <AlertTitle>{t('Cascade delete')}</AlertTitle>
+                      <FormGroup>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              checked={deleteObject}
+                              onChange={this.handleToggleDeleteObject.bind(
+                                this,
+                              )}
+                            />
+                          }
+                          label={t(
+                            'Delete the element if no other containers contain it',
+                          )}
+                        />
+                      </FormGroup>
+                    </Alert>
                   </DialogContent>
                   <DialogActions>
                     <Button onClick={this.handleCloseRemove.bind(this)}>
@@ -1030,7 +1086,7 @@ class ReportKnowledgeGraphBar extends Component {
                     <Button
                       onClick={() => {
                         this.handleCloseRemove();
-                        handleDeleteSelected();
+                        handleDeleteSelected(deleteObject);
                       }}
                       color="secondary"
                     >
@@ -1041,7 +1097,12 @@ class ReportKnowledgeGraphBar extends Component {
               </div>
             )}
             <div className="clearfix" />
-            <div style={{ height: '100%', padding: '30px 10px 0px 190px' }}>
+            <div
+              style={{
+                height: '100%',
+                padding: navOpen ? '30px 10px 0px 190px' : '30px 10px 0px 65px',
+              }}
+            >
               <div
                 style={{
                   position: 'absolute',

@@ -1,20 +1,20 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
-import { graphql, createFragmentContainer } from 'react-relay';
+import { createFragmentContainer, graphql } from 'react-relay';
 import withStyles from '@mui/styles/withStyles';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import {
-  KeyboardArrowRightOutlined,
-  FeedbackOutlined,
-} from '@mui/icons-material';
-import { compose, pathOr } from 'ramda';
+import { KeyboardArrowRightOutlined } from '@mui/icons-material';
+import { compose } from 'ramda';
 import Skeleton from '@mui/material/Skeleton';
+import Checkbox from '@mui/material/Checkbox';
 import inject18n from '../../../../components/i18n';
 import StixCoreObjectLabels from '../../common/stix_core_objects/StixCoreObjectLabels';
 import ItemMarkings from '../../../../components/ItemMarkings';
+import ItemIcon from '../../../../components/ItemIcon';
+import ItemStatus from '../../../../components/ItemStatus';
 
 const styles = (theme) => ({
   item: {
@@ -49,7 +49,19 @@ const styles = (theme) => ({
 
 class OpinionLineComponent extends Component {
   render() {
-    const { fd, classes, node, dataColumns, onLabelClick } = this.props;
+    const {
+      fd,
+      classes,
+      node,
+      dataColumns,
+      onLabelClick,
+      onToggleEntity,
+      selectedElements,
+      deSelectedElements,
+      selectAll,
+      onToggleShiftEntity,
+      index,
+    } = this.props;
     return (
       <ListItem
         classes={{ root: classes.item }}
@@ -58,8 +70,25 @@ class OpinionLineComponent extends Component {
         component={Link}
         to={`/dashboard/analysis/opinions/${node.id}`}
       >
+        <ListItemIcon
+          classes={{ root: classes.itemIcon }}
+          style={{ minWidth: 40 }}
+          onClick={(event) => (event.shiftKey
+            ? onToggleShiftEntity(index, node, event)
+            : onToggleEntity(node, event))
+          }
+        >
+          <Checkbox
+            edge="start"
+            checked={
+              (selectAll && !(node.id in (deSelectedElements || {})))
+              || node.id in (selectedElements || {})
+            }
+            disableRipple={true}
+          />
+        </ListItemIcon>
         <ListItemIcon classes={{ root: classes.itemIcon }}>
-          <FeedbackOutlined />
+          <ItemIcon type="Opinion" />
         </ListItemIcon>
         <ListItemText
           primary={
@@ -74,7 +103,13 @@ class OpinionLineComponent extends Component {
                 className={classes.bodyItem}
                 style={{ width: dataColumns.createdBy.width }}
               >
-                {pathOr('', ['createdBy', 'name'], node)}
+                {node.createdBy?.name}
+              </div>
+              <div
+                className={classes.bodyItem}
+                style={{ width: dataColumns.creator.width }}
+              >
+                {node.creator?.name}
               </div>
               <div
                 className={classes.bodyItem}
@@ -94,16 +129,22 @@ class OpinionLineComponent extends Component {
               </div>
               <div
                 className={classes.bodyItem}
+                style={{ width: dataColumns.x_opencti_workflow_id.width }}
+              >
+                <ItemStatus
+                  status={node.status}
+                  variant="inList"
+                  disabled={!node.workflowEnabled}
+                />
+              </div>
+              <div
+                className={classes.bodyItem}
                 style={{ width: dataColumns.objectMarking.width }}
               >
                 <ItemMarkings
-                  markingDefinitions={pathOr(
-                    [],
-                    ['objectMarking', 'edges'],
-                    node,
-                  )}
-                  limit={1}
                   variant="inList"
+                  markingDefinitionsEdges={node.objectMarking.edges ?? []}
+                  limit={1}
                 />
               </div>
             </div>
@@ -129,9 +170,11 @@ const OpinionLineFragment = createFragmentContainer(OpinionLineComponent, {
   node: graphql`
     fragment OpinionLine_node on Opinion {
       id
+      entity_type
       opinion
       explanation
       created
+      confidence
       createdBy {
         ... on Identity {
           id
@@ -143,7 +186,9 @@ const OpinionLineFragment = createFragmentContainer(OpinionLineComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }
@@ -157,6 +202,19 @@ const OpinionLineFragment = createFragmentContainer(OpinionLineComponent, {
           }
         }
       }
+      creator {
+        id
+        name
+      }
+      status {
+        id
+        order
+        template {
+          name
+          color
+        }
+      }
+      workflowEnabled
     }
   `,
 });
@@ -171,7 +229,13 @@ class OpinionLineDummyComponent extends Component {
     const { classes, dataColumns } = this.props;
     return (
       <ListItem classes={{ root: classes.item }} divider={true}>
-        <ListItemIcon classes={{ root: classes.itemIconDisabled }}>
+        <ListItemIcon
+          classes={{ root: classes.itemIconDisabled }}
+          style={{ minWidth: 40 }}
+        >
+          <Checkbox edge="start" disabled={true} disableRipple={true} />
+        </ListItemIcon>
+        <ListItemIcon classes={{ root: classes.itemIcon }}>
           <Skeleton
             animation="wave"
             variant="circular"
@@ -206,6 +270,17 @@ class OpinionLineDummyComponent extends Component {
               </div>
               <div
                 className={classes.bodyItem}
+                style={{ width: dataColumns.creator.width }}
+              >
+                <Skeleton
+                  animation="wave"
+                  variant="rectangular"
+                  width="90%"
+                  height="100%"
+                />
+              </div>
+              <div
+                className={classes.bodyItem}
                 style={{ width: dataColumns.objectLabel.width }}
               >
                 <Skeleton
@@ -218,6 +293,17 @@ class OpinionLineDummyComponent extends Component {
               <div
                 className={classes.bodyItem}
                 style={{ width: dataColumns.created.width }}
+              >
+                <Skeleton
+                  animation="wave"
+                  variant="rectangular"
+                  width="90%"
+                  height="100%"
+                />
+              </div>
+              <div
+                className={classes.bodyItem}
+                style={{ width: dataColumns.x_opencti_workflow_id.width }}
               >
                 <Skeleton
                   animation="wave"

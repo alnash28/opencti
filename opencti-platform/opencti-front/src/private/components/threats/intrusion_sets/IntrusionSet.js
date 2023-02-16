@@ -10,7 +10,8 @@ import IntrusionSetEdition from './IntrusionSetEdition';
 import IntrusionSetPopover from './IntrusionSetPopover';
 import StixCoreObjectOrStixCoreRelationshipLastReports from '../../analysis/reports/StixCoreObjectOrStixCoreRelationshipLastReports';
 import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
@@ -28,13 +29,13 @@ const styles = () => ({
 
 class IntrusionSetComponent extends Component {
   render() {
-    const { classes, intrusionSet, enableReferences } = this.props;
+    const { classes, intrusionSet } = this.props;
     return (
       <div className={classes.container}>
         <StixDomainObjectHeader
+          entityType={'Intrusion-Set'}
           stixDomainObject={intrusionSet}
           PopoverComponent={<IntrusionSetPopover />}
-          enableReferences={enableReferences}
         />
         <Grid
           container={true}
@@ -42,10 +43,10 @@ class IntrusionSetComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={intrusionSet} />
+            <IntrusionSetDetails intrusionSet={intrusionSet} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <IntrusionSetDetails intrusionSet={intrusionSet} />
+            <StixDomainObjectOverview stixDomainObject={intrusionSet} />
           </Grid>
         </Grid>
         <Grid
@@ -83,6 +84,7 @@ class IntrusionSetComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={intrusionSet.id}
+          defaultMarking={(intrusionSet.objectMarking?.edges ?? []).map((edge) => edge.node)}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <IntrusionSetEdition intrusionSetId={intrusionSet.id} />
@@ -96,7 +98,6 @@ IntrusionSetComponent.propTypes = {
   intrusionSet: PropTypes.object,
   classes: PropTypes.object,
   t: PropTypes.func,
-  enableReferences: PropTypes.bool,
 };
 
 const IntrusionSet = createFragmentContainer(IntrusionSetComponent, {
@@ -127,7 +128,9 @@ const IntrusionSet = createFragmentContainer(IntrusionSetComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }

@@ -14,8 +14,9 @@ import InfrastructuresLines, {
   infrastructuresLinesQuery,
 } from './infrastructures/InfrastructuresLines';
 import InfrastructureCreation from './infrastructures/InfrastructureCreation';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../utils/Security';
-import { isUniqFilter } from '../common/lists/Filters';
+import Security from '../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../utils/hooks/useGranted';
+import { isUniqFilter } from '../../../utils/filters/filtersUtils';
 
 class Infrastructures extends Component {
   constructor(props) {
@@ -138,7 +139,7 @@ class Infrastructures extends Component {
         handleRemoveFilter={this.handleRemoveFilter.bind(this)}
         handleToggleExports={this.handleToggleExports.bind(this)}
         openExports={openExports}
-        exportEntityType="Intrusion-Set"
+        exportEntityType="Infrastructure"
         keyword={searchTerm}
         filters={filters}
         paginationOptions={paginationOptions}
@@ -149,6 +150,7 @@ class Infrastructures extends Component {
           'created_start_date',
           'created_end_date',
           'createdBy',
+          'confidence',
         ]}
       >
         <QueryRenderer

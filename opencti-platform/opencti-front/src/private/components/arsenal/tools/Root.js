@@ -29,7 +29,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -47,13 +47,13 @@ const toolQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
+    }
+    connectorsForImport {
+      ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
-    }
-    settings {
-      platform_enable_reference
     }
   }
 `;
@@ -78,7 +78,6 @@ class RootTool extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { toolId },
       },
@@ -86,7 +85,7 @@ class RootTool extends Component {
     const link = `/dashboard/arsenal/tools/${toolId}/knowledge`;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <Route path="/dashboard/arsenal/tools/:toolId/knowledge">
           <StixCoreObjectKnowledgeBar
             stixCoreObjectLink={link}
@@ -118,9 +117,6 @@ class RootTool extends Component {
                         <Tool
                           {...routeProps}
                           tool={props.tool}
-                          enableReferences={props.settings.platform_enable_reference?.includes(
-                            'Tool',
-                          )}
                         />
                       )}
                     />
@@ -145,11 +141,9 @@ class RootTool extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Tool'}
                             stixDomainObject={props.tool}
                             PopoverComponent={<ToolPopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Tool',
-                            )}
                           />
                           <StixCoreObjectOrStixCoreRelationshipContainers
                             {...routeProps}
@@ -164,9 +158,9 @@ class RootTool extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Tool'}
                             stixDomainObject={props.tool}
                             PopoverComponent={<ToolPopover />}
-                            variant="noaliases"
                           />
                           <StixDomainObjectIndicators
                             {...routeProps}
@@ -182,16 +176,14 @@ class RootTool extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Tool'}
                             stixDomainObject={props.tool}
                             PopoverComponent={<ToolPopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Tool',
-                            )}
                           />
                           <FileManager
                             {...routeProps}
                             id={toolId}
-                            connectorsImport={[]}
+                            connectorsImport={props.connectorsForImport}
                             connectorsExport={props.connectorsForExport}
                             entity={props.tool}
                           />
@@ -204,11 +196,9 @@ class RootTool extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Tool'}
                             stixDomainObject={props.tool}
                             PopoverComponent={<ToolPopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Tool',
-                            )}
                           />
                           <StixCoreObjectHistory
                             {...routeProps}
@@ -233,7 +223,6 @@ class RootTool extends Component {
 RootTool.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootTool);

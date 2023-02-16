@@ -29,6 +29,10 @@ class EntityStixCoreRelationshipsLinesAll extends Component {
       entityLink,
       entityId,
       paginationOptions,
+      onToggleEntity,
+      selectedElements,
+      deSelectedElements,
+      selectAll,
     } = this.props;
     return (
       <ListLinesContent
@@ -53,6 +57,10 @@ class EntityStixCoreRelationshipsLinesAll extends Component {
         paginationOptions={paginationOptions}
         entityLink={entityLink}
         entityId={entityId}
+        selectedElements={selectedElements}
+        deSelectedElements={deSelectedElements}
+        selectAll={selectAll}
+        onToggleEntity={onToggleEntity}
       />
     );
   }
@@ -81,6 +89,7 @@ export const entityStixCoreRelationshipsLinesAllQuery = graphql`
     $orderBy: StixCoreRelationshipsOrdering
     $orderMode: OrderingMode
     $filters: [StixCoreRelationshipsFiltering]
+    $fromTypes: [String]
   ) {
     ...EntityStixCoreRelationshipsLinesAll_data
       @arguments(
@@ -93,6 +102,7 @@ export const entityStixCoreRelationshipsLinesAllQuery = graphql`
         orderBy: $orderBy
         orderMode: $orderMode
         filters: $filters
+        fromTypes: $fromTypes
       )
   }
 `;
@@ -105,6 +115,7 @@ export default createPaginationContainer(
       @argumentDefinitions(
         elementId: { type: "[String]" }
         elementWithTargetTypes: { type: "[String]" }
+        fromTypes: { type: "[String]" }
         relationship_type: { type: "[String]" }
         search: { type: "String" }
         count: { type: "Int", defaultValue: 25 }
@@ -126,9 +137,11 @@ export default createPaginationContainer(
           orderBy: $orderBy
           orderMode: $orderMode
           filters: $filters
+          fromTypes: $fromTypes
         ) @connection(key: "Pagination_stixCoreRelationships") {
           edges {
             node {
+              id
               ...EntityStixCoreRelationshipLineAll_node
             }
           }

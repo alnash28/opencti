@@ -1,4 +1,4 @@
-FROM node:16-alpine AS base
+FROM node:18-alpine3.16 AS base
 
 RUN corepack enable
 
@@ -8,7 +8,10 @@ WORKDIR /opt/opencti-build/opencti-graphql
 COPY opencti-graphql/package.json opencti-graphql/yarn.lock opencti-graphql/.yarnrc.yml ./
 COPY opencti-graphql/.yarn ./.yarn
 COPY opencti-graphql/patch ./patch
-RUN yarn install --frozen-lockfile && yarn cache clean --all
+RUN set -ex \
+    ; apk add --no-cache git tini gcc g++ make musl-dev python3 python3-dev postfix postfix-pcre \
+    && npm install -g node-gyp \
+    && yarn install --frozen-lockfile && yarn cache clean --all
 
 
 FROM base AS graphql-builder
@@ -17,7 +20,10 @@ WORKDIR /opt/opencti-build/opencti-graphql
 COPY opencti-graphql/package.json opencti-graphql/yarn.lock opencti-graphql/.yarnrc.yml ./
 COPY opencti-graphql/.yarn ./.yarn
 COPY opencti-graphql/patch ./patch
-RUN yarn install
+RUN set -ex \
+    ; apk add --no-cache git tini gcc g++ make musl-dev python3 python3-dev postfix postfix-pcre \
+    && npm install -g node-gyp \
+    && yarn install
 COPY opencti-graphql /opt/opencti-build/opencti-graphql
 RUN yarn build:prod
 
@@ -29,6 +35,10 @@ WORKDIR /opt/opencti-build/opencti-front
 COPY opencti-front/package.json opencti-front/yarn.lock opencti-front/.yarnrc.yml ./
 COPY opencti-front/.yarn ./.yarn
 COPY opencti-front/patch ./patch
+RUN set -ex \
+    ; apk add --no-cache git tini gcc g++ make musl-dev python3 python3-dev postfix postfix-pcre \
+    && npm install -g node-gyp \
+&& yarn install
 
 RUN yarn install
 
@@ -55,10 +65,11 @@ RUN pip3 install --no-cache-dir --requirement ./src/python/requirements.txt \
         --no-cache-dir \
         --upgrade \
         --force 'git+https://github.com/OpenCTI-Platform/client-python@master' \
-    && apk del git python3-dev gcc musl-dev
+    && apk del git gcc musl-dev
 
 COPY --from=graphql-deps-builder /opt/opencti-build/opencti-graphql/node_modules ./node_modules
 COPY --from=graphql-builder /opt/opencti-build/opencti-graphql/build ./build
+COPY --from=graphql-builder /opt/opencti-build/opencti-graphql/static ./static
 COPY --from=front-builder /opt/opencti-build/opencti-front/builder/prod/build ./public
 COPY opencti-graphql/src ./src
 COPY opencti-graphql/config ./config
@@ -89,4 +100,4 @@ VOLUME ["/opt/opencti/logs"]
 USER "${USERNAME}"
 
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "build/index.js"]
+CMD ["node", "build/back.js"]

@@ -1,3 +1,4 @@
+import { expect, it, describe } from 'vitest';
 import gql from 'graphql-tag';
 import { queryAsAdmin } from '../../utils/testQuery';
 
@@ -174,7 +175,7 @@ describe('Intrusion set resolver standard behavior', () => {
   });
   it('should delete relation in intrusion set', async () => {
     const RELATION_DELETE_QUERY = gql`
-      mutation IntrusionSetEdit($id: ID!, $toId: String!, $relationship_type: String!) {
+      mutation IntrusionSetEdit($id: ID!, $toId: StixRef!, $relationship_type: String!) {
         intrusionSetEdit(id: $id) {
           relationDelete(toId: $toId, relationship_type: $relationship_type) {
             id

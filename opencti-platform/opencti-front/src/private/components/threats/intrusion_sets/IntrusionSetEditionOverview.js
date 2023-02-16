@@ -1,8 +1,7 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
-import { graphql, createFragmentContainer } from 'react-relay';
-import { Formik, Form, Field } from 'formik';
-import withStyles from '@mui/styles/withStyles';
+import { createFragmentContainer, graphql } from 'react-relay';
+import { Field, Form, Formik } from 'formik';
 import * as Yup from 'yup';
 import * as R from 'ramda';
 import inject18n from '../../../../components/i18n';
@@ -15,33 +14,9 @@ import MarkDownField from '../../../../components/MarkDownField';
 import ConfidenceField from '../../common/form/ConfidenceField';
 import CommitMessage from '../../common/form/CommitMessage';
 import { adaptFieldValue } from '../../../../utils/String';
-import { convertCreatedBy, convertMarkings, convertStatus } from '../../../../utils/Edition';
+import { convertCreatedBy, convertMarkings, convertStatus } from '../../../../utils/edition';
 import StatusField from '../../common/form/StatusField';
-
-const styles = (theme) => ({
-  drawerPaper: {
-    minHeight: '100vh',
-    width: '50%',
-    position: 'fixed',
-    overflow: 'hidden',
-
-    transition: theme.transitions.create('width', {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-    padding: '30px 30px 30px 30px',
-  },
-  createButton: {
-    position: 'fixed',
-    bottom: 30,
-    right: 30,
-  },
-  importButton: {
-    position: 'absolute',
-    top: 30,
-    right: 30,
-  },
-});
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
 
 const intrusionSetMutationFieldPatch = graphql`
   mutation IntrusionSetEditionOverviewFieldPatchMutation(
@@ -94,7 +69,7 @@ const intrusionSetMutationRelationAdd = graphql`
 const intrusionSetMutationRelationDelete = graphql`
   mutation IntrusionSetEditionOverviewRelationDeleteMutation(
     $id: ID!
-    $toId: String!
+    $toId: StixRef!
     $relationship_type: String!
   ) {
     intrusionSetEdit(id: $id) {
@@ -149,7 +124,8 @@ class IntrusionSetEditionOverviewComponent extends Component {
       variables: {
         id: this.props.intrusionSet.id,
         input: inputValues,
-        commitMessage: commitMessage && commitMessage.length > 0 ? commitMessage : null,
+        commitMessage:
+          commitMessage && commitMessage.length > 0 ? commitMessage : null,
         references,
       },
       setSubmitting,
@@ -269,7 +245,6 @@ class IntrusionSetEditionOverviewComponent extends Component {
         {({
           submitForm,
           isSubmitting,
-          validateForm,
           setFieldValue,
           values,
         }) => (
@@ -292,7 +267,7 @@ class IntrusionSetEditionOverviewComponent extends Component {
               onChange={this.handleSubmitField.bind(this)}
               label={t('Confidence')}
               fullWidth={true}
-              containerstyle={{ width: '100%', marginTop: 20 }}
+              containerStyle={fieldSpacingContainerStyle}
               editContext={context}
               variant="edit"
             />
@@ -311,20 +286,20 @@ class IntrusionSetEditionOverviewComponent extends Component {
               }
             />
             {intrusionSet.workflowEnabled && (
-                <StatusField
-                    name="x_opencti_workflow_id"
-                    type="Intrusion-Set"
-                    onFocus={this.handleChangeFocus.bind(this)}
-                    onChange={this.handleSubmitField.bind(this)}
-                    setFieldValue={setFieldValue}
-                    style={{ marginTop: 20 }}
-                    helpertext={
-                      <SubscriptionFocus
-                          context={context}
-                          fieldName="x_opencti_workflow_id"
-                      />
-                    }
-                />
+              <StatusField
+                name="x_opencti_workflow_id"
+                type="Intrusion-Set"
+                onFocus={this.handleChangeFocus.bind(this)}
+                onChange={this.handleSubmitField.bind(this)}
+                setFieldValue={setFieldValue}
+                style={{ marginTop: 20 }}
+                helpertext={
+                  <SubscriptionFocus
+                    context={context}
+                    fieldName="x_opencti_workflow_id"
+                  />
+                }
+              />
             )}
             <CreatedByField
               name="createdBy"
@@ -350,9 +325,8 @@ class IntrusionSetEditionOverviewComponent extends Component {
               <CommitMessage
                 submitForm={submitForm}
                 disabled={isSubmitting}
-                validateForm={validateForm}
-                setFieldValue={setFieldValue}
-                values={values}
+                setFieldValue={setFieldValue}open={false}
+                values={values.references}
                 id={intrusionSet.id}
               />
             )}
@@ -364,11 +338,11 @@ class IntrusionSetEditionOverviewComponent extends Component {
 }
 
 IntrusionSetEditionOverviewComponent.propTypes = {
-  classes: PropTypes.object,
   theme: PropTypes.object,
   t: PropTypes.func,
   intrusionSet: PropTypes.object,
   context: PropTypes.array,
+  enableReferences: PropTypes.bool,
 };
 
 const IntrusionSetEditionOverview = createFragmentContainer(
@@ -391,8 +365,10 @@ const IntrusionSetEditionOverview = createFragmentContainer(
           edges {
             node {
               id
-              definition
               definition_type
+              definition
+              x_opencti_order
+              x_opencti_color
             }
           }
         }
@@ -410,7 +386,4 @@ const IntrusionSetEditionOverview = createFragmentContainer(
   },
 );
 
-export default R.compose(
-  inject18n,
-  withStyles(styles, { withTheme: true }),
-)(IntrusionSetEditionOverview);
+export default inject18n(IntrusionSetEditionOverview);

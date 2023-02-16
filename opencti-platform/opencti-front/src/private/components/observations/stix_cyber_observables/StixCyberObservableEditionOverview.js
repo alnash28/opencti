@@ -1,73 +1,46 @@
-import React, { Component } from 'react';
-import * as PropTypes from 'prop-types';
-import { graphql, createFragmentContainer } from 'react-relay';
-import { Formik, Form, Field } from 'formik';
-import withStyles from '@mui/styles/withStyles';
-import {
-  assoc,
-  compose,
-  fromPairs,
-  map,
-  pathOr,
-  pipe,
-  pick,
-  difference,
-  head,
-  filter,
-  includes,
-} from 'ramda';
-import { withRouter } from 'react-router-dom';
-import inject18n from '../../../../components/i18n';
+import React from 'react';
+import { createFragmentContainer, graphql } from 'react-relay';
+import { Field, Form, Formik } from 'formik';
+import { assoc, difference, filter, fromPairs, head, includes, map, pathOr, pick, pipe } from 'ramda';
+import { useHistory } from 'react-router-dom';
+import * as R from 'ramda';
 import TextField from '../../../../components/TextField';
 import { SubscriptionFocus } from '../../../../components/Subscription';
 import { commitMutation, QueryRenderer } from '../../../../relay/environment';
 import CreatedByField from '../../common/form/CreatedByField';
 import ObjectMarkingField from '../../common/form/ObjectMarkingField';
 import { stixCyberObservablesLinesAttributesQuery } from './StixCyberObservablesLines';
-import {
-  booleanAttributes,
-  dateAttributes,
-  ignoredAttributes,
-  numberAttributes,
-  multipleAttributes,
-} from './StixCyberObservableCreation';
 import { buildDate } from '../../../../utils/Time';
 import SwitchField from '../../../../components/SwitchField';
 import MarkDownField from '../../../../components/MarkDownField';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
-
-const styles = (theme) => ({
-  drawerPaper: {
-    minHeight: '100vh',
-    width: '50%',
-    position: 'fixed',
-    overflow: 'hidden',
-
-    transition: theme.transitions.create('width', {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-    padding: '30px 30px 30px 30px',
-  },
-  createButton: {
-    position: 'fixed',
-    bottom: 30,
-    right: 30,
-  },
-  importButton: {
-    position: 'absolute',
-    top: 30,
-    right: 30,
-  },
-});
+import {
+  booleanAttributes,
+  dateAttributes,
+  ignoredAttributes,
+  multipleAttributes,
+  numberAttributes,
+} from '../../../../utils/Entity';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
+import ArtifactField from '../../common/form/ArtifactField';
+import OpenVocabField from '../../common/form/OpenVocabField';
+import { useFormatter } from '../../../../components/i18n';
+import useVocabularyCategory from '../../../../utils/hooks/useVocabularyCategory';
+import { adaptFieldValue } from '../../../../utils/String';
 
 const stixCyberObservableMutationFieldPatch = graphql`
   mutation StixCyberObservableEditionOverviewFieldPatchMutation(
     $id: ID!
     $input: [EditInput]!
+    $commitMessage: String
+    $references: [String]
   ) {
     stixCyberObservableEdit(id: $id) {
-      fieldPatch(input: $input) {
+      fieldPatch(
+        input: $input
+        commitMessage: $commitMessage
+        references: $references
+      ) {
         id
         ...StixCyberObservableEditionOverview_stixCyberObservable
         ...StixCyberObservable_stixCyberObservable
@@ -107,7 +80,7 @@ const stixCyberObservableMutationRelationAdd = graphql`
 const stixCyberObservableMutationRelationDelete = graphql`
   mutation StixCyberObservableEditionOverviewRelationDeleteMutation(
     $id: ID!
-    $toId: String!
+    $toId: StixRef!
     $relationship_type: String!
   ) {
     stixCyberObservableEdit(id: $id) {
@@ -119,122 +92,159 @@ const stixCyberObservableMutationRelationDelete = graphql`
   }
 `;
 
-class StixCyberObservableEditionOverviewComponent extends Component {
-  handleChangeFocus(name) {
+const StixCyberObservableEditionOverviewComponent = ({ stixCyberObservable, enableReferences, context, handleClose }) => {
+  const history = useHistory();
+  const { t } = useFormatter();
+  const { isVocabularyField, fieldToCategory } = useVocabularyCategory();
+
+  const onSubmit = (values, { setSubmitting }) => {
+    const commitMessage = values.message;
+    const references = R.pluck('value', values.references || []);
+    const inputValues = R.pipe(
+      R.dissoc('message'),
+      R.dissoc('references'),
+      R.assoc('x_opencti_workflow_id', values.x_opencti_workflow_id?.value),
+      R.assoc('createdBy', values.createdBy?.value),
+      R.assoc('objectMarking', R.pluck('value', values.objectMarking)),
+      R.toPairs,
+      R.map((n) => ({
+        key: n[0],
+        value: adaptFieldValue(n[1]),
+      })),
+    )(values);
+    commitMutation({
+      mutation: stixCyberObservableMutationFieldPatch,
+      variables: {
+        id: stixCyberObservable.id,
+        input: inputValues,
+        commitMessage:
+          commitMessage && commitMessage.length > 0 ? commitMessage : null,
+        references,
+      },
+      setSubmitting,
+      onCompleted: () => {
+        setSubmitting(false);
+        handleClose();
+      },
+    });
+  };
+  const handleChangeFocus = (name) => {
     commitMutation({
       mutation: stixCyberObservableEditionOverviewFocus,
       variables: {
-        id: this.props.stixCyberObservable.id,
+        id: stixCyberObservable.id,
         input: {
           focusOn: name,
         },
       },
     });
-  }
+  };
 
-  handleSubmitField(name, value) {
-    let finalName = name;
-    let finalValue = value || '';
-    if (name.includes('hashes')) {
-      finalName = name.replace('hashes_', 'hashes.');
-    }
-    if (multipleAttributes.includes(finalName)) {
-      if (finalValue.length > 0) {
-        finalValue = finalValue.split(',');
-      } else {
-        finalValue = [];
+  const handleSubmitField = (name, value) => {
+    if (!enableReferences) {
+      let finalName = name;
+      let finalValue = value || '';
+      if (name.includes('hashes')) {
+        finalName = name.replace('hashes_', 'hashes.');
       }
-    }
-    commitMutation({
-      mutation: stixCyberObservableMutationFieldPatch,
-      variables: {
-        id: this.props.stixCyberObservable.id,
-        input: { key: finalName, value: finalValue },
-      },
-      onCompleted: (response) => {
-        if (
-          response.stixCyberObservableEdit.fieldPatch.id
-          !== this.props.stixCyberObservable.id
-        ) {
-          this.props.history.push(
-            `/dashboard/observations/observables/${response.stixCyberObservableEdit.fieldPatch.id}`,
-          );
+      if (multipleAttributes.includes(finalName)) {
+        if (finalValue.length > 0) {
+          finalValue = finalValue.split(',');
+        } else {
+          finalValue = [];
         }
-      },
-    });
-  }
-
-  handleChangeCreatedBy(name, value) {
-    if (!this.props.enableReferences) {
+      }
       commitMutation({
         mutation: stixCyberObservableMutationFieldPatch,
         variables: {
-          id: this.props.stixCyberObservable.id,
+          id: stixCyberObservable.id,
+          input: { key: finalName, value: finalValue },
+        },
+        onCompleted: (response) => {
+          if (
+            response.stixCyberObservableEdit.fieldPatch.id
+            !== stixCyberObservable.id
+          ) {
+            history.push(
+              `/dashboard/observations/observables/${response.stixCyberObservableEdit.fieldPatch.id}`,
+            );
+          }
+        },
+      });
+    }
+  };
+
+  const handleChangeCreatedBy = (name, value) => {
+    if (!enableReferences) {
+      commitMutation({
+        mutation: stixCyberObservableMutationFieldPatch,
+        variables: {
+          id: stixCyberObservable.id,
           input: { key: 'createdBy', value: value.value || '' },
         },
       });
     }
-  }
+  };
 
-  handleChangeObjectMarking(name, values) {
-    const { stixCyberObservable } = this.props;
-    const currentMarkingDefinitions = pipe(
-      pathOr([], ['objectMarking', 'edges']),
-      map((n) => ({
-        label: n.node.definition,
-        value: n.node.id,
-      })),
-    )(stixCyberObservable);
-
-    const added = difference(values, currentMarkingDefinitions);
-    const removed = difference(currentMarkingDefinitions, values);
-
-    if (added.length > 0) {
+  const handleChangeRef = (name, value) => {
+    if (!enableReferences) {
       commitMutation({
-        mutation: stixCyberObservableMutationRelationAdd,
+        mutation: stixCyberObservableMutationFieldPatch,
         variables: {
-          id: this.props.stixCyberObservable.id,
-          input: {
-            toId: head(added).value,
+          id: stixCyberObservable.id,
+          input: { key: name, value: value.value || '' },
+        },
+      });
+    }
+  };
+
+  const handleChangeObjectMarking = (name, values) => {
+    if (!enableReferences) {
+      const currentMarkingDefinitions = pipe(
+        pathOr([], ['objectMarking', 'edges']),
+        map((n) => ({
+          label: n.node.definition,
+          value: n.node.id,
+        })),
+      )(stixCyberObservable);
+      const added = difference(values, currentMarkingDefinitions);
+      const removed = difference(currentMarkingDefinitions, values);
+      if (added.length > 0) {
+        commitMutation({
+          mutation: stixCyberObservableMutationRelationAdd,
+          variables: {
+            id: stixCyberObservable.id,
+            input: {
+              toId: head(added).value,
+              relationship_type: 'object-marking',
+            },
+          },
+        });
+      }
+      if (removed.length > 0) {
+        commitMutation({
+          mutation: stixCyberObservableMutationRelationDelete,
+          variables: {
+            id: stixCyberObservable.id,
+            toId: head(removed).value,
             relationship_type: 'object-marking',
           },
-        },
-      });
+        });
+      }
     }
+  };
 
-    if (removed.length > 0) {
-      commitMutation({
-        mutation: stixCyberObservableMutationRelationDelete,
-        variables: {
-          id: this.props.stixCyberObservable.id,
-          toId: head(removed).value,
-          relationship_type: 'object-marking',
-        },
-      });
-    }
-  }
-
-  render() {
-    const { t, stixCyberObservable, context } = this.props;
-    return (
+  return (
       <QueryRenderer
         query={stixCyberObservablesLinesAttributesQuery}
-        variables={{ elementType: stixCyberObservable.entity_type }}
+        variables={{ elementType: [stixCyberObservable.entity_type] }}
         render={({ props }) => {
           if (props && props.schemaAttributes) {
-            const createdBy = pathOr(null, ['createdBy', 'name'], stixCyberObservable) === null
+            const createdBy = (stixCyberObservable?.createdBy?.name ?? null) === null
               ? ''
               : {
-                label: pathOr(
-                  null,
-                  ['createdBy', 'name'],
-                  stixCyberObservable,
-                ),
-                value: pathOr(
-                  null,
-                  ['createdBy', 'id'],
-                  stixCyberObservable,
-                ),
+                label: stixCyberObservable?.createdBy?.name ?? null,
+                value: stixCyberObservable?.createdBy?.id ?? null,
               };
             const objectMarking = pipe(
               pathOr([], ['objectMarking', 'edges']),
@@ -263,15 +273,11 @@ class StixCyberObservableEditionOverviewComponent extends Component {
             )(props.schemaAttributes.edges);
             for (const attribute of attributes) {
               if (includes(attribute.value, dateAttributes)) {
-                initialValues[attribute.value] = stixCyberObservable[
-                  attribute.value
-                ]
+                initialValues[attribute.value] = stixCyberObservable[attribute.value]
                   ? buildDate(stixCyberObservable[attribute.value])
                   : null;
               } else if (includes(attribute.value, multipleAttributes)) {
-                initialValues[attribute.value] = stixCyberObservable[
-                  attribute.value
-                ]
+                initialValues[attribute.value] = stixCyberObservable[attribute.value]
                   ? stixCyberObservable[attribute.value].join(',')
                   : null;
               } else if (attribute.value === 'hashes') {
@@ -291,7 +297,7 @@ class StixCyberObservableEditionOverviewComponent extends Component {
               <Formik
                 enableReinitialize={true}
                 initialValues={initialValues}
-                onSubmit={() => true}
+                onSubmit={onSubmit}
               >
                 {({ setFieldValue }) => (
                   <Form style={{ margin: '20px 0 20px 0' }}>
@@ -302,8 +308,8 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                       label={t('Score')}
                       fullWidth={true}
                       type="number"
-                      onFocus={this.handleChangeFocus.bind(this)}
-                      onSubmit={this.handleSubmitField.bind(this)}
+                      onFocus={handleChangeFocus}
+                      onSubmit={handleSubmitField}
                       helperText={
                         <SubscriptionFocus
                           context={context}
@@ -319,8 +325,8 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                       multiline={true}
                       rows="4"
                       style={{ marginTop: 20 }}
-                      onFocus={this.handleChangeFocus.bind(this)}
-                      onSubmit={this.handleSubmitField.bind(this)}
+                      onFocus={handleChangeFocus}
+                      onSubmit={handleSubmitField}
                       helperText={
                         <SubscriptionFocus
                           context={context}
@@ -339,8 +345,8 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                               label={t('hash_md5')}
                               fullWidth={true}
                               style={{ marginTop: 20 }}
-                              onFocus={this.handleChangeFocus.bind(this)}
-                              onSubmit={this.handleSubmitField.bind(this)}
+                              onFocus={handleChangeFocus}
+                              onSubmit={handleSubmitField}
                               helperText={
                                 <SubscriptionFocus
                                   context={context}
@@ -355,8 +361,8 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                               label={t('hash_sha-1')}
                               fullWidth={true}
                               style={{ marginTop: 20 }}
-                              onFocus={this.handleChangeFocus.bind(this)}
-                              onSubmit={this.handleSubmitField.bind(this)}
+                              onFocus={handleChangeFocus}
+                              onSubmit={handleSubmitField}
                               helperText={
                                 <SubscriptionFocus
                                   context={context}
@@ -371,8 +377,8 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                               label={t('hash_sha-256')}
                               fullWidth={true}
                               style={{ marginTop: 20 }}
-                              onFocus={this.handleChangeFocus.bind(this)}
-                              onSubmit={this.handleSubmitField.bind(this)}
+                              onFocus={handleChangeFocus}
+                              onSubmit={handleSubmitField}
                               helperText={
                                 <SubscriptionFocus
                                   context={context}
@@ -387,8 +393,8 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                               label={t('hash_sha-512')}
                               fullWidth={true}
                               style={{ marginTop: 20 }}
-                              onFocus={this.handleChangeFocus.bind(this)}
-                              onSubmit={this.handleSubmitField.bind(this)}
+                              onFocus={handleChangeFocus}
+                              onSubmit={handleSubmitField}
                               helperText={
                                 <SubscriptionFocus
                                   context={context}
@@ -406,8 +412,8 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                             key={attribute.value}
                             name={attribute.value}
                             withSeconds={true}
-                            onFocus={this.handleChangeFocus.bind(this)}
-                            onSubmit={this.handleSubmitField.bind(this)}
+                            onFocus={handleChangeFocus}
+                            onSubmit={handleSubmitField}
                             TextFieldProps={{
                               label: attribute.value,
                               variant: 'standard',
@@ -434,8 +440,8 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                             fullWidth={true}
                             number={true}
                             style={{ marginTop: 20 }}
-                            onFocus={this.handleChangeFocus.bind(this)}
-                            onSubmit={this.handleSubmitField.bind(this)}
+                            onFocus={handleChangeFocus}
+                            onSubmit={handleSubmitField}
                             helperText={
                               <SubscriptionFocus
                                 context={context}
@@ -454,6 +460,36 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                             name={attribute.value}
                             label={attribute.value}
                             containerstyle={{ marginTop: 20 }}
+                            onChange={handleSubmitField}
+                          />
+                        );
+                      }
+                      if (isVocabularyField(stixCyberObservable.entity_type, attribute.value)) {
+                        return (
+                          <OpenVocabField
+                            key={attribute.value}
+                            label={t(attribute.value)}
+                            type={fieldToCategory(stixCyberObservable.entity_type, attribute.value)}
+                            name={attribute.value}
+                            variant={'edit'}
+                            onChange={handleSubmitField}
+                            containerStyle={fieldSpacingContainerStyle}
+                            multiple={false}
+                            editContext={context}
+                          />
+                        );
+                      }
+                      if (attribute.value === 'obsContent') {
+                        const artifact = stixCyberObservable[attribute.value];
+                        return (
+                          <ArtifactField
+                            key={attribute.value}
+                            attributeName={attribute.value}
+                            attributeValue={artifact ? {
+                              label: artifact.observable_value ?? artifact.id,
+                              value: artifact.id,
+                            } : undefined}
+                            onChange={handleChangeRef}
                           />
                         );
                       }
@@ -466,8 +502,8 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                           label={attribute.value}
                           fullWidth={true}
                           style={{ marginTop: 20 }}
-                          onFocus={this.handleChangeFocus.bind(this)}
-                          onSubmit={this.handleSubmitField.bind(this)}
+                          onFocus={handleChangeFocus}
+                          onSubmit={handleSubmitField}
                           helperText={
                             <SubscriptionFocus
                               context={context}
@@ -479,7 +515,7 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                     })}
                     <CreatedByField
                       name="createdBy"
-                      style={{ marginTop: 20, width: '100%' }}
+                      style={fieldSpacingContainerStyle}
                       setFieldValue={setFieldValue}
                       helpertext={
                         <SubscriptionFocus
@@ -487,18 +523,18 @@ class StixCyberObservableEditionOverviewComponent extends Component {
                           fieldName="createdBy"
                         />
                       }
-                      onChange={this.handleChangeCreatedBy.bind(this)}
+                      onChange={handleChangeCreatedBy}
                     />
                     <ObjectMarkingField
                       name="objectMarking"
-                      style={{ marginTop: 20, width: '100%' }}
+                      style={fieldSpacingContainerStyle}
                       helpertext={
                         <SubscriptionFocus
                           context={context}
                           fieldname="objectMarking"
                         />
                       }
-                      onChange={this.handleChangeObjectMarking.bind(this)}
+                      onChange={handleChangeObjectMarking}
                     />
                   </Form>
                 )}
@@ -508,17 +544,7 @@ class StixCyberObservableEditionOverviewComponent extends Component {
           return <div />;
         }}
       />
-    );
-  }
-}
-
-StixCyberObservableEditionOverviewComponent.propTypes = {
-  classes: PropTypes.object,
-  theme: PropTypes.object,
-  t: PropTypes.func,
-  stixCyberObservable: PropTypes.object,
-  context: PropTypes.array,
-  history: PropTypes.object,
+  );
 };
 
 const StixCyberObservableEditionOverview = createFragmentContainer(
@@ -579,6 +605,13 @@ const StixCyberObservableEditionOverview = createFragmentContainer(
           ctime
           mtime
           atime
+          obsContent{
+            id
+            ... on Artifact {
+              observable_value
+              url
+            }
+          }
           hashes {
             algorithm
             hash
@@ -650,6 +683,21 @@ const StixCyberObservableEditionOverview = createFragmentContainer(
           cwd
           command_line
           environment_variables
+          ## windows-process-ext
+          aslr_enabled
+          dep_enabled
+          priority
+          owner_sid
+          window_title
+          integrity_level
+          ## windows-service-ext
+          service_name
+          descriptions
+          display_name
+          group_name
+          start_type
+          service_type
+          service_status
         }
         ... on Software {
           name
@@ -704,6 +752,27 @@ const StixCyberObservableEditionOverview = createFragmentContainer(
         ... on UserAgent {
           value
         }
+        ... on BankAccount {
+          iban
+          bic
+          account_number
+        }
+        ... on PhoneNumber {
+          value
+        }
+        ... on PaymentCard {
+          card_number
+          expiration_date
+          cvv
+          holder_name
+        }
+        ... on MediaContent {
+          title
+          content
+          media_category
+          url
+          publication_date
+        }
         x_opencti_score
         x_opencti_description
         createdBy {
@@ -719,6 +788,8 @@ const StixCyberObservableEditionOverview = createFragmentContainer(
               id
               definition
               definition_type
+              x_opencti_order
+              x_opencti_color
             }
           }
         }
@@ -727,8 +798,4 @@ const StixCyberObservableEditionOverview = createFragmentContainer(
   },
 );
 
-export default compose(
-  inject18n,
-  withRouter,
-  withStyles(styles, { withTheme: true }),
-)(StixCyberObservableEditionOverview);
+export default StixCyberObservableEditionOverview;

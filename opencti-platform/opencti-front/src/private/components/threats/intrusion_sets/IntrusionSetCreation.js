@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import * as PropTypes from 'prop-types';
-import { Formik, Form, Field } from 'formik';
+import { Field, Form, Formik } from 'formik';
 import withStyles from '@mui/styles/withStyles';
 import Drawer from '@mui/material/Drawer';
 import Typography from '@mui/material/Typography';
@@ -12,18 +12,16 @@ import * as Yup from 'yup';
 import { graphql } from 'react-relay';
 import * as R from 'ramda';
 import inject18n from '../../../../components/i18n';
-import {
-  commitMutation,
-  handleErrorInForm,
-} from '../../../../relay/environment';
+import { commitMutation, handleErrorInForm } from '../../../../relay/environment';
 import TextField from '../../../../components/TextField';
 import CreatedByField from '../../common/form/CreatedByField';
 import ObjectLabelField from '../../common/form/ObjectLabelField';
 import ObjectMarkingField from '../../common/form/ObjectMarkingField';
 import MarkDownField from '../../../../components/MarkDownField';
 import ConfidenceField from '../../common/form/ConfidenceField';
-import { insertNode } from '../../../../utils/Store';
-import ExternalReferencesField from '../../common/form/ExternalReferencesField';
+import { insertNode } from '../../../../utils/store';
+import { ExternalReferencesField } from '../../common/form/ExternalReferencesField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -207,7 +205,7 @@ class IntrusionSetCreation extends Component {
                     name="confidence"
                     label={t('Confidence')}
                     fullWidth={true}
-                    containerstyle={{ width: '100%', marginTop: 20 }}
+                    containerStyle={fieldSpacingContainerStyle}
                   />
                   <Field
                     component={MarkDownField}

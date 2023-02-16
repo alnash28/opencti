@@ -3,6 +3,7 @@ export const ACCESS_CONTROL = 'ACCESS_CONTROL';
 // endregion
 
 // region login
+export const IMPERSONATE_ACTION = 'IMPERSONATE';
 export const LOGIN_ACTION = 'LOGIN';
 export const LOGOUT_ACTION = 'LOGOUT';
 // endregion
@@ -26,6 +27,9 @@ export const convertRelationToAction = (name: string, isAdd = true): string => {
   }
   if (name === 'member-of') {
     convertName = 'GROUP';
+  }
+  if (name === 'participate-to') {
+    convertName = 'ORGANIZATION';
   }
   return isAdd ? `${convertName}_ADD` : `${convertName}_REMOVE`;
 };

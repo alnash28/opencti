@@ -8,11 +8,12 @@ import {
 import { onlyStableStixIds } from '../database/stix';
 import { isInferredIndex } from '../database/utils';
 import { STIX_SIGHTING_RELATIONSHIP } from '../schema/stixSightingRelationship';
+import { stixObjectOrStixRelationshipOptions } from '../schema/stixObjectOrStixRelationship';
 
 const stixObjectOrStixRelationshipResolvers = {
   Query: {
-    stixObjectOrStixRelationship: (_, { id }, { user }) => findById(user, id),
-    stixCoreObjectOrStixCoreRelationship: (_, { id }, { user }) => findById(user, id),
+    stixObjectOrStixRelationship: (_, { id }, context) => findById(context, context.user, id),
+    stixCoreObjectOrStixCoreRelationship: (_, { id }, context) => findById(context, context.user, id),
   },
   StixObject: {
     is_inferred: (object) => isInferredIndex(object._index),
@@ -22,6 +23,7 @@ const stixObjectOrStixRelationshipResolvers = {
     is_inferred: (object) => isInferredIndex(object._index),
     x_opencti_stix_ids: (object) => onlyStableStixIds(object.x_opencti_stix_ids || []),
   },
+  StixObjectOrStixRelationshipsFilter: stixObjectOrStixRelationshipOptions.StixObjectOrStixRelationshipsFilter,
   StixObjectOrStixRelationship: {
     // eslint-disable-next-line
     __resolveType(obj) {

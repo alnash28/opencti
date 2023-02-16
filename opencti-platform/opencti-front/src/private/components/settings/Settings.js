@@ -1,10 +1,11 @@
-import React, { Component } from 'react';
-import * as PropTypes from 'prop-types';
+import React from 'react';
 import * as R from 'ramda';
 import { graphql } from 'react-relay';
-import withStyles from '@mui/styles/withStyles';
-import { Form, Formik, Field } from 'formik';
+import { Field, Form, Formik } from 'formik';
+import Tooltip from '@mui/material/Tooltip';
 import Grid from '@mui/material/Grid';
+import Alert from '@mui/material/Alert';
+import AlertTitle from '@mui/material/AlertTitle';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import MenuItem from '@mui/material/MenuItem';
@@ -12,30 +13,36 @@ import * as Yup from 'yup';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
+import ListItemIcon from '@mui/material/ListItemIcon';
 import Chip from '@mui/material/Chip';
-import Avatar from '@mui/material/Avatar';
-import Checkbox from '@mui/material/Checkbox';
-import Box from '@mui/material/Box';
-import { ListItemAvatar } from '@mui/material';
 import { deepPurple } from '@mui/material/colors';
+import { makeStyles } from '@mui/styles';
+import { InformationOutline } from 'mdi-material-ui';
+import { VpnKeyOutlined } from '@mui/icons-material';
 import { SubscriptionFocus } from '../../../components/Subscription';
 import { commitMutation, QueryRenderer } from '../../../relay/environment';
-import inject18n from '../../../components/i18n';
+import { useFormatter } from '../../../components/i18n';
 import TextField from '../../../components/TextField';
 import SelectField from '../../../components/SelectField';
-import Loader from '../../../components/Loader';
+import Loader, { LoaderVariant } from '../../../components/Loader';
 import MarkDownField from '../../../components/MarkDownField';
 import ColorPickerField from '../../../components/ColorPickerField';
+import ObjectOrganizationField from '../common/form/ObjectOrganizationField';
+import useGranted, { SETTINGS_SETACCESSES } from '../../../utils/hooks/useGranted';
+import useQueryLoading from '../../../utils/hooks/useQueryLoading';
+import HiddenTypesList from './entity_settings/HiddenTypesList';
+import { entitySettingsQuery } from './sub_types/EntitySetting';
+import SwitchField from '../../../components/SwitchField';
 
-const styles = (theme) => ({
+const useStyles = makeStyles((theme) => ({
   container: {
-    margin: 0,
+    margin: '0 0 60px 0',
   },
   paper: {
-    width: '100%',
     height: '100%',
-    padding: '20px 20px 30px 20px',
-    textAlign: 'left',
+    minHeight: '100%',
+    margin: '10px 0 0 0',
+    padding: 20,
     borderRadius: 6,
   },
   purple: {
@@ -43,13 +50,34 @@ const styles = (theme) => ({
     backgroundColor: deepPurple[500],
   },
   button: {
-    float: 'right',
-    margin: '20px 0 0 0',
+    float: 'left',
+    margin: '20px 0 20px 0',
   },
   nested: {
     paddingLeft: theme.spacing(4),
   },
-});
+  icon: {
+    paddingTop: 4,
+    display: 'inline-block',
+    color: theme.palette.primary.main,
+  },
+  text: {
+    display: 'inline-block',
+    flexGrow: 1,
+    marginLeft: 10,
+  },
+  autoCompleteIndicator: {
+    display: 'none',
+  },
+  alert: {
+    width: '100%',
+    marginTop: 20,
+  },
+  message: {
+    width: '100%',
+    overflow: 'hidden',
+  },
+}));
 
 const settingsQuery = graphql`
   query SettingsQuery {
@@ -68,6 +96,7 @@ const settingsQuery = graphql`
       platform_theme_dark_secondary
       platform_theme_dark_accent
       platform_theme_dark_logo
+      platform_theme_dark_logo_collapsed
       platform_theme_dark_logo_login
       platform_theme_light_background
       platform_theme_light_paper
@@ -76,9 +105,12 @@ const settingsQuery = graphql`
       platform_theme_light_secondary
       platform_theme_light_accent
       platform_theme_light_logo
+      platform_theme_light_logo_collapsed
       platform_theme_light_logo_login
-      platform_enable_reference
-      platform_hidden_types
+      platform_organization {
+        id
+        name
+      }
       platform_providers {
         name
         strategy
@@ -86,16 +118,21 @@ const settingsQuery = graphql`
       platform_modules {
         id
         enable
+        running
+      }
+      platform_cluster {
+        instances_number
       }
       editContext {
         name
         focusOn
       }
+      otp_mandatory
     }
   }
 `;
 
-const settingsMutationFieldPatch = graphql`
+export const settingsMutationFieldPatch = graphql`
   mutation SettingsFieldPatchMutation($id: ID!, $input: [EditInput]!) {
     settingsEdit(id: $id) {
       fieldPatch(input: $input) {
@@ -111,6 +148,7 @@ const settingsMutationFieldPatch = graphql`
         platform_theme_dark_secondary
         platform_theme_dark_accent
         platform_theme_dark_logo
+        platform_theme_dark_logo_collapsed
         platform_theme_dark_logo_login
         platform_theme_light_background
         platform_theme_light_paper
@@ -119,10 +157,15 @@ const settingsMutationFieldPatch = graphql`
         platform_theme_light_secondary
         platform_theme_light_accent
         platform_theme_light_logo
+        platform_theme_light_logo_collapsed
         platform_theme_light_logo_login
         platform_language
         platform_login_message
-        platform_hidden_types
+        platform_organization {
+          id
+          name
+        }
+        otp_mandatory
       }
     }
   }
@@ -164,6 +207,7 @@ const settingsValidation = (t) => Yup.object().shape({
   platform_theme_dark_secondary: Yup.string().nullable(),
   platform_theme_dark_accent: Yup.string().nullable(),
   platform_theme_dark_logo: Yup.string().nullable(),
+  platform_theme_dark_logo_collapsed: Yup.string().nullable(),
   platform_theme_dark_logo_login: Yup.string().nullable(),
   platform_theme_light_background: Yup.string().nullable(),
   platform_theme_light_paper: Yup.string().nullable(),
@@ -172,15 +216,19 @@ const settingsValidation = (t) => Yup.object().shape({
   platform_theme_light_secondary: Yup.string().nullable(),
   platform_theme_light_accent: Yup.string().nullable(),
   platform_theme_light_logo: Yup.string().nullable(),
+  platform_theme_light_logo_collapsed: Yup.string().nullable(),
   platform_theme_light_logo_login: Yup.string().nullable(),
   platform_language: Yup.string().nullable(),
   platform_login_message: Yup.string().nullable(),
-  platform_hidden_types: Yup.array().nullable(),
+  platform_organization: Yup.object().nullable(),
+  otp_mandatory: Yup.boolean(),
 });
 
-class Settings extends Component {
-  // eslint-disable-next-line class-methods-use-this
-  handleChangeFocus(id, name) {
+const Settings = () => {
+  const classes = useStyles();
+  const { t } = useFormatter();
+  const isAccessAdmin = useGranted([SETTINGS_SETACCESSES]);
+  const handleChangeFocus = (id, name) => {
     commitMutation({
       mutation: settingsFocus,
       variables: {
@@ -190,9 +238,9 @@ class Settings extends Component {
         },
       },
     });
-  }
+  };
 
-  handleSubmitField(id, name, value) {
+  const handleSubmitField = (id, name, value) => {
     let finalValue = value;
     if (
       [
@@ -219,14 +267,10 @@ class Settings extends Component {
         finalValue = '#000000';
       }
     }
-    if (name === 'platform_hidden_types') {
-      if (finalValue.includes('Threats')) {
-        finalValue = finalValue.filter(
-          (n) => !['Threat-Actor', 'Intrusion-Set', 'Campaign'].includes(n),
-        );
-      }
+    if (name === 'platform_organization') {
+      finalValue = finalValue.value;
     }
-    settingsValidation(this.props.t)
+    settingsValidation(t)
       .validateAt(name, { [name]: finalValue })
       .then(() => {
         commitMutation({
@@ -235,762 +279,786 @@ class Settings extends Component {
         });
       })
       .catch(() => false);
-  }
+  };
 
-  render() {
-    const { t, classes } = this.props;
-    return (
-      <div className={classes.container}>
-        <QueryRenderer
-          query={settingsQuery}
-          render={({ props }) => {
-            if (props && props.settings) {
-              const { settings } = props;
-              const { id, editContext } = settings;
-              const initialValues = R.pipe(
-                R.assoc(
-                  'platform_hidden_types',
-                  settings.platform_hidden_types || [],
-                ),
-                R.pick([
-                  'platform_title',
-                  'platform_favicon',
-                  'platform_email',
-                  'platform_theme',
-                  'platform_language',
-                  'platform_login_message',
-                  'platform_theme_dark_background',
-                  'platform_theme_dark_paper',
-                  'platform_theme_dark_nav',
-                  'platform_theme_dark_primary',
-                  'platform_theme_dark_secondary',
-                  'platform_theme_dark_accent',
-                  'platform_theme_dark_logo',
-                  'platform_theme_dark_logo_login',
-                  'platform_theme_light_background',
-                  'platform_theme_light_paper',
-                  'platform_theme_light_nav',
-                  'platform_theme_light_primary',
-                  'platform_theme_light_secondary',
-                  'platform_theme_light_accent',
-                  'platform_theme_light_logo',
-                  'platform_theme_light_logo_login',
-                  'platform_map_tile_server_dark',
-                  'platform_map_tile_server_light',
-                  'platform_hidden_types',
-                ]),
-              )(settings);
-              const authProviders = settings.platform_providers;
-              const modules = settings.platform_modules;
-              let i = 0;
-              return (
-                <div>
-                  <Grid container={true} spacing={3}>
-                    <Grid item={true} xs={6}>
-                      <Paper
-                        classes={{ root: classes.paper }}
-                        variant="outlined"
+  const queryRef = useQueryLoading(entitySettingsQuery);
+
+  return (
+    <div className={classes.container}>
+      <QueryRenderer
+        query={settingsQuery}
+        render={({ props }) => {
+          if (props && props.settings) {
+            const { settings } = props;
+            const { id, editContext } = settings;
+            const initialValues = R.pipe(
+              R.assoc(
+                'platform_organization',
+                settings.platform_organization
+                  ? {
+                    label: settings.platform_organization.name,
+                    value: settings.platform_organization.id,
+                  }
+                  : '',
+              ),
+              R.pick([
+                'platform_title',
+                'platform_favicon',
+                'platform_email',
+                'platform_theme',
+                'platform_language',
+                'platform_login_message',
+                'platform_theme_dark_background',
+                'platform_theme_dark_paper',
+                'platform_theme_dark_nav',
+                'platform_theme_dark_primary',
+                'platform_theme_dark_secondary',
+                'platform_theme_dark_accent',
+                'platform_theme_dark_logo',
+                'platform_theme_dark_logo_collapsed',
+                'platform_theme_dark_logo_login',
+                'platform_theme_light_background',
+                'platform_theme_light_paper',
+                'platform_theme_light_nav',
+                'platform_theme_light_primary',
+                'platform_theme_light_secondary',
+                'platform_theme_light_accent',
+                'platform_theme_light_logo',
+                'platform_theme_light_logo_collapsed',
+                'platform_theme_light_logo_login',
+                'platform_map_tile_server_dark',
+                'platform_map_tile_server_light',
+                'platform_organization',
+                'otp_mandatory',
+              ]),
+            )(settings);
+            const authProviders = settings.platform_providers;
+            const modules = settings.platform_modules;
+            return (
+              <div>
+                <Grid container={true} spacing={3}>
+                  <Grid item={true} xs={6}>
+                    <Typography variant="h4" gutterBottom={true}>
+                      {t('Configuration')}
+                    </Typography>
+                    <Paper classes={{ root: classes.paper }} variant="outlined">
+                      <Formik
+                        onSubmit={() => {}}
+                        enableReinitialize={true}
+                        initialValues={initialValues}
+                        validationSchema={settingsValidation(t)}
                       >
-                        <Typography variant="h1" gutterBottom={true}>
-                          {t('Configuration')}
-                        </Typography>
-                        <Formik
-                          enableReinitialize={true}
-                          initialValues={initialValues}
-                          validationSchema={settingsValidation(t)}
-                        >
-                          {({ values }) => (
-                            <Form style={{ marginTop: 20 }}>
-                              <Field
-                                component={TextField}
-                                variant="standard"
-                                name="platform_title"
-                                label={t('Platform title')}
-                                fullWidth={true}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_title"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={TextField}
-                                variant="standard"
-                                name="platform_favicon"
-                                label={t('Platform favicon URL')}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_favicon"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={TextField}
-                                variant="standard"
-                                name="platform_email"
-                                label={t('Sender email address')}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_email"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={SelectField}
-                                variant="standard"
-                                name="platform_theme"
-                                label={t('Theme')}
-                                fullWidth={true}
-                                containerstyle={{
-                                  marginTop: 20,
-                                  width: '100%',
-                                }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onChange={this.handleSubmitField.bind(this, id)}
-                                helpertext={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme"
-                                  />
-                                }
-                              >
-                                <MenuItem value="dark">{t('Dark')}</MenuItem>
-                                <MenuItem value="light">{t('Light')}</MenuItem>
-                              </Field>
-                              <Field
-                                component={SelectField}
-                                variant="standard"
-                                name="platform_language"
-                                label={t('Language')}
-                                fullWidth={true}
-                                containerstyle={{
-                                  marginTop: 20,
-                                  width: '100%',
-                                }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onChange={this.handleSubmitField.bind(this, id)}
-                                helpertext={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_language"
-                                  />
-                                }
-                              >
-                                <MenuItem value="auto">
-                                  <em>{t('Automatic')}</em>
-                                </MenuItem>
-                                <MenuItem value="en-us">English</MenuItem>
-                                <MenuItem value="fr-fr">Français</MenuItem>
-                                <MenuItem value="zh-cn">简化字</MenuItem>
-                              </Field>
-                              <Field
-                                component={SelectField}
-                                variant="standard"
-                                name="platform_hidden_types"
-                                label={t('Hidden entity types')}
-                                fullWidth={true}
-                                multiple={true}
-                                containerstyle={{
-                                  marginTop: 20,
-                                  width: '100%',
-                                }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onChange={this.handleSubmitField.bind(this, id)}
-                                helpertext={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_hidden_types"
-                                  />
-                                }
-                                renderValue={(selected) => (
-                                  <Box
-                                    sx={{
-                                      display: 'flex',
-                                      flexWrap: 'wrap',
-                                      gap: 0.5,
-                                    }}
-                                  >
-                                    {selected.map((value) => (
-                                      <Chip
-                                        key={value}
-                                        label={t(`entity_${value}`)}
-                                      />
-                                    ))}
-                                  </Box>
-                                )}
-                              >
-                                <MenuItem value="Threats">
-                                  <Checkbox
-                                    checked={
-                                      (
-                                        values.platform_hidden_types || []
-                                      ).indexOf('Threats') > -1
-                                    }
-                                  />
-                                  {t('Threats')}
-                                </MenuItem>
-                                <MenuItem
-                                  value="Threat-Actor"
-                                  disabled={(
-                                    values.platform_hidden_types || []
-                                  ).includes('Threats')}
-                                >
-                                  <Checkbox
-                                    checked={
-                                      (
-                                        values.platform_hidden_types || []
-                                      ).indexOf('Threat-Actor') > -1
-                                    }
-                                    style={{ marginLeft: 10 }}
-                                  />
-                                  {t('entity_Threat-Actor')}
-                                </MenuItem>
-                                <MenuItem
-                                  value="Intrusion-Set"
-                                  disabled={(
-                                    values.platform_hidden_types || []
-                                  ).includes('Threats')}
-                                >
-                                  <Checkbox
-                                    checked={
-                                      (
-                                        values.platform_hidden_types || []
-                                      ).indexOf('Intrusion-Set') > -1
-                                    }
-                                    style={{ marginLeft: 10 }}
-                                  />
-                                  {t('entity_Intrusion-Set')}
-                                </MenuItem>
-                                <MenuItem
-                                  value="Campaign"
-                                  disabled={(
-                                    values.platform_hidden_types || []
-                                  ).includes('Threats')}
-                                >
-                                  <Checkbox
-                                    checked={
-                                      (
-                                        values.platform_hidden_types || []
-                                      ).indexOf('Campaign') > -1
-                                    }
-                                    style={{ marginLeft: 10 }}
-                                  />
-                                  {t('entity_Campaign')}
-                                </MenuItem>
-                              </Field>
-                            </Form>
-                          )}
-                        </Formik>
-                      </Paper>
-                    </Grid>
-                    <Grid item={true} xs={6}>
-                      <Paper
-                        classes={{ root: classes.paper }}
-                        variant="outlined"
-                      >
-                        <Typography variant="h1" gutterBottom={true}>
-                          {t('Authentication strategies')}
-                        </Typography>
-                        <List>
-                          {authProviders.map((provider) => {
-                            i += 1;
-                            return (
-                              <ListItem key={provider.strategy} divider={true}>
-                                <ListItemAvatar>
-                                  <Avatar className={classes.purple}>
-                                    {i}
-                                  </Avatar>
-                                </ListItemAvatar>
-                                <ListItemText
-                                  primary={provider.name}
-                                  secondary={provider.strategy}
+                        {() => (
+                          <Form>
+                            <Field
+                              component={TextField}
+                              variant="standard"
+                              name="platform_title"
+                              label={t('Platform title')}
+                              fullWidth={true}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_title"
                                 />
-                              </ListItem>
-                            );
-                          })}
-                        </List>
-                        <Formik
-                          enableReinitialize={true}
-                          initialValues={initialValues}
-                          validationSchema={settingsValidation(t)}
-                        >
-                          {() => (
-                            <Form style={{ marginTop: 20 }}>
-                              <Field
-                                component={MarkDownField}
-                                name="platform_login_message"
-                                label={t('Platform login message')}
-                                fullWidth={true}
-                                multiline={true}
-                                rows="3"
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_login_message"
-                                  />
-                                }
-                              />
-                            </Form>
-                          )}
-                        </Formik>
-                      </Paper>
-                    </Grid>
-                  </Grid>
-                  <Grid container={true} spacing={3} style={{ marginTop: 0 }}>
-                    <Grid item={true} xs={4}>
-                      <Paper
-                        classes={{ root: classes.paper }}
-                        variant="outlined"
-                      >
-                        <Typography variant="h1" gutterBottom={true}>
-                          {t('Dark theme')}
-                        </Typography>
-                        <Formik
-                          enableReinitialize={true}
-                          initialValues={initialValues}
-                          validationSchema={settingsValidation(t)}
-                        >
-                          {() => (
-                            <Form style={{ marginTop: 20 }}>
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_dark_background"
-                                label={t('Background color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_dark_background"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_dark_paper"
-                                label={t('Paper color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_dark_paper"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_dark_nav"
-                                label={t('Navigation color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_dark_nav"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_dark_primary"
-                                label={t('Primary color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_dark_primary"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_dark_secondary"
-                                label={t('Secondary color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_dark_secondary"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_dark_accent"
-                                label={t('Accent color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_dark_accent"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={TextField}
-                                variant="standard"
-                                name="platform_theme_dark_logo"
-                                label={t('Logo URL')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_dark_logo"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={TextField}
-                                variant="standard"
-                                name="platform_theme_dark_logo_login"
-                                label={t('Logo URL for login page')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_dark_logo_login"
-                                  />
-                                }
-                              />
-                            </Form>
-                          )}
-                        </Formik>
-                      </Paper>
-                    </Grid>
-                    <Grid item={true} xs={4}>
-                      <Paper
-                        classes={{ root: classes.paper }}
-                        variant="outlined"
-                      >
-                        <Typography variant="h1" gutterBottom={true}>
-                          {t('Light theme')}
-                        </Typography>
-                        <Formik
-                          enableReinitialize={true}
-                          initialValues={initialValues}
-                          validationSchema={settingsValidation(t)}
-                        >
-                          {() => (
-                            <Form style={{ marginTop: 20 }}>
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_light_background"
-                                label={t('Background color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_light_background"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_light_paper"
-                                label={t('Paper color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_light_paper"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_light_nav"
-                                label={t('Navigation color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_light_nav"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_light_primary"
-                                label={t('Primary color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_light_primary"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_light_secondary"
-                                label={t('Secondary color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_light_secondary"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={ColorPickerField}
-                                name="platform_theme_light_accent"
-                                label={t('Accent color')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                variant="standard"
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_light_accent"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={TextField}
-                                variant="standard"
-                                name="platform_theme_light_logo"
-                                label={t('Logo URL')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_light_logo"
-                                  />
-                                }
-                              />
-                              <Field
-                                component={TextField}
-                                variant="standard"
-                                name="platform_theme_light_logo_login"
-                                label={t('Logo URL for login page')}
-                                placeholder={t('Default')}
-                                InputLabelProps={{
-                                  shrink: true,
-                                }}
-                                fullWidth={true}
-                                style={{ marginTop: 20 }}
-                                onFocus={this.handleChangeFocus.bind(this, id)}
-                                onSubmit={this.handleSubmitField.bind(this, id)}
-                                helperText={
-                                  <SubscriptionFocus
-                                    context={editContext}
-                                    fieldName="platform_theme_light_logo_login"
-                                  />
-                                }
-                              />
-                            </Form>
-                          )}
-                        </Formik>
-                      </Paper>
-                    </Grid>
-                    <Grid item={true} xs={4}>
-                      <Paper
-                        classes={{ root: classes.paper }}
-                        variant="outlined"
-                      >
-                        <QueryRenderer
-                          query={settingsAboutQuery}
-                          render={({ props: aboutProps }) => {
-                            if (aboutProps) {
-                              const { version, dependencies } = aboutProps.about;
-                              return (
+                              }
+                            />
+                            <Field
+                              component={TextField}
+                              variant="standard"
+                              name="platform_favicon"
+                              label={t('Platform favicon URL')}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_favicon"
+                                />
+                              }
+                            />
+                            <Field
+                              component={TextField}
+                              variant="standard"
+                              name="platform_email"
+                              label={t('Sender email address')}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_email"
+                                />
+                              }
+                            />
+                            <Field
+                              component={SelectField}
+                              variant="standard"
+                              name="platform_theme"
+                              label={t('Theme')}
+                              fullWidth={true}
+                              containerstyle={{
+                                marginTop: 20,
+                                width: '100%',
+                              }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onChange={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helpertext={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme"
+                                />
+                              }
+                            >
+                              <MenuItem value="dark">{t('Dark')}</MenuItem>
+                              <MenuItem value="light">{t('Light')}</MenuItem>
+                            </Field>
+                            <Field
+                              component={SelectField}
+                              variant="standard"
+                              name="platform_language"
+                              label={t('Language')}
+                              fullWidth={true}
+                              containerstyle={{
+                                marginTop: 20,
+                                width: '100%',
+                              }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onChange={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helpertext={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_language"
+                                />
+                              }
+                            >
+                              <MenuItem value="auto">
+                                <em>{t('Automatic')}</em>
+                              </MenuItem>
+                              <MenuItem value="en-us">English</MenuItem>
+                              <MenuItem value="fr-fr">Français</MenuItem>
+                              <MenuItem value="es-es">Español</MenuItem>
+                              <MenuItem value="ja-jp">日本語</MenuItem>
+                              <MenuItem value="zh-cn">简化字</MenuItem>
+                            </Field>
+                            {queryRef && (
+                              <React.Suspense fallback={<Loader variant={LoaderVariant.inElement} />}>
+                                 <HiddenTypesList queryRef={queryRef} />
+                              </React.Suspense>
+                            )}
+                            <div style={{ marginTop: 20 }}>
+                              {isAccessAdmin && (
                                 <div>
-                                  <Typography variant="h1" gutterBottom={true}>
-                                    {t('Tools')}
+                                  <Typography
+                                    variant="h3"
+                                    gutterBottom={true}
+                                    style={{ marginTop: 30 }}
+                                  >
+                                    {t('Admin access only')}
                                   </Typography>
-                                  <List>
-                                    <ListItem divider={true}>
-                                      <ListItemText primary={'OpenCTI'} />
-                                      <Chip label={version} color="primary" />
-                                    </ListItem>
-                                    <List component="div" disablePadding>
-                                      {modules.map((module) => (
-                                        <ListItem
-                                          key={module.id}
-                                          divider={true}
-                                          className={classes.nested}
-                                        >
-                                          <ListItemText
-                                            primary={t(module.id)}
-                                          />
-                                          <Chip
-                                            label={
-                                              module.enable
-                                                ? t('Enabled')
-                                                : t('Disabled')
-                                            }
-                                            color={
-                                              module.enable
-                                                ? 'success'
-                                                : 'error'
-                                            }
-                                          />
-                                        </ListItem>
-                                      ))}
-                                    </List>
-                                    {dependencies.map((dep) => (
-                                      <ListItem key={dep.name} divider={true}>
-                                        <ListItemText primary={t(dep.name)} />
-                                        <Chip
-                                          label={dep.version}
-                                          color="primary"
-                                        />
-                                      </ListItem>
-                                    ))}
-                                  </List>
+                                  <Alert
+                                    classes={{
+                                      root: classes.alert,
+                                      message: classes.message,
+                                    }}
+                                    severity="warning"
+                                    variant="outlined"
+                                    style={{ position: 'relative' }}
+                                  >
+                                    <AlertTitle>
+                                      {t('Platform organization')}
+                                    </AlertTitle>
+                                    <Tooltip
+                                      title={t(
+                                        'When you specified the platform organization, data without any organization restriction will be accessible only for users that are part of the platform one',
+                                      )}
+                                    >
+                                      <InformationOutline
+                                        fontSize="small"
+                                        color="primary"
+                                        style={{
+                                          position: 'absolute',
+                                          top: 10,
+                                          right: 18,
+                                        }}
+                                      />
+                                    </Tooltip>
+                                    <ObjectOrganizationField
+                                      name="platform_organization"
+                                      disabled={!isAccessAdmin}
+                                      onChange={(name, value) => handleSubmitField(id, name, value)
+                                      }
+                                      style={{ width: '100%' }}
+                                      multiple={false}
+                                      outlined={false}
+                                    />
+                                  </Alert>
                                 </div>
-                              );
-                            }
-                            return <Loader variant="inElement" />;
-                          }}
-                        />
-                      </Paper>
-                    </Grid>
+                              )}
+                              {!isAccessAdmin && <div></div>}
+                            </div>
+                          </Form>
+                        )}
+                      </Formik>
+                    </Paper>
                   </Grid>
-                </div>
-              );
-            }
-            return <Loader />;
-          }}
-        />
-      </div>
-    );
-  }
-}
-
-Settings.propTypes = {
-  classes: PropTypes.object,
-  t: PropTypes.func,
-  fsd: PropTypes.func,
+                  <Grid item={true} xs={6}>
+                    <Typography variant="h4" gutterBottom={true}>
+                      {t('Authentication strategies')}
+                    </Typography>
+                    <Paper classes={{ root: classes.paper }} variant="outlined">
+                      <List style={{ marginTop: -20 }}>
+                        {authProviders.map((provider) => (
+                          <ListItem key={provider.strategy} divider={true}>
+                            <ListItemIcon>
+                              <VpnKeyOutlined color="primary" />
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={provider.name}
+                              secondary={provider.strategy}
+                            />
+                            <Chip label={t('Enabled')} color="success" />
+                          </ListItem>
+                        ))}
+                      </List>
+                      <Formik
+                        onSubmit={() => {}}
+                        enableReinitialize={true}
+                        initialValues={initialValues}
+                        validationSchema={settingsValidation(t)}
+                      >
+                        {() => (
+                          <Form>
+                            <Field
+                              component={MarkDownField}
+                              name="platform_login_message"
+                              label={t('Platform login message')}
+                              fullWidth={true}
+                              multiline={true}
+                              rows="3"
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_login_message"
+                                />
+                              }
+                            />
+                            <Field
+                              component={SwitchField}
+                              disabled={!isAccessAdmin}
+                              type="checkbox"
+                              name="otp_mandatory"
+                              label={t('Enforce two-factor authentication')}
+                              containerstyle={{
+                                margin: '20px 0',
+                              }}
+                              onChange={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="otp_mandatory"
+                                />
+                              }
+                            />
+                          </Form>
+                        )}
+                      </Formik>
+                    </Paper>
+                  </Grid>
+                </Grid>
+                <Grid container={true} spacing={3} style={{ marginTop: 25 }}>
+                  <Grid item={true} xs={4}>
+                    <Typography variant="h4" gutterBottom={true}>
+                      {t('Dark theme')}
+                    </Typography>
+                    <Paper classes={{ root: classes.paper }} variant="outlined">
+                      <Formik
+                        onSubmit={() => {}}
+                        enableReinitialize={true}
+                        initialValues={initialValues}
+                        validationSchema={settingsValidation(t)}
+                      >
+                        {() => (
+                          <Form>
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_dark_background"
+                              label={t('Background color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_dark_background"
+                                />
+                              }
+                            />
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_dark_paper"
+                              label={t('Paper color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_dark_paper"
+                                />
+                              }
+                            />
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_dark_nav"
+                              label={t('Navigation color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_dark_nav"
+                                />
+                              }
+                            />
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_dark_primary"
+                              label={t('Primary color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_dark_primary"
+                                />
+                              }
+                            />
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_dark_secondary"
+                              label={t('Secondary color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_dark_secondary"
+                                />
+                              }
+                            />
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_dark_accent"
+                              label={t('Accent color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_dark_accent"
+                                />
+                              }
+                            />
+                            <Field
+                              component={TextField}
+                              variant="standard"
+                              name="platform_theme_dark_logo"
+                              label={t('Logo URL')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_dark_logo"
+                                />
+                              }
+                            />
+                            <Field
+                              component={TextField}
+                              variant="standard"
+                              name="platform_theme_dark_logo_collapsed"
+                              label={t('Logo URL (collapsed)')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_dark_logo_collapsed"
+                                />
+                              }
+                            />
+                            <Field
+                              component={TextField}
+                              variant="standard"
+                              name="platform_theme_dark_logo_login"
+                              label={t('Logo URL (login)')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_dark_logo_login"
+                                />
+                              }
+                            />
+                          </Form>
+                        )}
+                      </Formik>
+                    </Paper>
+                  </Grid>
+                  <Grid item={true} xs={4}>
+                    <Typography variant="h4" gutterBottom={true}>
+                      {t('Light theme')}
+                    </Typography>
+                    <Paper classes={{ root: classes.paper }} variant="outlined">
+                      <Formik
+                        onSubmit={() => {}}
+                        enableReinitialize={true}
+                        initialValues={initialValues}
+                        validationSchema={settingsValidation(t)}
+                      >
+                        {() => (
+                          <Form>
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_light_background"
+                              label={t('Background color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_light_background"
+                                />
+                              }
+                            />
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_light_paper"
+                              label={t('Paper color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_light_paper"
+                                />
+                              }
+                            />
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_light_nav"
+                              label={t('Navigation color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_light_nav"
+                                />
+                              }
+                            />
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_light_primary"
+                              label={t('Primary color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_light_primary"
+                                />
+                              }
+                            />
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_light_secondary"
+                              label={t('Secondary color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_light_secondary"
+                                />
+                              }
+                            />
+                            <Field
+                              component={ColorPickerField}
+                              name="platform_theme_light_accent"
+                              label={t('Accent color')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              variant="standard"
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_light_accent"
+                                />
+                              }
+                            />
+                            <Field
+                              component={TextField}
+                              variant="standard"
+                              name="platform_theme_light_logo"
+                              label={t('Logo URL')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_light_logo"
+                                />
+                              }
+                            />
+                            <Field
+                              component={TextField}
+                              variant="standard"
+                              name="platform_theme_light_logo_collapsed"
+                              label={t('Logo URL (collapsed)')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_light_logo_collapsed"
+                                />
+                              }
+                            />
+                            <Field
+                              component={TextField}
+                              variant="standard"
+                              name="platform_theme_light_logo_login"
+                              label={t('Logo URL (login)')}
+                              placeholder={t('Default')}
+                              InputLabelProps={{
+                                shrink: true,
+                              }}
+                              fullWidth={true}
+                              style={{ marginTop: 20 }}
+                              onFocus={(name) => handleChangeFocus(id, name)}
+                              onSubmit={(name, value) => handleSubmitField(id, name, value)
+                              }
+                              helperText={
+                                <SubscriptionFocus
+                                  context={editContext}
+                                  fieldName="platform_theme_light_logo_login"
+                                />
+                              }
+                            />
+                          </Form>
+                        )}
+                      </Formik>
+                    </Paper>
+                  </Grid>
+                  <Grid item={true} xs={4}>
+                    <Typography variant="h4" gutterBottom={true}>
+                      {t('Tools')}
+                    </Typography>
+                    <Paper classes={{ root: classes.paper }} variant="outlined">
+                      <QueryRenderer
+                        query={settingsAboutQuery}
+                        render={({ props: aboutProps }) => {
+                          if (aboutProps) {
+                            const { version, dependencies } = aboutProps.about;
+                            const clusterInfo = settings.platform_cluster.instances_number > 1
+                              ? `Cluster of ${settings.platform_cluster.instances_number} nodes`
+                              : 'Single node';
+                            return (
+                              <List style={{ marginTop: -20 }}>
+                                <ListItem divider={true}>
+                                  <ListItemText primary={`OpenCTI (${clusterInfo})`} />
+                                  <Chip label={version} color="primary" />
+                                </ListItem>
+                                <List component="div" disablePadding>
+                                  {modules.map((module) => (
+                                    <ListItem
+                                      key={module.id}
+                                      divider={true}
+                                      className={classes.nested}
+                                    >
+                                      <ListItemText primary={t(module.id)} />
+                                      <Chip
+                                        label={
+                                          module.enable
+                                            ? t('Enabled')
+                                            : t('Disabled')
+                                        }
+                                        color={
+                                          module.enable ? 'success' : 'error'
+                                        }
+                                      />
+                                    </ListItem>
+                                  ))}
+                                </List>
+                                {dependencies.map((dep) => (
+                                  <ListItem key={dep.name} divider={true}>
+                                    <ListItemText primary={t(dep.name)} />
+                                    <Chip label={dep.version} color="primary" />
+                                  </ListItem>
+                                ))}
+                              </List>
+                            );
+                          }
+                          return <Loader variant="inElement" />;
+                        }}
+                      />
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </div>
+            );
+          }
+          return <Loader />;
+        }}
+      />
+    </div>
+  );
 };
 
-export default R.compose(inject18n, withStyles(styles))(Settings);
+export default Settings;

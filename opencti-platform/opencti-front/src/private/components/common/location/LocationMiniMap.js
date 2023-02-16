@@ -1,16 +1,20 @@
 import React, { useContext } from 'react';
 import * as PropTypes from 'prop-types';
-import { compose, flatten, propOr, pluck, includes, uniq, pipe } from 'ramda';
+import { compose, flatten, propOr, pluck, uniq, pipe } from 'ramda';
 import withTheme from '@mui/styles/withTheme';
 import withStyles from '@mui/styles/withStyles';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import { MapContainer, TileLayer, GeoJSON, Marker } from 'react-leaflet';
 import L from 'leaflet';
-import countries from '../../../../resources/geo/countries.json';
+import countries from '../../../../static/geo/countries.json';
 import inject18n from '../../../../components/i18n';
-import { UserContext } from '../../../../utils/Security';
-import { APP_BASE_PATH } from '../../../../relay/environment';
+import { UserContext } from '../../../../utils/hooks/useAuth';
+import { fileUri } from '../../../../relay/environment';
+import CityDark from '../../../../static/images/leaflet/city_dark.png';
+import MarkerDark from '../../../../static/images/leaflet/marker_dark.png';
+import CityLight from '../../../../static/images/leaflet/city_light.png';
+import MarkerLight from '../../../../static/images/leaflet/marker_light.png';
 
 const styles = () => ({
   paper: {
@@ -23,20 +27,16 @@ const styles = () => ({
 });
 
 const cityIcon = (dark = true) => new L.Icon({
-  iconUrl: `${APP_BASE_PATH}/static/city_${dark ? 'dark' : 'light'}.png`,
-  iconRetinaUrl: `${APP_BASE_PATH}/static/city_${
-    dark ? 'dark' : 'light'
-  }.png`,
+  iconUrl: dark ? fileUri(CityDark) : fileUri(CityLight),
+  iconRetinaUrl: dark ? fileUri(CityDark) : fileUri(CityLight),
   iconAnchor: [5, 55],
   popupAnchor: [10, -44],
   iconSize: [25, 25],
 });
 
 const positionIcon = (dark = true) => new L.Icon({
-  iconUrl: `${APP_BASE_PATH}/static/marker_${dark ? 'dark' : 'light'}.png`,
-  iconRetinaUrl: `${APP_BASE_PATH}/static/marker_${
-    dark ? 'dark' : 'light'
-  }.png`,
+  iconUrl: dark ? fileUri(MarkerDark) : fileUri(MarkerLight),
+  iconRetinaUrl: dark ? fileUri(MarkerDark) : fileUri(MarkerLight),
   iconAnchor: [5, 55],
   popupAnchor: [10, -44],
   iconSize: [25, 25],
@@ -50,7 +50,7 @@ const LocationMiniMap = (props) => {
     uniq,
   )(propOr([], 'countries', props));
   const getStyle = (feature) => {
-    if (includes(feature.properties.ISO3, countriesAliases)) {
+    if (countriesAliases.includes(feature.properties.ISO3)) {
       return {
         color: props.theme.palette.primary.main,
         weight: 1,

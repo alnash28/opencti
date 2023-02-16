@@ -2,35 +2,37 @@ import * as C from '@mui/material/colors';
 
 const colors = (temp) => [
   C.red[temp],
-  C.pink[temp],
   C.purple[temp],
+  C.pink[temp],
   C.deepPurple[temp],
   C.indigo[temp],
   C.blue[temp],
-  C.lightBlue[temp],
   C.cyan[temp],
-  C.teal[temp],
+  C.blueGrey[temp],
+  C.lightBlue[temp],
   C.green[temp],
+  C.teal[temp],
   C.lightGreen[temp],
+  C.amber[temp],
+  C.deepOrange[temp],
   C.lime[temp],
   C.yellow[temp],
-  C.amber[temp],
-  C.orange[temp],
-  C.deepOrange[temp],
   C.brown[temp],
+  C.orange[temp],
   C.grey[temp],
-  C.blueGrey[temp],
 ];
 
-export const areaChartOptions = (
+export const lineChartOptions = (
   theme,
   isTimeSeries = false,
   xFormatter = null,
   yFormatter = null,
   tickAmount = undefined,
+  dataLabels = false,
+  legend = false,
 ) => ({
   chart: {
-    type: 'area',
+    type: 'line',
     background: 'transparent',
     toolbar: {
       show: false,
@@ -41,13 +43,12 @@ export const areaChartOptions = (
     mode: theme.palette.mode,
   },
   dataLabels: {
-    enabled: false,
+    enabled: dataLabels,
   },
-  stroke: {
-    curve: 'smooth',
-    width: 2,
-  },
-  colors: [theme.palette.primary.main],
+  colors: [
+    theme.palette.primary.main,
+    ...colors(theme.palette.mode === 'dark' ? 400 : 600),
+  ],
   states: {
     hover: {
       filter: {
@@ -64,7 +65,101 @@ export const areaChartOptions = (
     strokeDashArray: 3,
   },
   legend: {
-    show: false,
+    show: legend,
+    itemMargin: {
+      horizontal: 5,
+      vertical: 20,
+    },
+  },
+  stroke: {
+    curve: 'smooth',
+    width: 2,
+  },
+  tooltip: {
+    theme: theme.palette.mode,
+  },
+  xaxis: {
+    type: isTimeSeries ? 'datetime' : 'category',
+    tickAmount,
+    tickPlacement: 'on',
+    labels: {
+      formatter: (value) => (xFormatter ? xFormatter(value) : value),
+      style: {
+        fontSize: '12px',
+        fontFamily: '"IBM Plex Sans", sans-serif',
+      },
+    },
+    axisBorder: {
+      show: false,
+    },
+  },
+  yaxis: {
+    labels: {
+      formatter: (value) => (yFormatter ? yFormatter(value) : value),
+      style: {
+        fontSize: '14px',
+        fontFamily: '"IBM Plex Sans", sans-serif',
+      },
+    },
+    axisBorder: {
+      show: false,
+    },
+  },
+});
+
+export const areaChartOptions = (
+  theme,
+  isTimeSeries = false,
+  xFormatter = null,
+  yFormatter = null,
+  tickAmount = undefined,
+  isStacked = false,
+  legend = false,
+) => ({
+  chart: {
+    type: 'area',
+    background: 'transparent',
+    toolbar: {
+      show: false,
+    },
+    foreColor: theme.palette.text.secondary,
+    stacked: isStacked,
+  },
+  theme: {
+    mode: theme.palette.mode,
+  },
+  dataLabels: {
+    enabled: false,
+  },
+  stroke: {
+    curve: 'smooth',
+    width: 2,
+  },
+  colors: [
+    theme.palette.primary.main,
+    ...colors(theme.palette.mode === 'dark' ? 400 : 600),
+  ],
+  states: {
+    hover: {
+      filter: {
+        type: 'lighten',
+        value: 0.05,
+      },
+    },
+  },
+  grid: {
+    borderColor:
+      theme.palette.mode === 'dark'
+        ? 'rgba(255, 255, 255, .1)'
+        : 'rgba(0, 0, 0, .1)',
+    strokeDashArray: 3,
+  },
+  legend: {
+    show: legend,
+    itemMargin: {
+      horizontal: 5,
+      vertical: 20,
+    },
   },
   tooltip: {
     theme: theme.palette.mode,
@@ -117,6 +212,8 @@ export const verticalBarsChartOptions = (
   yFormatter = null,
   distributed = false,
   isTimeSeries = false,
+  isStacked = false,
+  legend = false,
 ) => ({
   chart: {
     type: 'bar',
@@ -125,6 +222,7 @@ export const verticalBarsChartOptions = (
       show: false,
     },
     foreColor: theme.palette.text.secondary,
+    stacked: isStacked,
   },
   theme: {
     mode: theme.palette.mode,
@@ -132,9 +230,10 @@ export const verticalBarsChartOptions = (
   dataLabels: {
     enabled: false,
   },
-  colors: distributed
-    ? colors(theme.palette.mode === 'dark' ? 400 : 600)
-    : [theme.palette.primary.main],
+  colors: [
+    theme.palette.primary.main,
+    ...colors(theme.palette.mode === 'dark' ? 400 : 600),
+  ],
   states: {
     hover: {
       filter: {
@@ -151,7 +250,11 @@ export const verticalBarsChartOptions = (
     strokeDashArray: 3,
   },
   legend: {
-    show: false,
+    show: legend,
+    itemMargin: {
+      horizontal: 5,
+      vertical: 20,
+    },
   },
   tooltip: {
     theme: theme.palette.mode,
@@ -186,6 +289,8 @@ export const verticalBarsChartOptions = (
       horizontal: false,
       barHeight: '30%',
       borderRadius: 5,
+      borderRadiusApplication: 'end',
+      borderRadiusWhenStacked: 'last',
       distributed,
     },
   },
@@ -197,6 +302,10 @@ export const horizontalBarsChartOptions = (
   xFormatter = null,
   yFormatter = null,
   distributed = false,
+  stacked = false,
+  total = false,
+  categories = null,
+  legend = false,
 ) => ({
   chart: {
     type: 'bar',
@@ -205,6 +314,7 @@ export const horizontalBarsChartOptions = (
       show: false,
     },
     foreColor: theme.palette.text.secondary,
+    stacked,
   },
   theme: {
     mode: theme.palette.mode,
@@ -212,9 +322,10 @@ export const horizontalBarsChartOptions = (
   dataLabels: {
     enabled: false,
   },
-  colors: distributed
-    ? colors(theme.palette.mode === 'dark' ? 400 : 600)
-    : [theme.palette.primary.main],
+  colors: [
+    theme.palette.primary.main,
+    ...colors(theme.palette.mode === 'dark' ? 400 : 600),
+  ],
   states: {
     hover: {
       filter: {
@@ -231,12 +342,16 @@ export const horizontalBarsChartOptions = (
     strokeDashArray: 3,
   },
   legend: {
-    show: false,
+    show: legend,
+    itemMargin: {
+      horizontal: 5,
+    },
   },
   tooltip: {
     theme: theme.palette.mode,
   },
   xaxis: {
+    categories: categories ?? [],
     labels: {
       formatter: (value) => (xFormatter ? xFormatter(value) : value),
       style: {
@@ -264,19 +379,38 @@ export const horizontalBarsChartOptions = (
       horizontal: true,
       barHeight: '30%',
       borderRadius: 5,
+      borderRadiusApplication: 'end',
+      borderRadiusWhenStacked: 'last',
       distributed,
+      dataLabels: {
+        total: {
+          enabled: total,
+          offsetX: 0,
+          style: {
+            fontSize: '13px',
+            fontWeight: 900,
+            fontFamily: '"IBM Plex Sans", sans-serif',
+          },
+        },
+      },
     },
   },
 });
 
-export const radarChartOptions = (theme, labels, chartColors = []) => ({
+export const radarChartOptions = (
+  theme,
+  labels,
+  chartColors = [],
+  legend = false,
+  offset = false,
+) => ({
   chart: {
     type: 'radar',
     background: 'transparent',
     toolbar: {
       show: false,
     },
-    offsetY: -20,
+    offsetY: offset ? -20 : 0,
   },
   theme: {
     mode: theme.palette.mode,
@@ -291,7 +425,11 @@ export const radarChartOptions = (theme, labels, chartColors = []) => ({
     },
   },
   legend: {
-    show: false,
+    show: legend,
+    itemMargin: {
+      horizontal: 5,
+      vertical: 5,
+    },
   },
   tooltip: {
     theme: theme.palette.mode,
@@ -313,6 +451,7 @@ export const radarChartOptions = (theme, labels, chartColors = []) => ({
   },
   xaxis: {
     labels: {
+      show: legend,
       style: {
         fontFamily: '"IBM Plex Sans", sans-serif',
         colors: chartColors,
@@ -495,3 +634,157 @@ export const donutChartOptions = (
     },
   };
 };
+
+export const treeMapOptions = (
+  theme,
+  legendPosition = 'bottom',
+  distributed = false,
+) => {
+  return {
+    chart: {
+      type: 'donut',
+      background: 'transparent',
+      toolbar: {
+        show: false,
+      },
+      foreColor: theme.palette.text.secondary,
+    },
+    theme: {
+      mode: theme.palette.mode,
+    },
+    colors: [
+      theme.palette.primary.main,
+      ...colors(theme.palette.mode === 'dark' ? 400 : 600),
+    ],
+    fill: {
+      opacity: 1,
+    },
+    states: {
+      hover: {
+        filter: {
+          type: 'lighten',
+          value: 0.05,
+        },
+      },
+    },
+    stroke: {
+      curve: 'smooth',
+      width: 3,
+      colors: [theme.palette.background.paper],
+    },
+    legend: {
+      show: true,
+      position: legendPosition,
+      fontFamily: '"IBM Plex Sans", sans-serif',
+    },
+    tooltip: {
+      theme: theme.palette.mode,
+    },
+    dataLabels: {
+      style: {
+        fontSize: '12px',
+        fontFamily: '"IBM Plex Sans", sans-serif',
+        fontWeight: 600,
+        colors: [theme.palette.text.primary],
+      },
+      background: {
+        enabled: false,
+      },
+      dropShadow: {
+        enabled: false,
+      },
+    },
+    plotOptions: {
+      treemap: {
+        distributed,
+      },
+    },
+  };
+};
+
+export const heatMapOptions = (
+  theme,
+  isTimeSeries = false,
+  xFormatter = null,
+  yFormatter = null,
+  tickAmount = undefined,
+  isStacked = false,
+  ranges = [],
+) => ({
+  chart: {
+    type: 'heatmap',
+    background: 'transparent',
+    toolbar: {
+      show: false,
+    },
+    foreColor: theme.palette.text.secondary,
+    stacked: isStacked,
+  },
+  theme: {
+    mode: theme.palette.mode,
+  },
+  dataLabels: {
+    enabled: false,
+  },
+  stroke: {
+    colors: [theme.palette.background.paper],
+    width: 1,
+  },
+  states: {
+    hover: {
+      filter: {
+        type: 'lighten',
+        value: 0.05,
+      },
+    },
+  },
+  grid: {
+    borderColor:
+      theme.palette.mode === 'dark'
+        ? 'rgba(255, 255, 255, .1)'
+        : 'rgba(0, 0, 0, .1)',
+    strokeDashArray: 3,
+  },
+  legend: {
+    show: false,
+  },
+  tooltip: {
+    theme: theme.palette.mode,
+  },
+  xaxis: {
+    type: isTimeSeries ? 'datetime' : 'category',
+    tickAmount,
+    tickPlacement: 'on',
+    labels: {
+      formatter: (value) => (xFormatter ? xFormatter(value) : value),
+      style: {
+        fontSize: '12px',
+        fontFamily: '"IBM Plex Sans", sans-serif',
+      },
+    },
+    axisBorder: {
+      show: false,
+    },
+  },
+  yaxis: {
+    labels: {
+      formatter: (value) => (yFormatter ? yFormatter(value) : value),
+      style: {
+        fontSize: '14px',
+        fontFamily: '"IBM Plex Sans", sans-serif',
+      },
+    },
+    axisBorder: {
+      show: false,
+    },
+  },
+  plotOptions: {
+    heatmap: {
+      enableShades: false,
+      distributed: false,
+      colorScale: {
+        ranges,
+      },
+    },
+  },
+});

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import * as PropTypes from 'prop-types';
-import { compose, head, pathOr } from 'ramda';
+import * as R from 'ramda';
 import { graphql, createFragmentContainer } from 'react-relay';
 import withStyles from '@mui/styles/withStyles';
 import Paper from '@mui/material/Paper';
@@ -12,17 +12,13 @@ import { Link } from 'react-router-dom';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import List from '@mui/material/List';
-import {
-  DescriptionOutlined,
-  ExpandLessOutlined,
-  ExpandMoreOutlined,
-} from '@mui/icons-material';
-import * as R from 'ramda';
+import { ExpandLessOutlined, ExpandMoreOutlined } from '@mui/icons-material';
 import Button from '@mui/material/Button';
 import inject18n from '../../../../components/i18n';
 import ExpandableMarkdown from '../../../../components/ExpandableMarkdown';
 import EntityStixCoreRelationshipsHorizontalBars from '../../common/stix_core_relationships/EntityStixCoreRelationshipsHorizontalBars';
-import ItemMarking from '../../../../components/ItemMarking';
+import ItemIcon from '../../../../components/ItemIcon';
+import ItemMarkings from '../../../../components/ItemMarkings';
 
 const styles = (theme) => ({
   paper: {
@@ -82,13 +78,10 @@ const styles = (theme) => ({
           : 'rgba(0, 0, 0, .2)',
     },
   },
-});
-
-const inlineStyles = {
   itemAuthor: {
-    width: 80,
-    minWidth: 80,
-    maxWidth: 80,
+    width: 120,
+    minWidth: 120,
+    maxWidth: 120,
     marginRight: 24,
     marginLeft: 24,
     whiteSpace: 'nowrap',
@@ -96,15 +89,19 @@ const inlineStyles = {
     textOverflow: 'ellipsis',
   },
   itemDate: {
-    width: 80,
-    minWidth: 80,
-    maxWidth: 80,
+    width: 120,
+    minWidth: 120,
+    maxWidth: 120,
     marginRight: 24,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-};
+  itemMarking: {
+    width: 110,
+    paddingRight: 20,
+  },
+});
 
 const ReportDetailsComponent = (props) => {
   const { t, fldt, fsd, classes, report } = props;
@@ -150,7 +147,11 @@ const ReportDetailsComponent = (props) => {
             </Typography>
             {fldt(report.published)}
           </Grid>
-          <Grid item={true} xs={6} style={{ maxHeight: height }}>
+          <Grid
+            item={true}
+            xs={6}
+            style={{ minHeight: 200, maxHeight: height }}
+          >
             <EntityStixCoreRelationshipsHorizontalBars
               title={t('Entities distribution')}
               variant="inEntity"
@@ -172,9 +173,6 @@ const ReportDetailsComponent = (props) => {
             )
             .map((relatedContainerEdge) => {
               const relatedContainer = relatedContainerEdge.node;
-              const markingDefinition = head(
-                pathOr([], ['objectMarking', 'edges'], relatedContainer),
-              );
               return (
                 <ListItem
                   key={report.id}
@@ -186,7 +184,7 @@ const ReportDetailsComponent = (props) => {
                   to={`/dashboard/analysis/reports/${relatedContainer.id}`}
                 >
                   <ListItemIcon>
-                    <DescriptionOutlined color="primary" />
+                    <ItemIcon type={relatedContainer.entity_type} />
                   </ListItemIcon>
                   <ListItemText
                     primary={
@@ -195,20 +193,20 @@ const ReportDetailsComponent = (props) => {
                       </div>
                     }
                   />
-                  <div style={inlineStyles.itemAuthor}>
-                    {pathOr('', ['createdBy', 'name'], relatedContainer)}
+                  <div className={classes.itemAuthor}>
+                    {R.pathOr('', ['createdBy', 'name'], relatedContainer)}
                   </div>
-                  <div style={inlineStyles.itemDate}>
+                  <div className={classes.itemDate}>
                     {fsd(relatedContainer.published)}
                   </div>
-                  <div style={{ width: 110, paddingRight: 20 }}>
-                    {markingDefinition && (
-                      <ItemMarking
-                        key={markingDefinition.node.id}
-                        label={markingDefinition.node.definition}
-                        variant="inList"
-                      />
-                    )}
+                  <div className={classes.itemMarking}>
+                    <ItemMarkings
+                      variant="inList"
+                      markingDefinitionsEdges={
+                        relatedContainer.objectMarking.edges
+                      }
+                      limit={1}
+                    />
                   </div>
                 </ListItem>
               );
@@ -257,6 +255,7 @@ const ReportDetails = createFragmentContainer(ReportDetailsComponent, {
         edges {
           node {
             id
+            entity_type
             ... on Report {
               name
               description
@@ -271,7 +270,11 @@ const ReportDetails = createFragmentContainer(ReportDetailsComponent, {
               objectMarking {
                 edges {
                   node {
+                    id
+                    definition_type
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }
@@ -283,4 +286,4 @@ const ReportDetails = createFragmentContainer(ReportDetailsComponent, {
   `,
 });
 
-export default compose(inject18n, withStyles(styles))(ReportDetails);
+export default R.compose(inject18n, withStyles(styles))(ReportDetails);

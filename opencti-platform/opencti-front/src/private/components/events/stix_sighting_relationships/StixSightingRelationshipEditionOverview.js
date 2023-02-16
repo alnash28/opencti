@@ -1,41 +1,32 @@
 import React, { useEffect } from 'react';
-import * as PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
-import { graphql, createFragmentContainer } from 'react-relay';
-import { Form, Formik, Field } from 'formik';
-import withStyles from '@mui/styles/withStyles';
+import { createFragmentContainer, graphql } from 'react-relay';
+import { Field, Form, Formik } from 'formik';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
 import { Close } from '@mui/icons-material';
 import * as Yup from 'yup';
 import * as R from 'ramda';
+import makeStyles from '@mui/styles/makeStyles';
 import { buildDate } from '../../../../utils/Time';
 import { resolveLink } from '../../../../utils/Entity';
-import inject18n from '../../../../components/i18n';
-import {
-  commitMutation,
-  requestSubscription,
-} from '../../../../relay/environment';
+import { useFormatter } from '../../../../components/i18n';
+import { commitMutation, requestSubscription } from '../../../../relay/environment';
 import TextField from '../../../../components/TextField';
-import {
-  SubscriptionAvatars,
-  SubscriptionFocus,
-} from '../../../../components/Subscription';
+import { SubscriptionAvatars, SubscriptionFocus } from '../../../../components/Subscription';
 import ObjectMarkingField from '../../common/form/ObjectMarkingField';
 import CreatedByField from '../../common/form/CreatedByField';
 import ConfidenceField from '../../common/form/ConfidenceField';
 import SwitchField from '../../../../components/SwitchField';
 import MarkDownField from '../../../../components/MarkDownField';
 import StatusField from '../../common/form/StatusField';
-import {
-  convertCreatedBy,
-  convertMarkings,
-  convertStatus,
-} from '../../../../utils/Edition';
+import { convertCreatedBy, convertMarkings, convertStatus } from '../../../../utils/edition';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
+import { useIsEnforceReference } from '../../../../utils/hooks/useEntitySettings';
 
-const styles = (theme) => ({
+const useStyles = makeStyles((theme) => ({
   header: {
     backgroundColor: theme.palette.background.nav,
     padding: '20px 20px 20px 60px',
@@ -75,7 +66,7 @@ const styles = (theme) => ({
   buttonLeft: {
     float: 'left',
   },
-});
+}));
 
 const subscription = graphql`
   subscription StixSightingRelationshipEditionOverviewSubscription($id: ID!) {
@@ -129,7 +120,7 @@ const stixSightingRelationshipMutationRelationAdd = graphql`
 const stixSightingRelationshipMutationRelationDelete = graphql`
   mutation StixSightingRelationshipEditionOverviewRelationDeleteMutation(
     $id: ID!
-    $toId: String!
+    $toId: StixRef!
     $relationship_type: String!
   ) {
     stixSightingRelationshipEdit(id: $id) {
@@ -160,15 +151,18 @@ const stixSightingRelationshipValidation = (t) => Yup.object().shape({
   x_opencti_workflow_id: Yup.object(),
 });
 
-const StixSightingRelationshipEditionContainer = ({
-  t,
-  classes,
+const StixSightingRelationshipEditionOverview = ({
   handleClose,
   handleDelete,
   stixSightingRelationship,
   stixDomainObject,
   inferred,
 }) => {
+  const { t } = useFormatter();
+  const classes = useStyles();
+
+  const enableReferences = useIsEnforceReference('stix-sighting-relationship');
+
   const { editContext } = stixSightingRelationship;
   useEffect(() => {
     const sub = requestSubscription({
@@ -182,46 +176,50 @@ const StixSightingRelationshipEditionContainer = ({
     };
   });
   const handleChangeObjectMarking = (name, values) => {
-    const currentMarkingDefinitions = R.pipe(
-      R.pathOr([], ['objectMarking', 'edges']),
-      R.map((n) => ({
-        label: n.node.definition,
-        value: n.node.id,
-      })),
-    )(stixSightingRelationship);
-    const added = R.difference(values, currentMarkingDefinitions);
-    const removed = R.difference(currentMarkingDefinitions, values);
-    if (added.length > 0) {
-      commitMutation({
-        mutation: stixSightingRelationshipMutationRelationAdd,
-        variables: {
-          id: stixSightingRelationship.id,
-          input: {
-            toId: R.head(added).value,
+    if (!enableReferences) {
+      const currentMarkingDefinitions = R.pipe(
+        R.pathOr([], ['objectMarking', 'edges']),
+        R.map((n) => ({
+          label: n.node.definition,
+          value: n.node.id,
+        })),
+      )(stixSightingRelationship);
+      const added = R.difference(values, currentMarkingDefinitions);
+      const removed = R.difference(currentMarkingDefinitions, values);
+      if (added.length > 0) {
+        commitMutation({
+          mutation: stixSightingRelationshipMutationRelationAdd,
+          variables: {
+            id: stixSightingRelationship.id,
+            input: {
+              toId: R.head(added).value,
+              relationship_type: 'object-marking',
+            },
+          },
+        });
+      }
+      if (removed.length > 0) {
+        commitMutation({
+          mutation: stixSightingRelationshipMutationRelationDelete,
+          variables: {
+            id: stixSightingRelationship.id,
+            toId: R.head(removed).value,
             relationship_type: 'object-marking',
           },
-        },
-      });
-    }
-    if (removed.length > 0) {
-      commitMutation({
-        mutation: stixSightingRelationshipMutationRelationDelete,
-        variables: {
-          id: stixSightingRelationship.id,
-          toId: R.head(removed).value,
-          relationship_type: 'object-marking',
-        },
-      });
+        });
+      }
     }
   };
   const handleChangeCreatedBy = (name, value) => {
-    commitMutation({
-      mutation: stixSightingRelationshipMutationFieldPatch,
-      variables: {
-        id: stixSightingRelationship.id,
-        input: { key: 'createdBy', value: value.value || '' },
-      },
-    });
+    if (!enableReferences) {
+      commitMutation({
+        mutation: stixSightingRelationshipMutationFieldPatch,
+        variables: {
+          id: stixSightingRelationship.id,
+          input: { key: 'createdBy', value: value.value || '' },
+        },
+      });
+    }
   };
   const handleChangeFocus = (name) => {
     commitMutation({
@@ -235,23 +233,26 @@ const StixSightingRelationshipEditionContainer = ({
     });
   };
   const handleSubmitField = (name, value) => {
-    let finalValue = value;
-    if (name === 'x_opencti_workflow_id') {
-      finalValue = value.value;
+    if (!enableReferences) {
+      let finalValue = value;
+      if (name === 'x_opencti_workflow_id') {
+        finalValue = value.value;
+      }
+      stixSightingRelationshipValidation(t)
+        .validateAt(name, { [name]: value })
+        .then(() => {
+          commitMutation({
+            mutation: stixSightingRelationshipMutationFieldPatch,
+            variables: {
+              id: stixSightingRelationship.id,
+              input: { key: name, value: finalValue || '' },
+            },
+          });
+        })
+        .catch(() => false);
     }
-    stixSightingRelationshipValidation(t)
-      .validateAt(name, { [name]: value })
-      .then(() => {
-        commitMutation({
-          mutation: stixSightingRelationshipMutationFieldPatch,
-          variables: {
-            id: stixSightingRelationship.id,
-            input: { key: name, value: finalValue || '' },
-          },
-        });
-      })
-      .catch(() => false);
   };
+
   const createdBy = convertCreatedBy(stixSightingRelationship);
   const objectMarking = convertMarkings(stixSightingRelationship);
   const status = convertStatus(t, stixSightingRelationship);
@@ -269,6 +270,7 @@ const StixSightingRelationshipEditionContainer = ({
       'description',
       'x_opencti_negative',
       'createdBy',
+      'objectOrganization',
       'objectMarking',
       'x_opencti_workflow_id',
     ]),
@@ -325,7 +327,7 @@ const StixSightingRelationshipEditionContainer = ({
                 onFocus={handleChangeFocus}
                 onChange={handleSubmitField}
                 editContext={editContext}
-                containerstyle={{ marginTop: 20, width: '100%' }}
+                containerStyle={fieldSpacingContainerStyle}
                 disabled={inferred}
               />
               <Field
@@ -470,20 +472,8 @@ const StixSightingRelationshipEditionContainer = ({
   );
 };
 
-StixSightingRelationshipEditionContainer.propTypes = {
-  handleClose: PropTypes.func,
-  handleDelete: PropTypes.func,
-  classes: PropTypes.object,
-  stixDomainObject: PropTypes.object,
-  stixSightingRelationship: PropTypes.object,
-  theme: PropTypes.object,
-  t: PropTypes.func,
-  inferred: PropTypes.bool,
-  noStoreUpdate: PropTypes.bool,
-};
-
 const StixSightingRelationshipEditionFragment = createFragmentContainer(
-  StixSightingRelationshipEditionContainer,
+  StixSightingRelationshipEditionOverview,
   {
     stixSightingRelationship: graphql`
       fragment StixSightingRelationshipEditionOverview_stixSightingRelationship on StixSightingRelationship {
@@ -505,8 +495,10 @@ const StixSightingRelationshipEditionFragment = createFragmentContainer(
           edges {
             node {
               id
-              definition
               definition_type
+              definition
+              x_opencti_order
+              x_opencti_color
             }
           }
         }
@@ -528,7 +520,4 @@ const StixSightingRelationshipEditionFragment = createFragmentContainer(
   },
 );
 
-export default R.compose(
-  inject18n,
-  withStyles(styles, { withTheme: true }),
-)(StixSightingRelationshipEditionFragment);
+export default StixSightingRelationshipEditionFragment;

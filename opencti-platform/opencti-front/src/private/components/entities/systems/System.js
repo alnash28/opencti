@@ -10,7 +10,8 @@ import SystemEdition from './SystemEdition';
 import SystemPopover from './SystemPopover';
 import StixCoreObjectOrStixCoreRelationshipLastReports from '../../analysis/reports/StixCoreObjectOrStixCoreRelationshipLastReports';
 import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
@@ -35,6 +36,8 @@ class SystemComponent extends Component {
     return (
       <div className={classes.container}>
         <StixDomainObjectHeader
+          entityType={'System'}
+          disableSharing={true}
           stixDomainObject={system}
           isOpenctiAlias={true}
           PopoverComponent={<SystemPopover />}
@@ -47,10 +50,10 @@ class SystemComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={system} />
+            <SystemDetails system={system} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <SystemDetails system={system} />
+            <StixDomainObjectOverview stixDomainObject={system} />
           </Grid>
         </Grid>
         <Grid
@@ -88,6 +91,7 @@ class SystemComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={system.id}
+          defaultMarking={(system.objectMarking?.edges ?? []).map((edge) => edge.node)}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <SystemEdition systemId={system.id} />
@@ -133,7 +137,9 @@ const System = createFragmentContainer(SystemComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }

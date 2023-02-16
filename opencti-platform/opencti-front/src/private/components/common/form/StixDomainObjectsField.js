@@ -37,7 +37,10 @@ export const stixDomainObjectsFieldSearchQuery = graphql`
             edges {
               node {
                 id
+                definition_type
                 definition
+                x_opencti_order
+                x_opencti_color
               }
             }
           }
@@ -66,6 +69,10 @@ export const stixDomainObjectsFieldSearchQuery = graphql`
             name
             description
             published
+          }
+          ... on Grouping {
+            name
+            description
           }
           ... on CourseOfAction {
             name
@@ -107,6 +114,10 @@ export const stixDomainObjectsFieldSearchQuery = graphql`
             description
           }
           ... on City {
+            name
+            description
+          }
+          ... on AdministrativeArea {
             name
             description
           }

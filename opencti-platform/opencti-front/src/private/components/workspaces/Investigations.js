@@ -11,7 +11,8 @@ import inject18n from '../../../components/i18n';
 import ListLines from '../../../components/list_lines/ListLines';
 import WorkspacesLines, { workspacesLinesQuery } from './WorkspacesLines';
 import WorkspaceCreation from './WorkspaceCreation';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../utils/Security';
+import Security from '../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../utils/hooks/useGranted';
 
 class Investigations extends Component {
   constructor(props) {
@@ -84,6 +85,7 @@ class Investigations extends Component {
         handleSort={this.handleSort.bind(this)}
         handleSearch={this.handleSearch.bind(this)}
         keyword={searchTerm}
+        secondaryAction={true}
         paginationOptions={paginationOptions}
         numberOfElements={numberOfElements}
       >

@@ -1,12 +1,13 @@
 import * as R from 'ramda';
-import { searchClient, ES_IGNORE_THROTTLED } from '../database/engine';
+import { ES_IGNORE_THROTTLED, elRawSearch } from '../database/engine';
 import { READ_INDEX_STIX_CYBER_OBSERVABLES } from '../database/utils';
 import { mergeEntities, patchAttribute } from '../database/middleware';
 import { generateStandardId } from '../schema/identifier';
 import { logApp } from '../config/conf';
-import { SYSTEM_USER } from '../utils/access';
+import { executionContext, SYSTEM_USER } from '../utils/access';
 
 export const up = async (next) => {
+  const context = executionContext('migration');
   // region find duplicates
   const query = {
     index: READ_INDEX_STIX_CYBER_OBSERVABLES,
@@ -29,8 +30,8 @@ export const up = async (next) => {
       },
     },
   };
-  const duplicates = await searchClient().search(query);
-  const { buckets } = duplicates.body.aggregations.url.duplicateUri;
+  const duplicates = await elRawSearch(context, SYSTEM_USER, 'Url', query);
+  const { buckets } = duplicates.aggregations.url.duplicateUri;
   logApp.info(`[MIGRATION] Merging ${buckets.length} URL`);
   // end region
   // For each duplicate, merge all entities into one.
@@ -53,17 +54,17 @@ export const up = async (next) => {
         sort: [{ 'internal_id.keyword': 'desc' }],
       },
     };
-    const data = await searchClient().search(findQuery);
-    const urlsToMerge = data.body.hits.hits;
+    const data = await elRawSearch(context, SYSTEM_USER, 'Url', findQuery);
+    const urlsToMerge = data.hits.hits;
     const target = R.head(urlsToMerge)._source;
     // 1. Update the standard_id of the target
-    const { element: updatedTarget } = await patchAttribute(SYSTEM_USER, target.internal_id, target.entity_type, {
+    const { element: updatedTarget } = await patchAttribute(context, SYSTEM_USER, target.internal_id, target.entity_type, {
       standard_id: generateStandardId(target.entity_type, target),
     });
     const elementsToMerge = urlsToMerge.slice(1);
     const sources = elementsToMerge.map((s) => s._source.internal_id);
     // 2. Merge everything else inside the target
-    await mergeEntities(SYSTEM_USER, updatedTarget.internal_id, sources);
+    await mergeEntities(context, SYSTEM_USER, updatedTarget.internal_id, sources);
     logApp.info(
       `[MIGRATION] URL ${updatedTarget.value} merged (${urlsToMerge.length}) -- ${index + 1}/${buckets.length}`
     );

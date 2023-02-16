@@ -250,6 +250,9 @@ const StixCoreRelationshipCreationFromRelationStixDomainObjectsLines = createPag
                 ... on Report {
                   name
                 }
+                ... on Grouping {
+                  name
+                }
                 ... on Campaign {
                   name
                   description
@@ -294,6 +297,10 @@ const StixCoreRelationshipCreationFromRelationStixDomainObjectsLines = createPag
                   name
                   description
                 }
+                ... on AdministrativeArea {
+                  name
+                  description
+                }
                 ... on Country {
                   name
                   description
@@ -321,6 +328,30 @@ const StixCoreRelationshipCreationFromRelationStixDomainObjectsLines = createPag
                 ... on Incident {
                   name
                   description
+                }
+                ... on Event {
+                  name
+                  description
+                }
+                ... on Channel {
+                  name
+                  description
+                }
+                ... on Narrative {
+                  name
+                  description
+                }
+                ... on Language {
+                  name
+                }
+                ... on DataComponent {
+                  name
+                }
+                ... on DataSource {
+                  name
+                }
+                ... on Case {
+                  name
                 }
               }
             }

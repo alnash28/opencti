@@ -9,17 +9,27 @@ import {
   HelpOutlined,
   BugReportOutlined,
   DescriptionOutlined,
-  MapOutlined,
   CenterFocusStrongOutlined,
   ShortTextOutlined,
   WorkOutline,
-  FeedbackOutlined,
-  LanguageOutlined,
+  ReviewsOutlined,
+  LocalOfferOutlined,
   WifiTetheringOutlined,
   Visibility,
   PlaceOutlined,
   StorageOutlined,
-  TerminalOutlined,
+  WebAssetOutlined,
+  SurroundSoundOutlined,
+  EventOutlined,
+  SpeakerNotesOutlined,
+  TranslateOutlined,
+  WorkspacesOutlined,
+  StreamOutlined,
+  SourceOutlined,
+  SubjectOutlined,
+  TipsAndUpdatesOutlined,
+  BiotechOutlined,
+  MapOutlined,
 } from '@mui/icons-material';
 import {
   Biohazard,
@@ -34,39 +44,43 @@ import {
   VectorRadius,
   ShieldSearch,
   ServerNetwork,
+  Launch,
+  LaptopAccount,
+  ArchiveOutline,
+  Brain,
 } from 'mdi-material-ui';
+import { itemColor } from '../utils/Colors';
 
-const iconSelector = (type, variant, fontSize, color) => {
+const iconSelector = (type, variant, fontSize, color, isReversed) => {
   let style = {};
   switch (variant) {
     case 'inline':
       style = {
-        color,
-        width: 20,
-        height: 20,
+        color: color ?? itemColor(type),
+        width: 15,
+        height: 15,
         margin: '0 7px 0 0',
         float: 'left',
+        paddingTop: 2,
+        transform: isReversed ? 'rotate(-90deg)' : 'none',
       };
       break;
     default:
       style = {
-        color,
+        color: color ?? itemColor(type),
+        transform: isReversed ? 'rotate(-90deg)' : 'none',
       };
   }
 
   switch (type) {
-    case 'attribute':
+    case 'Vocabulary':
       return <ShortTextOutlined style={style} fontSize={fontSize} role="img" />;
     case 'Marking-Definition':
-      return (
-        <CenterFocusStrongOutlined
-          style={style}
-          fontSize={fontSize}
-          role="img"
-        />
-      );
+      return <CenterFocusStrongOutlined style={style} fontSize={fontSize} role="img" />;
     case 'External-Reference':
-      return <LanguageOutlined style={style} fontSize={fontSize} role="img" />;
+      return (
+        <LocalOfferOutlined style={style} fontSize={fontSize} role="img" />
+      );
     case 'Label':
       return <LabelOutline style={style} fontSize={fontSize} role="img" />;
     case 'Attack-Pattern':
@@ -74,20 +88,25 @@ const iconSelector = (type, variant, fontSize, color) => {
     case 'Campaign':
       return <ChessKnight style={style} fontSize={fontSize} role="img" />;
     case 'Note':
-      return <WorkOutline style={style} fontSize={fontSize} role="img" />;
+      return <SubjectOutlined style={style} fontSize={fontSize} role="img" />;
     case 'Observed-Data':
       return (
         <WifiTetheringOutlined style={style} fontSize={fontSize} role="img" />
       );
     case 'Opinion':
-      return <FeedbackOutlined style={style} fontSize={fontSize} role="img" />;
+      return <ReviewsOutlined style={style} fontSize={fontSize} role="img" />;
     case 'Report':
       return (
         <DescriptionOutlined style={style} fontSize={fontSize} role="img" />
       );
+    case 'Grouping':
+      return (
+        <WorkspacesOutlined style={style} fontSize={fontSize} role="img" />
+      );
     case 'Course-Of-Action':
       return <ProgressWrench style={style} fontSize={fontSize} role="img" />;
     case 'Individual':
+    case 'User':
       return <PersonOutlined style={style} fontSize={fontSize} role="img" />;
     case 'Organization':
     case 'Identity':
@@ -111,20 +130,52 @@ const iconSelector = (type, variant, fontSize, color) => {
     case 'Position':
     case 'Location':
       return <PlaceOutlined style={style} fontSize={fontSize} role="img" />;
+    case 'Administrative-Area':
+      return <MapOutlined style={style} fontSize={fontSize} role="img" />;
     case 'Country':
       return <FlagOutlined style={style} fontSize={fontSize} role="img" />;
     case 'Region':
-      return <MapOutlined style={style} fontSize={fontSize} role="img" />;
+      return <PublicOutlined style={style} fontSize={fontSize} role="img" />;
     case 'Malware':
       return <Biohazard style={style} fontSize={fontSize} role="img" />;
     case 'Threat-Actor':
-      return <PublicOutlined style={style} fontSize={fontSize} role="img" />;
+      return <LaptopAccount style={style} fontSize={fontSize} role="img" />;
     case 'Tool':
-      return <TerminalOutlined style={style} fontSize={fontSize} role="img" />;
+      return <WebAssetOutlined style={style} fontSize={fontSize} role="img" />;
     case 'Vulnerability':
       return <BugReportOutlined style={style} fontSize={fontSize} role="img" />;
     case 'Incident':
       return <Fire style={style} fontSize={fontSize} role="img" />;
+    case 'Channel':
+      return (
+        <SurroundSoundOutlined style={style} fontSize={fontSize} role="img" />
+      );
+    case 'Event':
+      return <EventOutlined style={style} fontSize={fontSize} role="img" />;
+    case 'Narrative':
+      return (
+        <SpeakerNotesOutlined style={style} fontSize={fontSize} role="img" />
+      );
+    case 'Language':
+      return <TranslateOutlined style={style} fontSize={fontSize} role="img" />;
+    case 'Data-Source':
+      return <StreamOutlined style={style} fontSize={fontSize} role="img" />;
+    case 'Data-Component':
+      return <SourceOutlined style={style} fontSize={fontSize} role="img" />;
+    case 'Kill-Chain-Phase':
+      return <Launch style={style} fontSize={fontSize} role="img" />;
+    case 'Artifact':
+      return <ArchiveOutline style={style} fontSize={fontSize} role="img" />;
+    case 'Case':
+      return <WorkOutline style={style} fontSize={fontSize} role="img" />;
+    case 'Case-incident':
+      return <BiotechOutlined style={style} fontSize={fontSize} role="img" />;
+    case 'Case-feedback':
+      return (
+        <TipsAndUpdatesOutlined style={style} fontSize={fontSize} role="img" />
+      );
+    case 'Case-rfi':
+      return <Brain style={style} fontSize={fontSize} role="img" />;
     case 'Stix-Cyber-Observable':
     case 'Autonomous-System':
     case 'Directory':
@@ -132,7 +183,6 @@ const iconSelector = (type, variant, fontSize, color) => {
     case 'Email-Addr':
     case 'Email-Message':
     case 'Email-Mime-Part-Type':
-    case 'Artifact':
     case 'StixFile':
     case 'X509-Certificate':
     case 'IPv4-Addr':
@@ -151,6 +201,10 @@ const iconSelector = (type, variant, fontSize, color) => {
     case 'Hostname':
     case 'Text':
     case 'User-Agent':
+    case 'Bank-Account':
+    case 'Phone-Number':
+    case 'Payment-Card':
+    case 'Media-Content':
       return <HexagonOutline style={style} fontSize={fontSize} role="img" />;
     case 'stix-sighting-relationship':
       return <Visibility style={style} fontSize={fontSize} role="img" />;
@@ -174,7 +228,63 @@ const iconSelector = (type, variant, fontSize, color) => {
     case 'belongs-to':
     case 'based-on':
     case 'communicates-with':
+    case 'amplifies':
+    case 'analysis-of':
+    case 'authored-by':
+    case 'beacons-to':
+    case 'characterizes':
+    case 'consists-of':
+    case 'controls':
+    case 'cooperates-with':
+    case 'derived-from':
+    case 'downloads':
+    case 'has':
+    case 'bcc':
+    case 'cc':
+    case 'obs_belongs-to':
+    case 'owns':
+    case 'dst':
+    case 'from':
+    case 'hosts':
+    case 'image':
+    case 'publishes':
+    case 'duplicate-of':
+    case 'obs_content':
+    case 'service-dll':
+    case 'dynamic-analysis-of':
+    case 'contains':
+    case 'exfiltrates-to':
+    case 'exploits':
+    case 'investigates':
+    case 'x_opencti_linked-to':
     case 'originates-from':
+    case 'participates-in':
+    case 'body-multipart':
+    case 'body-raw':
+    case 'child':
+    case 'creator-user':
+    case 'detects':
+    case 'dst-payload':
+    case 'encapsulated-by':
+    case 'encapsulates':
+    case 'opened-connection':
+    case 'operating-system':
+    case 'parent':
+    case 'parent-directory':
+    case 'raw-email':
+    case 'src-payload':
+    case 'remediates':
+    case 'resolves-to':
+    case 'obs_resolves-to':
+    case 'revoked-by':
+    case 'sample':
+    case 'sender':
+    case 'src':
+    case 'to':
+    case 'values':
+    case 'static-analysis-of':
+    case 'subnarrative-of':
+    case 'subtechnique-of':
       return <VectorRadius style={style} fontSize={fontSize} role="img" />;
     default:
       return <HelpOutlined style={style} fontSize={fontSize} role="img" />;
@@ -182,9 +292,9 @@ const iconSelector = (type, variant, fontSize, color) => {
 };
 
 const ItemIcon = (props) => {
-  const { type, size, variant, color } = props;
+  const { type, size, variant, color = null, isReversed = false } = props;
   const fontSize = size || 'medium';
-  return iconSelector(type, variant, fontSize, color);
+  return iconSelector(type, variant, fontSize, color, isReversed);
 };
 
 ItemIcon.propTypes = {
@@ -192,6 +302,7 @@ ItemIcon.propTypes = {
   size: PropTypes.string,
   variant: PropTypes.string,
   color: PropTypes.string,
+  isReversed: PropTypes.bool,
 };
 
 export default ItemIcon;

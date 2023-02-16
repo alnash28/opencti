@@ -133,8 +133,7 @@ class SessionsListComponent extends Component {
       R.compose(R.toLower, R.path(['user', 'name'])),
     );
     const filterByKeyword = (n) => keyword === ''
-      || n.user.name.toLowerCase().indexOf(keyword.toLowerCase()) !== -1
-      || n.user.user_email.toLowerCase().indexOf(keyword.toLowerCase()) !== -1;
+      || n.user.name.toLowerCase().indexOf(keyword.toLowerCase()) !== -1;
     const sessions = R.pipe(
       R.propOr([], 'sessions'),
       R.filter(filterByKeyword),
@@ -194,7 +193,7 @@ class SessionsListComponent extends Component {
                               {nsdt(userSession.created)}
                             </div>
                             <div className={classes.ttl}>
-                              {Math.round(userSession.ttl / 60)} {t('minutes')}
+                              {Math.round(userSession.ttl / 60)} {t('minutes left')} / {Math.round(userSession.originalMaxAge / 60)}
                             </div>
                           </div>
                         }
@@ -275,12 +274,12 @@ const SessionsList = createRefetchContainer(
           user {
             id
             name
-            user_email
           }
           sessions {
             id
             created
             ttl
+            originalMaxAge
           }
         }
       }

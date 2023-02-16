@@ -8,7 +8,8 @@ import inject18n from '../../../../components/i18n';
 import StixCyberObservableDetails from './StixCyberObservableDetails';
 import StixCyberObservableEdition from './StixCyberObservableEdition';
 import StixCoreObjectOrStixCoreRelationshipLastReports from '../../analysis/reports/StixCoreObjectOrStixCoreRelationshipLastReports';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
 import StixCoreObjectLatestHistory from '../../common/stix_core_objects/StixCoreObjectLatestHistory';
@@ -40,12 +41,12 @@ class StixCyberObservableComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixCyberObservableOverview
+            <StixCyberObservableDetails
               stixCyberObservable={stixCyberObservable}
             />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixCyberObservableDetails
+            <StixCyberObservableOverview
               stixCyberObservable={stixCyberObservable}
             />
           </Grid>
@@ -87,6 +88,7 @@ class StixCyberObservableComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={stixCyberObservable.id}
+          defaultMarking={(stixCyberObservable.objectMarking?.edges ?? []).map((edge) => edge.node)}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <StixCyberObservableEdition
@@ -132,7 +134,9 @@ const StixCyberObservable = createFragmentContainer(
           edges {
             node {
               id
+              definition_type
               definition
+              x_opencti_order
               x_opencti_color
             }
           }

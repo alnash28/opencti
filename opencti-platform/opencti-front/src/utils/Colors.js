@@ -35,6 +35,14 @@ export const itemColor = (type, dark = false, reversed = false) => {
         return '#727926';
       }
       return '#7f8727';
+    case 'Case':
+    case 'Case-incident':
+    case 'Case-rfi':
+    case 'Case-feedback':
+      if (dark) {
+        return '#ad1457';
+      }
+      return '#ec407a';
     case 'Campaign':
       if (dark) {
         return '#4a148c';
@@ -47,25 +55,31 @@ export const itemColor = (type, dark = false, reversed = false) => {
       return '#2e7d32';
     case 'Observed-Data':
       if (dark) {
-        return '#00acc1';
+        return '#00838f';
       }
-      return '#00838f';
+      return '#00acc1';
     case 'Opinion':
       if (dark) {
-        return '#ad1457';
+        return '#1565c0';
       }
-      return '#ec407a';
+      return '#1976d2';
     case 'Report':
       if (dark) {
         return '#4a148c';
       }
       return '#9c27b0';
+    case 'Grouping':
+      if (dark) {
+        return '#689f38';
+      }
+      return '#9ccc65';
     case 'Course-Of-Action':
       if (dark) {
         return '#558b2f';
       }
       return '#8bc34a';
     case 'Individual':
+    case 'User':
       if (dark) {
         return '#006064';
       }
@@ -85,6 +99,11 @@ export const itemColor = (type, dark = false, reversed = false) => {
         return '#64dd17';
       }
       return '#76ff03';
+    case 'Event':
+      if (dark) {
+        return '#00695c';
+      }
+      return '#26a69a';
     case 'Indicator':
       if (dark) {
         return '#ff6f00';
@@ -115,6 +134,11 @@ export const itemColor = (type, dark = false, reversed = false) => {
         return '#33691e';
       }
       return '#689f38';
+    case 'Administrative-Area':
+      if (dark) {
+        return '#fbc02d';
+      }
+      return '#ffeb3b';
     case 'Position':
       if (dark) {
         return '#afb42b';
@@ -135,6 +159,21 @@ export const itemColor = (type, dark = false, reversed = false) => {
         return '#1b5e20';
       }
       return '#4caf50';
+    case 'Channel':
+      if (dark) {
+        return '#ad1457';
+      }
+      return '#ec407a';
+    case 'Narrative':
+      if (dark) {
+        return '#558b2f';
+      }
+      return '#8bc34a';
+    case 'Language':
+      if (dark) {
+        return '#afb42b';
+      }
+      return '#d4e157';
     case 'Vulnerability':
       if (dark) {
         return '#5d4037';
@@ -166,17 +205,24 @@ export const itemColor = (type, dark = false, reversed = false) => {
     case 'User-Account':
     case 'Windows-Registry-Key':
     case 'Windows-Registry-Value-Type':
-    case 'X-OpenCTI-Cryptographic-Key':
-    case 'X-OpenCTI-Cryptocurrency-Wallet':
-    case 'X-OpenCTI-Text':
-    case 'X-OpenCTI-User-Agent':
+    case 'Cryptographic-Key':
+    case 'Cryptocurrency-Wallet':
+    case 'Text':
+    case 'User-Agent':
+    case 'Bank-Account':
+    case 'Phone-Number':
+    case 'Payment-Card':
+    case 'Media-Content':
       if (dark) {
         return '#37474f';
       }
       return stringToColour(type);
+    case 'Stix-Core-Relationship':
+    case 'Relationship':
     case 'stix-core-relationship':
     case 'targets':
     case 'uses':
+    case 'located-at':
     case 'related-to':
     case 'mitigates':
     case 'impersonates':
@@ -184,9 +230,70 @@ export const itemColor = (type, dark = false, reversed = false) => {
     case 'comes-after':
     case 'attributed-to':
     case 'variant-of':
-    case 'localization':
     case 'part-of':
     case 'drops':
+    case 'delivers':
+    case 'compromises':
+    case 'belongs-to':
+    case 'based-on':
+    case 'communicates-with':
+    case 'amplifies':
+    case 'analysis-of':
+    case 'authored-by':
+    case 'beacons-to':
+    case 'characterizes':
+    case 'consists-of':
+    case 'controls':
+    case 'cooperates-with':
+    case 'derived-from':
+    case 'downloads':
+    case 'has':
+    case 'bcc':
+    case 'cc':
+    case 'obs_belongs-to':
+    case 'owns':
+    case 'dst':
+    case 'from':
+    case 'hosts':
+    case 'image':
+    case 'publishes':
+    case 'duplicate-of':
+    case 'obs_content':
+    case 'service-dll':
+    case 'dynamic-analysis-of':
+    case 'contains':
+    case 'exfiltrates-to':
+    case 'exploits':
+    case 'investigates':
+    case 'x_opencti_linked-to':
+    case 'originates-from':
+    case 'participates-in':
+    case 'body-multipart':
+    case 'body-raw':
+    case 'child':
+    case 'creator-user':
+    case 'detects':
+    case 'dst-payload':
+    case 'encapsulated-by':
+    case 'encapsulates':
+    case 'opened-connection':
+    case 'operating-system':
+    case 'parent':
+    case 'parent-directory':
+    case 'raw-email':
+    case 'src-payload':
+    case 'remediates':
+    case 'resolves-to':
+    case 'obs_resolves-to':
+    case 'revoked-by':
+    case 'sample':
+    case 'sender':
+    case 'src':
+    case 'to':
+    case 'values':
+    case 'static-analysis-of':
+    case 'subnarrative-of':
+    case 'subtechnique-of':
       if (dark) {
         return '#616161';
       }

@@ -1,30 +1,35 @@
-import { assoc, dissoc, filter, map } from 'ramda';
+import * as R from 'ramda';
 import { BUS_TOPICS } from '../config/conf';
 import { delEditContext, notify, setEditContext } from '../database/redis';
 import {
+  batchListThroughGetTo,
   createEntity,
   createRelation,
   createRelations,
   deleteElementById,
   deleteRelationsByFromAndTo,
   distributionEntities,
-  internalLoadById,
   listThroughGetTo,
-  storeLoadById,
   timeSeriesEntities,
   updateAttribute,
 } from '../database/middleware';
-import { listEntities } from '../database/middleware-loader';
-import { elCount } from '../database/engine';
+import { internalLoadById, listEntities, storeLoadById } from '../database/middleware-loader';
+import { elCount, elFindByIds } from '../database/engine';
 import { upload } from '../database/file-storage';
 import { workToExportFile } from './work';
 import { FunctionalError, UnsupportedError } from '../config/errors';
-import { isEmptyField, READ_INDEX_STIX_DOMAIN_OBJECTS } from '../database/utils';
 import {
+  isEmptyField,
+  isNotEmptyField,
+  READ_INDEX_INFERRED_ENTITIES,
+  READ_INDEX_STIX_DOMAIN_OBJECTS
+} from '../database/utils';
+import {
+  ENTITY_TYPE_CONTAINER_NOTE,
+  ENTITY_TYPE_CONTAINER_REPORT,
   ENTITY_TYPE_IDENTITY_SECTOR,
   ENTITY_TYPE_INDICATOR,
   isStixDomainObject,
-  isStixDomainObjectContainer,
   isStixDomainObjectIdentity,
   isStixDomainObjectLocation,
   stixDomainObjectOptions,
@@ -33,89 +38,121 @@ import {
   ABSTRACT_STIX_CYBER_OBSERVABLE,
   ABSTRACT_STIX_DOMAIN_OBJECT,
   ABSTRACT_STIX_META_RELATIONSHIP,
+  buildRefRelationKey,
+  STIX_META_RELATIONSHIPS_INPUTS,
 } from '../schema/general';
-import { isStixMetaRelationship, RELATION_CREATED_BY, RELATION_OBJECT } from '../schema/stixMetaRelationship';
+import { isStixMetaRelationship, RELATION_CREATED_BY, RELATION_OBJECT_ASSIGNEE, } from '../schema/stixMetaRelationship';
 import { askEntityExport, askListExport, exportTransformFilters } from './stix';
-import { escape } from '../utils/format';
 import { RELATION_BASED_ON } from '../schema/stixCoreRelationship';
+import { STIX_CYBER_OBSERVABLE_RELATIONSHIPS_INPUTS } from '../schema/stixCyberObservableRelationship';
+import { now, utcDate } from '../utils/format';
+import { ENTITY_TYPE_CONTAINER_GROUPING } from '../modules/grouping/grouping-types';
+import { ENTITY_TYPE_USER } from '../schema/internalObject';
 
-export const findAll = async (user, args) => {
+export const findAll = async (context, user, args) => {
   let types = [];
   if (args.types && args.types.length > 0) {
-    types = filter((type) => isStixDomainObject(type), args.types);
+    types = R.filter((type) => isStixDomainObject(type), args.types);
   }
   if (types.length === 0) {
     types.push(ABSTRACT_STIX_DOMAIN_OBJECT);
   }
-  return listEntities(user, types, args);
+  let filters = args.filters ?? [];
+  if (isNotEmptyField(args.elementId) && isNotEmptyField(args.relationship_type)) {
+    const relationshipFilterKeys = args.relationship_type.map((n) => buildRefRelationKey(n));
+    filters = [
+      ...filters,
+      { key: relationshipFilterKeys, values: [args.elementId] },
+    ];
+  }
+  return listEntities(context, user, types, { ...R.omit(['elementId', 'relationship_type'], args), filters });
 };
 
-export const findById = async (user, stixDomainObjectId) => storeLoadById(user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
+export const findById = async (context, user, stixDomainObjectId) => storeLoadById(context, user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
+
+export const batchStixDomainObjects = async (context, user, objectsIds) => {
+  const objectsToFinds = R.uniq(objectsIds.filter((u) => isNotEmptyField(u)));
+  const objects = await elFindByIds(context, user, objectsToFinds, { toMap: true });
+  return objectsIds.map((id) => objects[id]);
+};
+
+export const batchAssignees = (context, user, stixDomainObjectIds) => {
+  return batchListThroughGetTo(context, user, stixDomainObjectIds, RELATION_OBJECT_ASSIGNEE, ENTITY_TYPE_USER);
+};
 
 // region time series
-export const reportsTimeSeries = (user, stixDomainObjectId, args) => {
-  const filters = [{ isRelation: true, type: RELATION_OBJECT, value: stixDomainObjectId }];
-  return timeSeriesEntities(user, 'Report', filters, args);
+export const stixDomainObjectsTimeSeries = (context, user, args) => {
+  const { types = [ABSTRACT_STIX_DOMAIN_OBJECT] } = args;
+  return timeSeriesEntities(context, user, types, args);
 };
 
-export const stixDomainObjectsTimeSeries = (user, args) => {
-  return timeSeriesEntities(user, args.type ? escape(args.type) : ABSTRACT_STIX_DOMAIN_OBJECT, [], args);
+export const stixDomainObjectsTimeSeriesByAuthor = (context, user, args) => {
+  const { authorId, types = [ABSTRACT_STIX_DOMAIN_OBJECT] } = args;
+  const filters = [{ key: [buildRefRelationKey(RELATION_CREATED_BY, '*')], values: [authorId] }, ...(args.filters || [])];
+  return timeSeriesEntities(context, user, types, { ...args, filters });
 };
 
-export const stixDomainObjectsTimeSeriesByAuthor = (user, args) => {
-  const { authorId } = args;
-  const filters = [{ isRelation: true, type: RELATION_CREATED_BY, value: authorId }];
-  return timeSeriesEntities(user, args.type ? escape(args.type) : ABSTRACT_STIX_DOMAIN_OBJECT, filters, args);
-};
-
-export const stixDomainObjectsNumber = (user, args) => ({
-  count: elCount(user, READ_INDEX_STIX_DOMAIN_OBJECTS, args),
-  total: elCount(user, READ_INDEX_STIX_DOMAIN_OBJECTS, dissoc('endDate', args)),
+export const stixDomainObjectsNumber = (context, user, args) => ({
+  count: elCount(context, user, args.onlyInferred ? READ_INDEX_INFERRED_ENTITIES : READ_INDEX_STIX_DOMAIN_OBJECTS, args),
+  total: elCount(context, user, args.onlyInferred ? READ_INDEX_INFERRED_ENTITIES : READ_INDEX_STIX_DOMAIN_OBJECTS, R.dissoc('endDate', args)),
 });
 
-export const stixDomainObjectsDistributionByEntity = async (user, args) => {
-  const { objectId, relationship_type: relationshipType } = args;
-  const filters = [{ isRelation: true, type: relationshipType, value: objectId }];
-  return distributionEntities(user, ABSTRACT_STIX_DOMAIN_OBJECT, filters, args);
+export const stixDomainObjectsDistributionByEntity = async (context, user, args) => {
+  const { relationship_type, objectId, types = [ABSTRACT_STIX_DOMAIN_OBJECT] } = args;
+  const filters = [{ key: [relationship_type.map((n) => buildRefRelationKey(n, '*'))], values: [objectId] }, ...(args.filters || [])];
+  return distributionEntities(context, user, types, { ...args, filters });
 };
 // endregion
 
 // region export
-export const stixDomainObjectsExportAsk = async (user, args) => {
-  const { format, type, exportType, maxMarkingDefinition } = args;
-  const { search, orderBy, orderMode, filters, filterMode } = args;
-  const argsFilters = { search, orderBy, orderMode, filters, filterMode };
+export const stixDomainObjectsExportAsk = async (context, user, args) => {
+  const { format, type, exportType, maxMarkingDefinition, selectedIds } = args;
+  const { search, orderBy, orderMode, filters, filterMode, relationship_type, elementId } = args;
+  const argsFilters = { search, orderBy, orderMode, filters, filterMode, relationship_type, elementId };
   const filtersOpts = stixDomainObjectOptions.StixDomainObjectsFilter;
   const ordersOpts = stixDomainObjectOptions.StixDomainObjectsOrdering;
-  const listParams = exportTransformFilters(argsFilters, filtersOpts, ordersOpts);
-  const works = await askListExport(user, format, type, listParams, exportType, maxMarkingDefinition);
-  return map((w) => workToExportFile(w), works);
+  let newArgsFiltersFilters = argsFilters.filters;
+  const initialParams = {};
+  if (argsFilters.filters && argsFilters.filters.length > 0) {
+    if (argsFilters.filters.filter((n) => n.key.includes('elementId')).length > 0) {
+      initialParams.elementId = R.head(R.head(argsFilters.filters.filter((n) => n.key.includes('elementId'))).values);
+      newArgsFiltersFilters = newArgsFiltersFilters.filter((n) => !n.key.includes('elementId'));
+    }
+    if (argsFilters.filters.filter((n) => n.key.includes('fromId')).length > 0) {
+      initialParams.fromId = R.head(R.head(argsFilters.filters.filter((n) => n.key.includes('fromId'))).values);
+      newArgsFiltersFilters = newArgsFiltersFilters.filter((n) => !n.key.includes('fromId'));
+    }
+  }
+  const finalArgsFilter = {
+    ...argsFilters,
+    filters: newArgsFiltersFilters
+  };
+  const listParams = { ...initialParams, ...exportTransformFilters(finalArgsFilter, filtersOpts, ordersOpts) };
+  const works = await askListExport(context, user, format, type, selectedIds, listParams, exportType, maxMarkingDefinition);
+  return works.map((w) => workToExportFile(w));
 };
-export const stixDomainObjectExportAsk = async (user, args) => {
+export const stixDomainObjectExportAsk = async (context, user, args) => {
   const { format, stixDomainObjectId = null, exportType = null, maxMarkingDefinition = null } = args;
-  const entity = stixDomainObjectId ? await storeLoadById(user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT) : null;
-  const works = await askEntityExport(user, format, entity, exportType, maxMarkingDefinition);
-  return map((w) => workToExportFile(w), works);
+  const entity = stixDomainObjectId ? await storeLoadById(context, user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT) : null;
+  const works = await askEntityExport(context, user, format, entity, exportType, maxMarkingDefinition);
+  return works.map((w) => workToExportFile(w));
 };
-export const stixDomainObjectsExportPush = async (user, type, file, listFilters) => {
-  await upload(user, `export/${type}`, file, { list_filters: listFilters });
+export const stixDomainObjectsExportPush = async (context, user, type, file, listFilters) => {
+  await upload(context, user, `export/${type}`, file, { list_filters: listFilters });
   return true;
 };
-export const stixDomainObjectExportPush = async (user, entityId, file) => {
-  const entity = await internalLoadById(user, entityId);
-  await upload(user, `export/${entity.entity_type}/${entityId}`, file, { entity_id: entityId });
+export const stixDomainObjectExportPush = async (context, user, entityId, file) => {
+  const entity = await internalLoadById(context, user, entityId);
+  await upload(context, user, `export/${entity.entity_type}/${entityId}`, file, { entity_id: entityId });
   return true;
 };
 // endregion
 
 // region mutation
-export const addStixDomainObject = async (user, stixDomainObject) => {
+export const addStixDomainObject = async (context, user, stixDomainObject) => {
   const innerType = stixDomainObject.type;
   if (!isStixDomainObject(innerType)) {
     throw UnsupportedError('This method can only create Stix domain');
-  }
-  if (isStixDomainObjectContainer(innerType)) {
-    throw UnsupportedError('This method cant create Stix domain container');
   }
   const data = stixDomainObject;
   if (isStixDomainObjectIdentity(innerType)) {
@@ -124,25 +161,38 @@ export const addStixDomainObject = async (user, stixDomainObject) => {
   if (isStixDomainObjectLocation(innerType)) {
     data.x_opencti_location_type = innerType;
   }
+  if (innerType === ENTITY_TYPE_CONTAINER_REPORT) {
+    data.published = utcDate();
+  }
+  if (innerType === ENTITY_TYPE_CONTAINER_GROUPING) {
+    if (isEmptyField(stixDomainObject.context)) {
+      throw UnsupportedError('You need to specify a context to create an grouping');
+    }
+  }
   if (innerType === ENTITY_TYPE_INDICATOR) {
     if (isEmptyField(stixDomainObject.pattern) || isEmptyField(stixDomainObject.pattern_type)) {
       throw UnsupportedError('You need to specify a pattern/pattern_type to create an indicator');
     }
   }
+  if (innerType === ENTITY_TYPE_CONTAINER_NOTE) {
+    data.created = data.created || now();
+  }
   // Create the element
-  const created = await createEntity(user, dissoc('type', data), innerType);
+  const created = await createEntity(context, user, R.dissoc('type', data), innerType);
   return notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].ADDED_TOPIC, created, user);
 };
 
-export const stixDomainObjectDelete = async (user, stixDomainObjectId) => {
-  const stixDomainObject = await storeLoadById(user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
+export const stixDomainObjectDelete = async (context, user, stixDomainObjectId) => {
+  const stixDomainObject = await storeLoadById(context, user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
   if (!stixDomainObject) {
     throw FunctionalError('Cannot delete the object, Stix-Domain-Object cannot be found.');
   }
-  return deleteElementById(user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
+  await deleteElementById(context, user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
+  notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].DELETE_TOPIC, stixDomainObject, user);
+  return stixDomainObjectId;
 };
 
-export const stixDomainObjectsDelete = async (user, stixDomainObjectsIds) => {
+export const stixDomainObjectsDelete = async (context, user, stixDomainObjectsIds) => {
   // Relations cannot be created in parallel.
   for (let i = 0; i < stixDomainObjectsIds.length; i += 1) {
     await stixDomainObjectDelete(user, stixDomainObjectsIds[i]);
@@ -150,76 +200,81 @@ export const stixDomainObjectsDelete = async (user, stixDomainObjectsIds) => {
   return stixDomainObjectsIds;
 };
 
-export const stixDomainObjectAddRelation = async (user, stixDomainObjectId, input) => {
-  const stixDomainObject = await storeLoadById(user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
-  if (!stixDomainObject) {
-    throw FunctionalError('Cannot add the relation, Stix-Domain-Object cannot be found.');
-  }
+export const stixDomainObjectAddRelation = async (context, user, stixDomainObjectId, input) => {
   if (!isStixMetaRelationship(input.relationship_type)) {
     throw FunctionalError(`Only ${ABSTRACT_STIX_META_RELATIONSHIP} can be added through this method.`);
   }
-  const finalInput = assoc('fromId', stixDomainObjectId, input);
-  return createRelation(user, finalInput).then((relationData) => {
+  const finalInput = { ...input, fromId: stixDomainObjectId };
+  return createRelation(context, user, finalInput).then((relationData) => {
     notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].EDIT_TOPIC, relationData, user);
     return relationData;
   });
 };
 
-export const stixDomainObjectAddRelations = async (user, stixDomainObjectId, input) => {
-  const stixDomainObject = await storeLoadById(user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
+export const stixDomainObjectAddRelations = async (context, user, stixDomainObjectId, input) => {
+  const stixDomainObject = await storeLoadById(context, user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
   if (!stixDomainObject) {
     throw FunctionalError('Cannot add the relation, Stix-Domain-Object cannot be found.');
   }
   if (!isStixMetaRelationship(input.relationship_type)) {
     throw FunctionalError(`Only ${ABSTRACT_STIX_META_RELATIONSHIP} can be added through this method.`);
   }
-  const finalInput = map(
-    (n) => ({ fromId: stixDomainObjectId, toId: n, relationship_type: input.relationship_type }),
-    input.toIds
+  const finalInput = input.toIds.map(
+    (n) => ({ fromId: stixDomainObjectId, toId: n, relationship_type: input.relationship_type })
   );
-  await createRelations(user, finalInput);
-  return storeLoadById(user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT).then((entity) => notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].EDIT_TOPIC, entity, user));
+  await createRelations(context, user, finalInput);
+  const entity = await storeLoadById(context, user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
+  return notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].EDIT_TOPIC, entity, user);
 };
 
-export const stixDomainObjectDeleteRelation = async (user, stixDomainObjectId, toId, relationshipType) => {
-  const stixDomainObject = await storeLoadById(user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
+export const stixDomainObjectDeleteRelation = async (context, user, stixDomainObjectId, toId, relationshipType) => {
+  const stixDomainObject = await storeLoadById(context, user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
   if (!stixDomainObject) {
     throw FunctionalError('Cannot delete the relation, Stix-Domain-Object cannot be found.');
   }
   if (!isStixMetaRelationship(relationshipType)) {
     throw FunctionalError(`Only ${ABSTRACT_STIX_META_RELATIONSHIP} can be deleted through this method.`);
   }
-  await deleteRelationsByFromAndTo(user, stixDomainObjectId, toId, relationshipType, ABSTRACT_STIX_META_RELATIONSHIP);
+  await deleteRelationsByFromAndTo(context, user, stixDomainObjectId, toId, relationshipType, ABSTRACT_STIX_META_RELATIONSHIP);
   return notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].EDIT_TOPIC, stixDomainObject, user);
 };
 
-export const stixDomainObjectEditField = async (user, stixObjectId, input, opts = {}) => {
-  const stixDomainObject = await storeLoadById(user, stixObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
+export const stixDomainObjectEditField = async (context, user, stixObjectId, input, opts = {}) => {
+  const stixDomainObject = await storeLoadById(context, user, stixObjectId, ABSTRACT_STIX_DOMAIN_OBJECT);
   if (!stixDomainObject) {
     throw FunctionalError('Cannot edit the field, Stix-Domain-Object cannot be found.');
   }
-  const { element: updatedElem } = await updateAttribute(user, stixObjectId, ABSTRACT_STIX_DOMAIN_OBJECT, input, opts);
+  const { element: updatedElem } = await updateAttribute(context, user, stixObjectId, ABSTRACT_STIX_DOMAIN_OBJECT, input, opts);
   if (stixDomainObject.entity_type === ENTITY_TYPE_INDICATOR && input.key === 'x_opencti_score') {
-    const observables = await listThroughGetTo(user, [stixObjectId], RELATION_BASED_ON, ABSTRACT_STIX_CYBER_OBSERVABLE);
+    const observables = await listThroughGetTo(context, user, [stixObjectId], RELATION_BASED_ON, ABSTRACT_STIX_CYBER_OBSERVABLE);
     await Promise.all(
-      observables.map((observable) => updateAttribute(user, observable.id, ABSTRACT_STIX_CYBER_OBSERVABLE, input, opts))
+      observables.map((observable) => updateAttribute(context, user, observable.id, ABSTRACT_STIX_CYBER_OBSERVABLE, input, opts))
     );
   }
-  return notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].EDIT_TOPIC, updatedElem, user);
+  // Check is a real update was done
+  const updateWithoutMeta = R.pipe(
+    R.omit(STIX_META_RELATIONSHIPS_INPUTS),
+    R.omit(STIX_CYBER_OBSERVABLE_RELATIONSHIPS_INPUTS),
+  )(updatedElem);
+  const isUpdated = !R.equals(stixDomainObject, updateWithoutMeta);
+  if (isUpdated) {
+    return notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].EDIT_TOPIC, updatedElem, user);
+  }
+  return updatedElem;
 };
 
 // region context
-export const stixDomainObjectCleanContext = async (user, stixDomainObjectId) => {
+export const stixDomainObjectCleanContext = async (context, user, stixDomainObjectId) => {
   await delEditContext(user, stixDomainObjectId);
-  return storeLoadById(user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT).then((stixDomainObject) => {
-    return notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].EDIT_TOPIC, stixDomainObject, user);
+  return storeLoadById(context, user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT).then((stixDomainObject) => {
+    return notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].CONTEXT_TOPIC, stixDomainObject, user);
   });
 };
 
-export const stixDomainObjectEditContext = async (user, stixDomainObjectId, input) => {
+export const stixDomainObjectEditContext = async (context, user, stixDomainObjectId, input) => {
   await setEditContext(user, stixDomainObjectId, input);
-  return storeLoadById(user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT).then((stixDomainObject) => {
-    return notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].EDIT_TOPIC, stixDomainObject, user);
+  return storeLoadById(context, user, stixDomainObjectId, ABSTRACT_STIX_DOMAIN_OBJECT).then((stixDomainObject) => {
+    return notify(BUS_TOPICS[ABSTRACT_STIX_DOMAIN_OBJECT].CONTEXT_TOPIC, stixDomainObject, user);
   });
 };
 // endregion

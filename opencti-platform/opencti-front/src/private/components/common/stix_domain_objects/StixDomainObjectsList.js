@@ -14,16 +14,18 @@ import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import List from '@mui/material/List';
 import Chip from '@mui/material/Chip';
-import ItemMarking from '../../../../components/ItemMarking';
+import Security from '../../../../utils/Security';
+import { EXPLORE_EXUPDATE } from '../../../../utils/hooks/useGranted';
 import ItemIcon from '../../../../components/ItemIcon';
 import inject18n from '../../../../components/i18n';
 import { QueryRenderer } from '../../../../relay/environment';
 import { resolveLink } from '../../../../utils/Entity';
 import { defaultValue } from '../../../../utils/Graph';
 import { convertFilters } from '../../../../utils/ListParameters';
-import Filters, { isUniqFilter } from '../lists/Filters';
+import { isUniqFilter } from '../../../../utils/filters/filtersUtils';
 import { truncate } from '../../../../utils/String';
-import Security, { EXPLORE_EXUPDATE } from '../../../../utils/Security';
+import Filters from '../lists/Filters';
+import ItemMarkings from '../../../../components/ItemMarkings';
 
 const styles = (theme) => ({
   container: {
@@ -152,6 +154,10 @@ const stixDomainObjectsListQuery = graphql`
             description
             published
           }
+          ... on Grouping {
+            name
+            description
+          }
           ... on CourseOfAction {
             name
             description
@@ -189,6 +195,10 @@ const stixDomainObjectsListQuery = graphql`
             description
           }
           ... on City {
+            name
+            description
+          }
+          ... on AdministrativeArea {
             name
             description
           }
@@ -231,6 +241,10 @@ const stixDomainObjectsListQuery = graphql`
             edges {
               node {
                 definition
+                definition_type
+                definition
+                x_opencti_order
+                x_opencti_color
               }
             }
           }
@@ -344,9 +358,6 @@ class StixDomainObjectsList extends Component {
                 <List style={{ marginTop: -10 }}>
                   {data.map((stixCoreObjectEdge) => {
                     const stixCoreObject = stixCoreObjectEdge.node;
-                    const markingDefinition = R.head(
-                      R.pathOr([], ['objectMarking', 'edges'], stixCoreObject),
-                    );
                     return (
                       <ListItem
                         key={stixCoreObject.id}
@@ -379,13 +390,13 @@ class StixDomainObjectsList extends Component {
                           {fsd(stixCoreObject[dateAttribute])}
                         </div>
                         <div style={{ width: 110, paddingRight: 20 }}>
-                          {markingDefinition && (
-                            <ItemMarking
-                              key={markingDefinition.node.id}
-                              label={markingDefinition.node.definition}
-                              variant="inList"
-                            />
-                          )}
+                          <ItemMarkings
+                            variant="inList"
+                            markingDefinitionsEdges={
+                              stixCoreObject.objectMarking.edges
+                            }
+                            limit={1}
+                          />
                         </div>
                       </ListItem>
                     );
@@ -456,7 +467,7 @@ class StixDomainObjectsList extends Component {
                     'markedBy',
                     'createdBy',
                     'labelledBy',
-                    'confidence_gt',
+                    'confidence',
                   ]}
                   handleAddFilter={this.handleAddFilter.bind(this)}
                   handleRemoveFilter={this.handleRemoveFilter.bind(this)}
@@ -468,6 +479,7 @@ class StixDomainObjectsList extends Component {
           <div className={classes.filters}>
             {R.map((currentFilter) => {
               const label = `${truncate(t(`filter_${currentFilter[0]}`), 20)}`;
+              const localFilterMode = currentFilter[0].endsWith('not_eq') ? t('AND') : t('OR');
               const values = (
                 <span>
                   {R.map(
@@ -477,7 +489,7 @@ class StixDomainObjectsList extends Component {
                           ? truncate(n.value, 15)
                           : t('No label')}{' '}
                         {R.last(currentFilter[1]).value !== n.value && (
-                          <code>OR</code>
+                          <code>{localFilterMode}</code>
                         )}
                       </span>
                     ),
@@ -487,6 +499,7 @@ class StixDomainObjectsList extends Component {
               );
               return (
                 <Tooltip
+                  key={label}
                   title={
                     <div>
                       <strong>{label}</strong>: {values}

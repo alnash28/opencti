@@ -53,10 +53,11 @@ import CreatedByField from '../form/CreatedByField';
 import ObjectMarkingField from '../form/ObjectMarkingField';
 import ConfidenceField from '../form/ConfidenceField';
 import StixCyberObservableCreation from '../../observations/stix_cyber_observables/StixCyberObservableCreation';
-import ExternalReferencesField from '../form/ExternalReferencesField';
+import { ExternalReferencesField } from '../form/ExternalReferencesField';
 import { defaultValue } from '../../../../utils/Graph';
-import { isNodeInConnection } from '../../../../utils/Store';
+import { isNodeInConnection } from '../../../../utils/store';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -236,6 +237,9 @@ const stixCoreRelationshipCreationFromEntityQuery = graphql`
       ... on City {
         name
       }
+      ... on AdministrativeArea {
+        name
+      }
       ... on Country {
         name
       }
@@ -255,6 +259,27 @@ const stixCoreRelationshipCreationFromEntityQuery = graphql`
         name
       }
       ... on Incident {
+        name
+      }
+      ... on Event {
+        name
+      }
+      ... on Channel {
+        name
+      }
+      ... on Narrative {
+        name
+      }
+      ... on Language {
+        name
+      }
+      ... on DataComponent {
+        name
+      }
+      ... on DataSource {
+        name
+      }
+      ... on Case {
         name
       }
       ... on StixCyberObservable {
@@ -312,6 +337,20 @@ class StixCoreRelationshipCreationFromEntity extends Component {
     };
   }
 
+  componentDidUpdate(prevProps) {
+    if (
+      this.props.targetEntities
+      && this.props.targetEntities.length > 0
+      && !R.equals(this.props.targetEntities, prevProps.targetEntities)
+    ) {
+      this.setState({
+        open: true,
+        step: 1,
+        targetEntities: this.props.targetEntities,
+      });
+    }
+  }
+
   handleOpen() {
     this.setState({ open: true });
   }
@@ -336,6 +375,7 @@ class StixCoreRelationshipCreationFromEntity extends Component {
               ? payload.getLinkedRecord(isRelationReversed ? 'from' : 'to')
               : payload;
             const connKey = connectionKey || 'Pagination_stixCoreRelationships';
+            // When using connectionKey we use less props of PaginationOptions, we need to filter them
             const { paginationOptions } = this.props;
             const conn = ConnectionHandler.getConnection(
               userProxy,
@@ -568,14 +608,14 @@ class StixCoreRelationshipCreationFromEntity extends Component {
             && targetStixDomainObjectTypes.length > 0 && (
               <StixDomainObjectCreation
                 display={this.state.open}
-                contextual={true}
                 inputValue={this.state.search}
                 paginationOptions={stixDomainObjectsPaginationOptions}
-                targetStixDomainObjectTypes={targetStixDomainObjectTypes}
+                stixDomainObjectTypes={targetStixDomainObjectTypes}
               />
           )}
           {targetEntities.length === 0
-            && !targetStixDomainObjectTypes
+            && (!targetStixDomainObjectTypes
+              || targetStixDomainObjectTypes.length === 0)
             && targetStixCyberObservableTypes
             && targetStixCyberObservableTypes.length > 0 && (
               <StixCyberObservableCreation
@@ -779,7 +819,7 @@ class StixCoreRelationshipCreationFromEntity extends Component {
                 name="confidence"
                 label={t('Confidence level')}
                 fullWidth={true}
-                containerstyle={{ marginTop: 20, width: '100%' }}
+                containerStyle={fieldSpacingContainerStyle}
               />
               <Field
                 component={DateTimePickerField}
@@ -962,6 +1002,7 @@ StixCoreRelationshipCreationFromEntity.propTypes = {
   defaultStopTime: PropTypes.string,
   isEntitiesView: PropTypes.bool,
   entitiesViewPaginationKey: PropTypes.string,
+  targetEntities: PropTypes.array,
 };
 
 export default R.compose(

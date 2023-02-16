@@ -29,7 +29,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -48,7 +48,7 @@ const reportQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
     connectorsForExport {
       ...StixCoreObjectFilesAndHistory_connectorsExport
@@ -79,14 +79,13 @@ class RootReport extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { reportId },
       },
     } = this.props;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <QueryRenderer
           query={reportQuery}
           variables={{ id: reportId }}
@@ -110,6 +109,7 @@ class RootReport extends Component {
                           <ContainerHeader
                             container={props.report}
                             PopoverComponent={<ReportPopover />}
+                            disableSharing={true}
                           />
                           <ContainerStixDomainObjects
                             {...routeProps}
@@ -126,6 +126,7 @@ class RootReport extends Component {
                           <ContainerHeader
                             container={props.report}
                             PopoverComponent={<ReportPopover />}
+                            disableSharing={true}
                           />
                           <ContainerStixCyberObservables
                             {...routeProps}
@@ -151,6 +152,7 @@ class RootReport extends Component {
                           <ContainerHeader
                             container={props.report}
                             PopoverComponent={<ReportPopover />}
+                            disableSharing={true}
                           />
                           <StixDomainObjectContent
                             {...routeProps}
@@ -207,7 +209,6 @@ class RootReport extends Component {
 RootReport.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootReport);

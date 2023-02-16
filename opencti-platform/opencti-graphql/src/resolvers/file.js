@@ -1,40 +1,43 @@
-import { GraphQLUpload } from 'graphql-upload';
 import { deleteFile, filesListing, loadFile } from '../database/file-storage';
 import { askJobImport, uploadImport, uploadPending } from '../domain/file';
 import { worksForSource } from '../domain/work';
 import { stixCoreObjectImportDelete } from '../domain/stixCoreObject';
-import { internalLoadById } from '../database/middleware';
+import { batchLoader } from '../database/middleware';
+import { batchCreators } from '../domain/user';
+import { batchStixDomainObjects } from '../domain/stixDomainObject';
+
+const creatorLoader = batchLoader(batchCreators);
+const domainLoader = batchLoader(batchStixDomainObjects);
 
 const fileResolvers = {
   Query: {
-    file: (_, { id }, { user }) => loadFile(user, id),
-    importFiles: (_, { first }, { user }) => filesListing(user, first, 'import/global/'),
-    pendingFiles: (_, { first }, { user }) => filesListing(user, first, 'import/pending/'),
+    file: (_, { id }, context) => loadFile(context, context.user, id),
+    importFiles: (_, { first }, context) => filesListing(context, context.user, first, 'import/global/'),
+    pendingFiles: (_, { first }, context) => filesListing(context, context.user, first, 'import/pending/'),
   },
   File: {
-    works: (file, _, { user }) => worksForSource(user, file.id),
-    metaData: (file, _, { user }) => {
-      if (file.metaData.entity_id) {
-        return { ...file.metaData, entity: internalLoadById(user, file.metaData.entity_id) };
-      }
-      return file.metaData;
-    },
+    works: (file, _, context) => worksForSource(context, context.user, file.id),
   },
-  Upload: GraphQLUpload, // Maps the `Upload` scalar to the implementation provided by the `graphql-upload` package.
+  FileMetadata: {
+    entity: (metadata, _, context) => domainLoader.load(metadata.entity_id, context, context.user),
+    creator: (metadata, _, context) => creatorLoader.load(metadata.creator_id, context, context.user),
+  },
   Mutation: {
-    uploadImport: (_, { file }, { user }) => uploadImport(user, file),
-    uploadPending: (_, { file, entityId }, { user }) => uploadPending(user, file, entityId),
-    deleteImport: (_, { fileName }, { user }) => {
+    uploadImport: (_, { file }, context) => uploadImport(context, context.user, file),
+    uploadPending: (_, { file, entityId, labels, errorOnExisting }, context) => {
+      return uploadPending(context, context.user, file, entityId, labels, errorOnExisting);
+    },
+    deleteImport: (_, { fileName }, context) => {
       // Imported file must be handle specifically
       // File deletion must publish a specific event
       // and update the updated_at field of the source entity
       if (fileName.startsWith('import') && !fileName.includes('global') && !fileName.includes('pending')) {
-        return stixCoreObjectImportDelete(user, fileName);
+        return stixCoreObjectImportDelete(context, context.user, fileName);
       }
       // If not, a simple deletion is enough
-      return deleteFile(user, fileName);
+      return deleteFile(context, context.user, fileName);
     },
-    askJobImport: (_, args, { user }) => askJobImport(user, args),
+    askJobImport: (_, args, context) => askJobImport(context, context.user, args),
   },
 };
 

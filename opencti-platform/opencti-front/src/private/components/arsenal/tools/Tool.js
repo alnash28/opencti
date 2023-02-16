@@ -10,7 +10,8 @@ import ToolEdition from './ToolEdition';
 import ToolPopover from './ToolPopover';
 import StixCoreObjectOrStixCoreRelationshipLastReports from '../../analysis/reports/StixCoreObjectOrStixCoreRelationshipLastReports';
 import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
@@ -28,13 +29,13 @@ const styles = () => ({
 
 class ToolComponent extends Component {
   render() {
-    const { classes, tool, enableReferences } = this.props;
+    const { classes, tool } = this.props;
     return (
       <div className={classes.container}>
         <StixDomainObjectHeader
+          entityType={'Tool'}
           stixDomainObject={tool}
           PopoverComponent={<ToolPopover />}
-          enableReferences={enableReferences}
         />
         <Grid
           container={true}
@@ -42,10 +43,10 @@ class ToolComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={tool} />
+            <ToolDetails tool={tool} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <ToolDetails tool={tool} />
+            <StixDomainObjectOverview stixDomainObject={tool} />
           </Grid>
         </Grid>
         <Grid
@@ -81,6 +82,7 @@ class ToolComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={tool.id}
+          defaultMarking={(tool.objectMarking?.edges ?? []).map((edge) => edge.node)}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <ToolEdition toolId={tool.id} />
@@ -94,7 +96,6 @@ ToolComponent.propTypes = {
   tool: PropTypes.object,
   classes: PropTypes.object,
   t: PropTypes.func,
-  enableReferences: PropTypes.bool,
 };
 
 const Tool = createFragmentContainer(ToolComponent, {
@@ -125,7 +126,9 @@ const Tool = createFragmentContainer(ToolComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }

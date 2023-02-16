@@ -1,37 +1,48 @@
-import * as R from 'ramda';
 import { withFilter } from 'graphql-subscriptions';
 import {
-  findById,
-  findAll,
-  stixCoreObjectAddRelation,
-  stixCoreObjectAddRelations,
-  stixCoreObjectDeleteRelation,
-  stixCoreRelationships,
-  stixCoreObjectMerge,
-  batchMarkingDefinitions,
-  batchLabels,
+  askElementEnrichmentForConnector,
+  batchCases,
   batchCreatedBy,
   batchExternalReferences,
+  batchLabels,
+  batchMarkingDefinitions,
   batchNotes,
-  batchOpinions,
   batchObservedData,
+  batchOpinions,
   batchReports,
-  askStixCoreObjectEnrichment,
+  findAll,
+  findById,
+  stixCoreObjectAddRelation,
+  stixCoreObjectAddRelations,
+  stixCoreObjectCleanContext,
+  stixCoreObjectDelete,
+  stixCoreObjectDeleteRelation,
+  stixCoreObjectEditContext,
   stixCoreObjectExportAsk,
   stixCoreObjectExportPush,
-  stixCoreObjectDelete,
-  stixCoreObjectImportPush
+  stixCoreObjectImportPush,
+  stixCoreObjectsDistribution,
+  stixCoreObjectsDistributionByEntity,
+  stixCoreObjectsExportAsk,
+  stixCoreObjectsExportPush,
+  stixCoreObjectsMultiDistribution,
+  stixCoreObjectsMultiNumber,
+  stixCoreObjectsMultiTimeSeries,
+  stixCoreObjectsNumber,
+  stixCoreObjectsTimeSeries,
+  stixCoreObjectsTimeSeriesByAuthor,
+  stixCoreRelationships,
 } from '../domain/stixCoreObject';
-import { creator } from '../domain/log';
-import { fetchEditContext, pubsub } from '../database/redis';
-import { batchLoader, stixLoadByIdStringify } from '../database/middleware';
+import { fetchEditContext, pubSubAsyncIterator } from '../database/redis';
+import { batchLoader, distributionRelations, stixLoadByIdStringify } from '../database/middleware';
 import { worksForSource } from '../domain/work';
 import { filesListing } from '../database/file-storage';
-import { stixDomainObjectCleanContext, stixDomainObjectEditContext } from '../domain/stixDomainObject';
 import { BUS_TOPICS } from '../config/conf';
 import { ABSTRACT_STIX_CORE_OBJECT } from '../schema/general';
 import withCancel from '../graphql/subscriptionWrapper';
 import { connectorsForEnrichment } from '../database/repository';
+import { addOrganizationRestriction, batchObjectOrganizations, removeOrganizationRestriction } from '../domain/stix';
+import { stixCoreObjectOptions } from '../schema/stixCoreObject';
 
 const createdByLoader = batchLoader(batchCreatedBy);
 const markingDefinitionsLoader = batchLoader(batchMarkingDefinitions);
@@ -40,14 +51,35 @@ const externalReferencesLoader = batchLoader(batchExternalReferences);
 const notesLoader = batchLoader(batchNotes);
 const opinionsLoader = batchLoader(batchOpinions);
 const reportsLoader = batchLoader(batchReports);
+const casesLoader = batchLoader(batchCases);
 const observedDataLoader = batchLoader(batchObservedData);
+const batchOrganizationsLoader = batchLoader(batchObjectOrganizations);
 
 const stixCoreObjectResolvers = {
   Query: {
-    stixCoreObject: (_, { id }, { user }) => findById(user, id),
-    stixCoreObjectRaw: (_, { id }, { user }) => stixLoadByIdStringify(user, id),
-    stixCoreObjects: (_, args, { user }) => findAll(user, args),
+    stixCoreObject: (_, { id }, context) => findById(context, context.user, id),
+    stixCoreObjectRaw: (_, { id }, context) => stixLoadByIdStringify(context, context.user, id),
+    stixCoreObjects: (_, args, context) => findAll(context, context.user, args),
+    stixCoreObjectsTimeSeries: (_, args, context) => {
+      if (args.authorId && args.authorId.length > 0) {
+        return stixCoreObjectsTimeSeriesByAuthor(context, context.user, args);
+      }
+      return stixCoreObjectsTimeSeries(context, context.user, args);
+    },
+    stixCoreObjectsMultiTimeSeries: (_, args, context) => stixCoreObjectsMultiTimeSeries(context, context.user, args),
+    stixCoreObjectsNumber: (_, args, context) => stixCoreObjectsNumber(context, context.user, args),
+    stixCoreObjectsMultiNumber: (_, args, context) => stixCoreObjectsMultiNumber(context, context.user, args),
+    stixCoreObjectsDistribution: (_, args, context) => {
+      if (args.objectId && args.objectId.length > 0) {
+        return stixCoreObjectsDistributionByEntity(context, context.user, args);
+      }
+      return stixCoreObjectsDistribution(context, context.user, args);
+    },
+    stixCoreObjectsMultiDistribution: (_, args, context) => stixCoreObjectsMultiDistribution(context, context.user, args),
+    stixCoreObjectsExportFiles: (_, { type, first }, context) => filesListing(context, context.user, first, `export/${type}/`),
   },
+  StixCoreObjectsFilter: stixCoreObjectOptions.StixCoreObjectsFilter,
+  StixCoreObjectsOrdering: stixCoreObjectOptions.StixCoreObjectsOrdering,
   StixCoreObject: {
     // eslint-disable-next-line
     __resolveType(obj) {
@@ -57,51 +89,57 @@ const stixCoreObjectResolvers = {
       /* istanbul ignore next */
       return 'Unknown';
     },
-    toStix: (stixCoreObject, _, { user }) => stixLoadByIdStringify(user, stixCoreObject.id),
-    creator: (stixCoreObject, _, { user }) => creator(user, stixCoreObject.id, ABSTRACT_STIX_CORE_OBJECT),
+    toStix: (stixCoreObject, _, context) => stixLoadByIdStringify(context, context.user, stixCoreObject.id),
     editContext: (stixCoreObject) => fetchEditContext(stixCoreObject.id),
-    stixCoreRelationships: (stixCoreObject, args, { user }) => stixCoreRelationships(user, stixCoreObject.id, args),
-    createdBy: (stixCoreObject, _, { user }) => createdByLoader.load(stixCoreObject.id, user),
-    objectMarking: (stixCoreObject, _, { user }) => markingDefinitionsLoader.load(stixCoreObject.id, user),
-    objectLabel: (stixCoreObject, _, { user }) => labelsLoader.load(stixCoreObject.id, user),
-    externalReferences: (stixCoreObject, _, { user }) => externalReferencesLoader.load(stixCoreObject.id, user),
-    reports: (stixCoreObject, args, { user }) => reportsLoader.load(stixCoreObject.id, user, args),
-    notes: (stixCoreObject, _, { user }) => notesLoader.load(stixCoreObject.id, user),
-    opinions: (stixCoreObject, _, { user }) => opinionsLoader.load(stixCoreObject.id, user),
-    observedData: (stixCoreObject, _, { user }) => observedDataLoader.load(stixCoreObject.id, user),
-    jobs: (stixCoreObject, args, { user }) => worksForSource(user, stixCoreObject.id, args),
-    connectors: (stixCoreObject, { onlyAlive = false }, { user }) => connectorsForEnrichment(user, stixCoreObject.entity_type, onlyAlive),
-    importFiles: (stixCoreObject, { first }, { user }) => filesListing(user, first, `import/${stixCoreObject.entity_type}/${stixCoreObject.id}/`),
-    pendingFiles: (stixCoreObject, { first }, { user }) => filesListing(user, first, 'import/pending/', stixCoreObject.id),
-    exportFiles: (stixCoreObject, { first }, { user }) => filesListing(user, first, `export/${stixCoreObject.entity_type}/${stixCoreObject.id}/`),
+    stixCoreObjectsDistribution: (stixCoreObject, args, context) => stixCoreObjectsDistributionByEntity(context, context.user, { ...args, objectId: stixCoreObject.id }),
+    stixCoreRelationships: (stixCoreObject, args, context) => stixCoreRelationships(context, context.user, stixCoreObject.id, args),
+    stixCoreRelationshipsDistribution: (stixCoreObject, args, context) => distributionRelations(context, context.user, { ...args, elementId: stixCoreObject.id }),
+    createdBy: (stixCoreObject, _, context) => createdByLoader.load(stixCoreObject.id, context, context.user),
+    objectMarking: (stixCoreObject, _, context) => markingDefinitionsLoader.load(stixCoreObject.id, context, context.user),
+    objectLabel: (stixCoreObject, _, context) => labelsLoader.load(stixCoreObject.id, context, context.user),
+    objectOrganization: (stixCoreObject, _, context) => batchOrganizationsLoader.load(stixCoreObject.id, context, context.user),
+    externalReferences: (stixCoreObject, _, context) => externalReferencesLoader.load(stixCoreObject.id, context, context.user),
+    reports: (stixCoreObject, args, context) => reportsLoader.load(stixCoreObject.id, context, context.user, args),
+    cases: (stixCoreObject, args, context) => casesLoader.load(stixCoreObject.id, context, context.user, args),
+    notes: (stixCoreObject, _, context) => notesLoader.load(stixCoreObject.id, context, context.user),
+    opinions: (stixCoreObject, _, context) => opinionsLoader.load(stixCoreObject.id, context, context.user),
+    observedData: (stixCoreObject, _, context) => observedDataLoader.load(stixCoreObject.id, context, context.user),
+    jobs: (stixCoreObject, args, context) => worksForSource(context, context.user, stixCoreObject.id, args),
+    connectors: (stixCoreObject, { onlyAlive = false }, context) => connectorsForEnrichment(context, context.user, stixCoreObject.entity_type, onlyAlive),
+    importFiles: (stixCoreObject, { first }, context) => filesListing(context, context.user, first, `import/${stixCoreObject.entity_type}/${stixCoreObject.id}/`),
+    pendingFiles: (stixCoreObject, { first }, context) => filesListing(context, context.user, first, 'import/pending/', stixCoreObject.id),
+    exportFiles: (stixCoreObject, { first }, context) => filesListing(context, context.user, first, `export/${stixCoreObject.entity_type}/${stixCoreObject.id}/`),
   },
   Mutation: {
-    stixCoreObjectEdit: (_, { id }, { user }) => ({
-      delete: () => stixCoreObjectDelete(user, id),
-      relationAdd: ({ input }) => stixCoreObjectAddRelation(user, id, input),
-      relationsAdd: ({ input }) => stixCoreObjectAddRelations(user, id, input),
-      relationDelete: ({ toId, relationship_type: relationshipType }) => stixCoreObjectDeleteRelation(user, id, toId, relationshipType),
-      merge: ({ stixCoreObjectsIds }) => stixCoreObjectMerge(user, id, stixCoreObjectsIds),
-      askEnrichment: ({ connectorId }) => askStixCoreObjectEnrichment(user, id, connectorId),
-      importPush: ({ file }) => stixCoreObjectImportPush(user, id, file),
-      exportAsk: (args) => stixCoreObjectExportAsk(user, R.assoc('stixCoreObjectId', id, args)),
-      exportPush: ({ file }) => stixCoreObjectExportPush(user, id, file),
+    stixCoreObjectEdit: (_, { id }, context) => ({
+      delete: () => stixCoreObjectDelete(context, context.user, id),
+      relationAdd: ({ input }) => stixCoreObjectAddRelation(context, context.user, id, input),
+      relationsAdd: ({ input }) => stixCoreObjectAddRelations(context, context.user, id, input),
+      restrictionOrganizationAdd: ({ organizationId }) => addOrganizationRestriction(context, context.user, id, organizationId),
+      restrictionOrganizationDelete: ({ organizationId }) => removeOrganizationRestriction(context, context.user, id, organizationId),
+      relationDelete: ({ toId, relationship_type: relationshipType }) => stixCoreObjectDeleteRelation(context, context.user, id, toId, relationshipType),
+      askEnrichment: ({ connectorId }) => askElementEnrichmentForConnector(context, context.user, id, connectorId),
+      importPush: ({ file, noTriggerImport = false }) => stixCoreObjectImportPush(context, context.user, id, file, noTriggerImport),
+      exportAsk: (args) => stixCoreObjectExportAsk(context, context.user, { ...args, stixCoreObjectId: id }),
+      exportPush: ({ file }) => stixCoreObjectExportPush(context, context.user, id, file),
     }),
+    stixCoreObjectsExportAsk: (_, args, context) => stixCoreObjectsExportAsk(context, context.user, args),
+    stixCoreObjectsExportPush: (_, { type, file, listFilters }, context) => stixCoreObjectsExportPush(context, context.user, type, file, listFilters),
   },
   Subscription: {
     stixCoreObject: {
       resolve: /* istanbul ignore next */ (payload) => payload.instance,
-      subscribe: /* istanbul ignore next */ (_, { id }, { user }) => {
-        stixDomainObjectEditContext(user, id);
+      subscribe: /* istanbul ignore next */ (_, { id }, context) => {
+        stixCoreObjectEditContext(context, context.user, id);
         const filtering = withFilter(
-          () => pubsub.asyncIterator(BUS_TOPICS[ABSTRACT_STIX_CORE_OBJECT].EDIT_TOPIC),
+          () => pubSubAsyncIterator(BUS_TOPICS[ABSTRACT_STIX_CORE_OBJECT].EDIT_TOPIC),
           (payload) => {
             if (!payload) return false; // When disconnect, an empty payload is dispatched.
-            return payload.user.id !== user.id && payload.instance.id === id;
+            return payload.user.id !== context.user.id && payload.instance.id === id;
           }
-        )(_, { id }, { user });
+        )(_, { id }, context);
         return withCancel(filtering, () => {
-          stixDomainObjectCleanContext(user, id);
+          stixCoreObjectCleanContext(context, context.user, id);
         });
       },
     },

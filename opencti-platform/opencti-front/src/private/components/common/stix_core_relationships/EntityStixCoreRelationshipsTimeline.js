@@ -22,6 +22,7 @@ import { resolveLink } from '../../../../utils/Entity';
 import inject18n from '../../../../components/i18n';
 import { QueryRenderer } from '../../../../relay/environment';
 import { truncate } from '../../../../utils/String';
+import { itemColor } from '../../../../utils/Colors';
 
 const styles = (theme) => ({
   container: {
@@ -113,7 +114,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                 edges {
                   node {
                     id
+                    definition_type
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }
@@ -199,6 +203,30 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
               name
               description
             }
+            ... on Event {
+              name
+              description
+            }
+            ... on Channel {
+              name
+              description
+            }
+            ... on Narrative {
+              name
+              description
+            }
+            ... on Language {
+              name
+            }
+            ... on DataComponent {
+              name
+            }
+            ... on DataSource {
+              name
+            }
+            ... on Case {
+              name
+            }
             ... on StixCyberObservable {
               id
               entity_type
@@ -208,7 +236,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                 edges {
                   node {
                     id
+                    definition_type
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }
@@ -237,7 +268,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                 edges {
                   node {
                     id
+                    definition_type
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }
@@ -291,7 +325,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -386,7 +423,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -415,7 +455,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -471,7 +514,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -566,7 +612,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -595,7 +644,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -653,7 +705,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                 edges {
                   node {
                     id
+                    definition_type
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }
@@ -748,7 +803,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                 edges {
                   node {
                     id
+                    definition_type
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }
@@ -777,7 +835,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                 edges {
                   node {
                     id
+                    definition_type
                     definition
+                    x_opencti_order
+                    x_opencti_color
                   }
                 }
               }
@@ -831,7 +892,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -926,7 +990,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -955,7 +1022,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -1011,7 +1081,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -1106,7 +1179,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -1135,7 +1211,10 @@ const entityStixCoreRelationshipsTimelineStixCoreRelationshipQuery = graphql`
                     edges {
                       node {
                         id
+                        definition_type
                         definition
+                        x_opencti_order
+                        x_opencti_color
                       }
                     }
                   }
@@ -1241,7 +1320,14 @@ class EntityStixCoreRelationshipsTimeline extends Component {
                           </TimelineOppositeContent>
                           <TimelineSeparator>
                             <Link to={link}>
-                              <TimelineDot color="primary" variant="outlined">
+                              <TimelineDot
+                                sx={{
+                                  borderColor: itemColor(
+                                    remoteNode.entity_type,
+                                  ),
+                                }}
+                                variant="outlined"
+                              >
                                 <ItemIcon type={remoteNode.entity_type} />
                               </TimelineDot>
                             </Link>

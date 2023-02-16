@@ -1,14 +1,20 @@
 import * as s3 from '@aws-sdk/client-s3';
 import * as R from 'ramda';
 import { Upload } from '@aws-sdk/lib-storage';
+import { Promise as BluePromise } from 'bluebird';
 import { chain, CredentialsProviderError, memoize } from '@aws-sdk/property-provider';
 import { remoteProvider } from '@aws-sdk/credential-provider-node/dist-cjs/remoteProvider';
+import mime from 'mime-types';
+import { SemanticAttributes } from '@opentelemetry/semantic-conventions';
 import conf, { booleanConf, logApp, logAudit } from '../config/conf';
 import { now, sinceNowInMinutes } from '../utils/format';
 import { UPLOAD_ACTION } from '../config/audit';
-import { DatabaseError } from '../config/errors';
-import { deleteWorkForFile, loadExportWorksAsProgressFiles } from '../domain/work';
+import { DatabaseError, FunctionalError } from '../config/errors';
+import { createWork, deleteWorkForFile, loadExportWorksAsProgressFiles } from '../domain/work';
 import { buildPagination } from './utils';
+import { connectorsForImport } from './repository';
+import { pushToConnector } from './rabbitmq';
+import { telemetry } from '../config/tracing';
 
 // Minio configuration
 const clientEndpoint = conf.get('minio:endpoint');
@@ -43,6 +49,14 @@ const credentialProvider = (init) => memoize(
   (credentials) => credentials.expiration !== undefined
 );
 
+const getEndpoint = () => {
+  // If using AWS S3, unset the endpoint to let the library choose the best endpoint
+  if (clientEndpoint === 's3.amazonaws.com') {
+    return undefined;
+  }
+  return `${(useSslConnection ? 'https' : 'http')}://${clientEndpoint}:${clientPort}`;
+};
+
 const s3Client = new s3.S3Client({
   region: bucketRegion,
   endpoint: getEndpoint(),
@@ -51,55 +65,50 @@ const s3Client = new s3.S3Client({
   tls: useSslConnection
 });
 
-function getEndpoint() {
-  // If using AWS S3, unset the endpoint to let the library choose the best endpoint
-  if (clientEndpoint === 's3.amazonaws.com') {
-    return undefined;
-  }
-  return `${(useSslConnection ? 'https' : 'http')}://${clientEndpoint}:${clientPort}`;
-}
-
-export async function initializeBucket() {
+export const initializeBucket = async () => {
   try {
-    await s3Client.send(new s3.CreateBucketCommand({
-      Bucket: bucketName
-    }));
+    // Try to access to the bucket
+    await s3Client.send(new s3.HeadBucketCommand({ Bucket: bucketName }));
     return true;
   } catch (err) {
-    if (err instanceof s3.BucketAlreadyOwnedByYou) {
-      return true;
-    }
-    if (err instanceof s3.BucketAlreadyExists) {
-      throw new Error(`The S3 bucket name ${bucketName} is already in use, please choose another.`);
-    }
-    throw err;
+    // If bucket not exist, try to create it.
+    // If creation fail, propagate the exception
+    await s3Client.send(new s3.CreateBucketCommand({ Bucket: bucketName }));
+    return true;
   }
-}
+};
 
-export async function isStorageAlive() {
-  return initializeBucket();
-}
+export const deleteBucket = async () => {
+  try {
+    // Try to access to the bucket
+    await s3Client.send(new s3.DeleteBucketCommand({ Bucket: bucketName }));
+  } catch (err) {
+    // Dont care
+  }
+};
 
-export async function deleteFile(user, id) {
+export const isStorageAlive = () => initializeBucket();
+
+export const deleteFile = async (context, user, id) => {
   logApp.debug(`[FILE STORAGE] delete file ${id} by ${user.user_email}`);
   await s3Client.send(new s3.DeleteObjectCommand({
     Bucket: bucketName,
     Key: id
   }));
-  await deleteWorkForFile(user, id);
+  await deleteWorkForFile(context, user, id);
   return true;
-}
+};
 
-export async function deleteFiles(user, ids) {
+export const deleteFiles = async (context, user, ids) => {
   logApp.debug(`[FILE STORAGE] delete files ${ids} by ${user.user_email}`);
   for (let i = 0; i < ids.length; i += 1) {
     const id = ids[i];
-    await deleteFile(user, id);
+    await deleteFile(context, user, id);
   }
   return true;
-}
+};
 
-export async function downloadFile(id) {
+export const downloadFile = async (context, id) => {
   try {
     const object = await s3Client.send(new s3.GetObjectCommand({
       Bucket: bucketName,
@@ -110,40 +119,44 @@ export async function downloadFile(id) {
     logApp.info('[OPENCTI] Cannot retrieve file from S3', { error: err });
     return null;
   }
-}
+};
 
-function streamToString(stream) {
+const streamToString = (stream) => {
   return new Promise((resolve, reject) => {
     const chunks = [];
     stream.on('data', (chunk) => chunks.push(chunk));
     stream.on('error', reject);
     stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
   });
-}
+};
 
-export async function getFileContent(id) {
+export const getFileContent = async (id) => {
   const object = await s3Client.send(new s3.GetObjectCommand({
     Bucket: bucketName,
     Key: id
   }));
   return streamToString(object.Body);
-}
+};
 
-export function storeFileConverter(user, file) {
+export const storeFileConverter = (user, file) => {
   return {
     id: file.id,
     name: file.name,
     version: file.metaData.version,
     mime_type: file.metaData.mimetype,
   };
-}
+};
 
-export async function loadFile(user, filename) {
+export const loadFile = async (context, user, filename) => {
   try {
-    const object = await s3Client.send(new s3.GetObjectCommand({
+    const object = await s3Client.send(new s3.HeadObjectCommand({
       Bucket: bucketName,
       Key: filename
     }));
+    const metaData = { ...object.Metadata, messages: [], errors: [] };
+    if (metaData.labels_text) {
+      metaData.labels = metaData.labels_text.split(';');
+    }
     return {
       id: filename,
       name: decodeURIComponent(object.Metadata.filename || 'unknown'),
@@ -151,7 +164,7 @@ export async function loadFile(user, filename) {
       information: '',
       lastModified: object.LastModified,
       lastModifiedSinceMin: sinceNowInMinutes(object.LastModified),
-      metaData: { ...object.Metadata, messages: [], errors: [] },
+      metaData,
       uploadStatus: 'complete'
     };
   } catch (err) {
@@ -160,54 +173,107 @@ export async function loadFile(user, filename) {
     }
     throw err;
   }
-}
+};
 
-export function isFileObjectExcluded(id) {
+export const isFileObjectExcluded = (id) => {
   const fileName = id.includes('/') ? R.last(id.split('/')) : id;
   return excludedFiles.map((e) => e.toLowerCase()).includes(fileName.toLowerCase());
-}
+};
 
-export async function rawFilesListing(user, directory, recursive = false) {
-  let truncated = true;
-  let pageMarker;
-  const objects = [];
+export const rawFilesListing = async (context, user, directory, recursive = false) => {
+  const storageObjects = [];
   const requestParams = {
     Bucket: bucketName,
     Prefix: directory || undefined,
     Delimiter: recursive ? undefined : '/'
   };
+  let truncated = true;
   while (truncated) {
-    const response = await s3Client.send(new s3.ListObjectsV2Command(requestParams));
-    if (!response.Contents) {
+    try {
+      const response = await s3Client.send(new s3.ListObjectsV2Command(requestParams));
+      storageObjects.push(...(response.Contents ?? []));
+      truncated = response.IsTruncated;
+      if (truncated) {
+        requestParams.ContinuationToken = response.NextContinuationToken;
+      }
+    } catch (err) {
+      logApp.error('[FILE STORAGE] Error loading files list', { error: err });
       truncated = false;
-      break;
-    }
-    objects.push(...response.Contents);
-    truncated = response.IsTruncated;
-    if (truncated) {
-      pageMarker = response.Contents.slice(-1)[0].Key;
-      requestParams.Marker = pageMarker;
     }
   }
-  return Promise.all(objects
-    .filter((obj) => !isFileObjectExcluded(obj.Key))
-    .map((obj) => loadFile(user, obj.Key)));
-}
+  const filteredObjects = storageObjects.filter((obj) => !isFileObjectExcluded(obj.Key));
+  // Load file metadata with 5 // call maximum
+  return BluePromise.map(filteredObjects, (f) => loadFile(context, user, f.Key), { concurrency: 5 });
+};
 
-export async function upload(user, path, fileUpload, meta = {}) {
+export const uploadJobImport = async (context, user, fileId, fileMime, entityId, opts = {}) => {
+  const { manual = false, connectorId = null, bypassValidation = false } = opts;
+  let connectors = await connectorsForImport(context, user, fileMime, true, !manual);
+  if (connectorId) {
+    connectors = R.filter((n) => n.id === connectorId, connectors);
+  }
+  if (!entityId) {
+    connectors = R.filter((n) => !n.only_contextual, connectors);
+  }
+  if (connectors.length > 0) {
+    // Create job and send ask to broker
+    const createConnectorWork = async (connector) => {
+      const work = await createWork(context, user, connector, 'Manual import', fileId);
+      return { connector, work };
+    };
+    const actionList = await Promise.all(R.map((connector) => createConnectorWork(connector), connectors));
+    // Send message to all correct connectors queues
+    const buildConnectorMessage = (data) => {
+      const { work } = data;
+      return {
+        internal: {
+          work_id: work.id, // Related action for history
+          applicant_id: user.id, // User asking for the import
+        },
+        event: {
+          file_id: fileId,
+          file_mime: fileMime,
+          file_fetch: `/storage/get/${fileId}`, // Path to get the file
+          entity_id: entityId, // Context of the upload
+          bypass_validation: bypassValidation, // Force no validation
+        },
+      };
+    };
+    const pushMessage = (data) => {
+      const { connector } = data;
+      const message = buildConnectorMessage(data);
+      return pushToConnector(context, connector, message);
+    };
+    await Promise.all(R.map((data) => pushMessage(data), actionList));
+  }
+};
+
+export const upload = async (context, user, path, fileUpload, meta = {}, noTriggerImport = false, errorOnExisting = false) => {
   const { createReadStream, filename, mimetype, encoding = '' } = await fileUpload;
+  const key = `${path}/${filename}`;
+  let existingFile = null;
+  try {
+    existingFile = await loadFile(context, user, key);
+  } catch {
+    // do nothing
+  }
+  if (errorOnExisting && existingFile) {
+    throw FunctionalError('A file already exists with this name');
+  }
+  // Upload the data
   const readStream = createReadStream();
+  const fileMime = mime.lookup(filename) || mimetype;
   const metadata = { ...meta };
   if (!metadata.version) {
     metadata.version = now();
   }
   logAudit.info(user, UPLOAD_ACTION, { path, filename, metadata });
-  const key = `${path}/${filename}`;
   const fullMetadata = {
     ...metadata,
     filename: encodeURIComponent(filename),
-    mimetype,
+    mimetype: fileMime,
     encoding,
+    creator_id: user.id,
   };
   const s3Upload = new Upload({
     client: s3Client,
@@ -219,7 +285,7 @@ export async function upload(user, path, fileUpload, meta = {}) {
     }
   });
   await s3Upload.done();
-  return {
+  const file = {
     id: key,
     name: filename,
     size: readStream.bytesRead,
@@ -229,24 +295,35 @@ export async function upload(user, path, fileUpload, meta = {}) {
     metaData: { ...fullMetadata, messages: [], errors: [] },
     uploadStatus: 'complete'
   };
-}
-
-export async function filesListing(user, first, path, entityId = null) {
-  const files = await rawFilesListing(user, path);
-  const inExport = await loadExportWorksAsProgressFiles(user, path);
-  const allFiles = R.concat(inExport, files);
-  const sortedFiles = R.sort((a, b) => b.lastModified - a.lastModified, allFiles);
-  let fileNodes = R.map((f) => ({ node: f }), sortedFiles);
-  if (entityId) {
-    fileNodes = R.filter((n) => n.node.metaData.entity_id === entityId, fileNodes);
+  // Trigger a enrich job for import file if needed
+  if (!noTriggerImport && path.startsWith('import/') && !path.startsWith('import/pending') && !path.startsWith('import/External-Reference')) {
+    await uploadJobImport(context, user, file.id, file.metaData.mimetype, file.metaData.entity_id);
   }
-  return buildPagination(first, null, fileNodes, allFiles.length);
-}
+  return file;
+};
 
-export async function deleteAllFiles(user, path) {
-  const files = await rawFilesListing(user, path);
-  const inExport = await loadExportWorksAsProgressFiles(user, path);
+export const filesListing = async (context, user, first, path, entityId = null) => {
+  const filesListingFn = async () => {
+    const files = await rawFilesListing(context, user, path);
+    const inExport = await loadExportWorksAsProgressFiles(context, user, path);
+    const allFiles = R.concat(inExport, files);
+    const sortedFiles = R.sort((a, b) => b.lastModified - a.lastModified, allFiles);
+    let fileNodes = R.map((f) => ({ node: f }), sortedFiles);
+    if (entityId) {
+      fileNodes = R.filter((n) => n.node.metaData.entity_id === entityId, fileNodes);
+    }
+    return buildPagination(first, null, fileNodes, allFiles.length);
+  };
+  return telemetry(context, user, `STORAGE ${path}`, {
+    [SemanticAttributes.DB_NAME]: 'storage_engine',
+    [SemanticAttributes.DB_OPERATION]: 'listing',
+  }, filesListingFn);
+};
+
+export const deleteAllFiles = async (context, user, path) => {
+  const files = await rawFilesListing(context, user, path);
+  const inExport = await loadExportWorksAsProgressFiles(context, user, path);
   const allFiles = R.concat(inExport, files);
   const ids = allFiles.map((file) => file.id);
-  return deleteFiles(user, ids);
-}
+  return deleteFiles(context, user, ids);
+};

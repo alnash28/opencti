@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import * as PropTypes from 'prop-types';
-import { Formik, Form, Field } from 'formik';
+import { Field, Form, Formik } from 'formik';
 import withStyles from '@mui/styles/withStyles';
 import Drawer from '@mui/material/Drawer';
 import Typography from '@mui/material/Typography';
@@ -11,15 +11,15 @@ import { Add, Close } from '@mui/icons-material';
 import * as Yup from 'yup';
 import { graphql } from 'react-relay';
 import { ConnectionHandler } from 'relay-runtime';
-import Chip from '@mui/material/Chip';
 import * as R from 'ramda';
 import { evolve, pluck } from 'ramda';
 import inject18n from '../../../../components/i18n';
 import { commitMutation } from '../../../../relay/environment';
 import TextField from '../../../../components/TextField';
-import Filters, { isUniqFilter } from '../../common/lists/Filters';
-import { truncate } from '../../../../utils/String';
+import Filters from '../../common/lists/Filters';
 import GroupField from '../../common/form/GroupField';
+import { isUniqFilter } from '../../../../utils/filters/filtersUtils';
+import FilterIconButton from '../../../../components/FilterIconButton';
 
 const styles = (theme) => ({
   drawerPaper: {
@@ -64,17 +64,6 @@ const styles = (theme) => ({
   },
   title: {
     float: 'left',
-  },
-  filters: {
-    marginTop: 20,
-  },
-  filter: {
-    margin: '0 10px 10px 0',
-  },
-  operator: {
-    fontFamily: 'Consolas, monaco, monospace',
-    backgroundColor: theme.palette.background.accent,
-    margin: '0 10px 10px 0',
   },
 });
 
@@ -149,16 +138,15 @@ const StreamCollectionCreation = (props) => {
   const handleAddFilter = (key, id, value) => {
     if (filters[key] && filters[key].length > 0) {
       setFilters(
-        R.assoc(
-          key,
-          isUniqFilter(key)
+        {
+          ...filters,
+          [key]: isUniqFilter(key)
             ? [{ id, value }]
             : R.uniqBy(R.prop('id'), [{ id, value }, ...filters[key]]),
-          filters,
-        ),
+        },
       );
     } else {
-      setFilters(R.assoc(key, [{ id, value }], filters));
+      setFilters({ ...filters, [key]: [{ id, value }] });
     }
   };
 
@@ -234,64 +222,37 @@ const StreamCollectionCreation = (props) => {
                     variant="text"
                     availableFilterKeys={[
                       'entity_type',
+                      'x_opencti_workflow_id',
+                      'assigneeTo',
+                      'objectContains',
                       'markedBy',
                       'labelledBy',
+                      'creator',
                       'createdBy',
-                      'x_opencti_score_gt',
+                      'priority',
+                      'severity',
+                      'x_opencti_score',
                       'x_opencti_detection',
                       'revoked',
-                      'confidence_gt',
+                      'confidence',
+                      'indicator_types',
                       'pattern_type',
+                      'fromId',
+                      'toId',
+                      'fromTypes',
+                      'toTypes',
                     ]}
                     handleAddFilter={handleAddFilter}
                     noDirectFilters={true}
                   />
                 </div>
                 <div className="clearfix" />
-                <div className={classes.filters}>
-                  {R.map((currentFilter) => {
-                    const label = `${truncate(
-                      t(`filter_${currentFilter[0]}`),
-                      20,
-                    )}`;
-                    const values = (
-                      <span>
-                        {R.map(
-                          (n) => (
-                            <span key={n.value}>
-                              {n.value && n.value.length > 0
-                                ? truncate(n.value, 15)
-                                : t('No label')}{' '}
-                              {R.last(currentFilter[1]).value !== n.value && (
-                                <code>OR</code>
-                              )}{' '}
-                            </span>
-                          ),
-                          currentFilter[1],
-                        )}
-                      </span>
-                    );
-                    return (
-                      <span key={currentFilter[0]}>
-                        <Chip
-                          classes={{ root: classes.filter }}
-                          label={
-                            <div>
-                              <strong>{label}</strong>: {values}
-                            </div>
-                          }
-                          onDelete={() => handleRemoveFilter(currentFilter[0])}
-                        />
-                        {R.last(R.toPairs(filters))[0] !== currentFilter[0] && (
-                          <Chip
-                            classes={{ root: classes.operator }}
-                            label={t('AND')}
-                          />
-                        )}
-                      </span>
-                    );
-                  }, R.toPairs(filters))}
-                </div>
+                <FilterIconButton
+                  filters={filters}
+                  handleRemoveFilter={handleRemoveFilter}
+                  classNameNumber={2}
+                  styleNumber={2}
+                />
                 <div className="clearfix" />
                 <div className={classes.buttons}>
                   <Button

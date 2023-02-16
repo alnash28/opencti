@@ -10,16 +10,16 @@ import {
   convertFilters,
   saveViewParameters,
 } from '../../../utils/ListParameters';
-import Security, {
-  UserContext,
-  KNOWLEDGE_KNUPDATE,
-} from '../../../utils/Security';
+import Security from '../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../utils/hooks/useGranted';
+import { UserContext } from '../../../utils/hooks/useAuth';
 import ToolBar from '../data/ToolBar';
 import ArtifactsLines, {
   artifactsLinesQuery,
 } from './artifacts/ArtifactsLines';
 import ArtifactCreation from './artifacts/ArtifactCreation';
-import { isUniqFilter } from '../common/lists/Filters';
+import { isUniqFilter } from '../../../utils/filters/filtersUtils';
+import ExportContextProvider from '../../../utils/ExportContextProvider';
 
 class StixCyberObservables extends Component {
   constructor(props) {
@@ -64,11 +64,33 @@ class StixCyberObservables extends Component {
     this.setState({ openExports: !this.state.openExports });
   }
 
-  handleToggleSelectEntity(entity, event) {
+  handleToggleSelectEntity(entity, event, forceRemove = []) {
     event.stopPropagation();
     event.preventDefault();
     const { selectedElements, deSelectedElements, selectAll } = this.state;
-    if (entity.id in (selectedElements || {})) {
+    if (Array.isArray(entity)) {
+      const currentIds = R.values(selectedElements).map((n) => n.id);
+      const givenIds = entity.map((n) => n.id);
+      const addedIds = givenIds.filter((n) => !currentIds.includes(n));
+      let newSelectedElements = {
+        ...selectedElements,
+        ...R.indexBy(
+          R.prop('id'),
+          entity.filter((n) => addedIds.includes(n.id)),
+        ),
+      };
+      if (forceRemove.length > 0) {
+        newSelectedElements = R.omit(
+          forceRemove.map((n) => n.id),
+          newSelectedElements,
+        );
+      }
+      this.setState({
+        selectAll: false,
+        selectedElements: newSelectedElements,
+        deSelectedElements: null,
+      });
+    } else if (entity.id in (selectedElements || {})) {
       const newSelectedElements = R.omit([entity.id], selectedElements);
       this.setState({
         selectAll: false,
@@ -298,6 +320,7 @@ class StixCyberObservables extends Component {
       orderMode: orderAsc ? 'asc' : 'desc',
     };
     return (
+      <ExportContextProvider>
       <div>
         {view === 'lines' ? this.renderLines(paginationOptions) : ''}
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
@@ -308,6 +331,7 @@ class StixCyberObservables extends Component {
           />
         </Security>
       </div>
+      </ExportContextProvider>
     );
   }
 }

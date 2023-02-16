@@ -10,7 +10,8 @@ import ReportDetails from './ReportDetails';
 import ReportEdition from './ReportEdition';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../external_references/StixCoreObjectExternalReferences';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixCoreObjectLatestHistory from '../../common/stix_core_objects/StixCoreObjectLatestHistory';
 import ReportPopover from './ReportPopover';
@@ -40,10 +41,13 @@ class ReportComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={report} />
+            <ReportDetails report={report} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <ReportDetails report={report} />
+            <StixDomainObjectOverview
+              stixDomainObject={report}
+              displayAssignees={true}
+            />
           </Grid>
         </Grid>
         <Grid
@@ -61,6 +65,9 @@ class ReportComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={report.id}
+          defaultMarking={(report.objectMarking?.edges ?? []).map(
+            (edge) => edge.node,
+          )}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <ReportEdition reportId={report.id} />
@@ -100,12 +107,32 @@ const Report = createFragmentContainer(ReportComponent, {
         id
         name
       }
+      objectMarking {
+        edges {
+          node {
+            id
+            definition_type
+            definition
+            x_opencti_order
+            x_opencti_color
+          }
+        }
+      }
       objectLabel {
         edges {
           node {
             id
             value
             color
+          }
+        }
+      }
+      objectAssignee {
+        edges {
+          node {
+            id
+            name
+            entity_type
           }
         }
       }

@@ -25,7 +25,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -42,7 +42,7 @@ const noteQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
     connectorsForExport {
       ...FileManager_connectorsExport
@@ -73,14 +73,13 @@ class RootNote extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { noteId },
       },
     } = this.props;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <QueryRenderer
           query={noteQuery}
           variables={{ id: noteId }}
@@ -100,7 +99,7 @@ class RootNote extends Component {
                       exact
                       path="/dashboard/analysis/notes/:noteId/files"
                       render={(routeProps) => (
-                        <React.Fragment>
+                        <>
                           <ContainerHeader
                             container={props.note}
                             PopoverComponent={<ReportPopover />}
@@ -112,14 +111,14 @@ class RootNote extends Component {
                             connectorsImport={props.connectorsForImport}
                             entity={props.note}
                           />
-                        </React.Fragment>
+                        </>
                       )}
                     />
                     <Route
                       exact
                       path="/dashboard/analysis/notes/:noteId/history"
                       render={(routeProps) => (
-                        <React.Fragment>
+                        <>
                           <ContainerHeader
                             container={props.note}
                             PopoverComponent={<ReportPopover />}
@@ -129,7 +128,7 @@ class RootNote extends Component {
                             stixCoreObjectId={noteId}
                             withoutRelations={true}
                           />
-                        </React.Fragment>
+                        </>
                       )}
                     />
                   </div>
@@ -148,7 +147,6 @@ class RootNote extends Component {
 RootNote.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootNote);

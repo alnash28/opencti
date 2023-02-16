@@ -22,6 +22,7 @@ import {
   saveViewParameters,
 } from '../../../../utils/ListParameters';
 import StixCoreObjectKnowledgeBar from '../../common/stix_core_objects/StixCoreObjectKnowledgeBar';
+import EntityStixSightingRelationships from '../../events/stix_sighting_relationships/EntityStixSightingRelationships';
 
 const subscription = graphql`
   subscription RootOrganizationSubscription($id: ID!) {
@@ -33,7 +34,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -49,13 +50,13 @@ const organizationQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
+    }
+    connectorsForImport {
+      ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
-    }
-    settings {
-      platform_enable_reference
     }
   }
 `;
@@ -106,7 +107,6 @@ class RootOrganization extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { organizationId },
       },
@@ -115,7 +115,7 @@ class RootOrganization extends Component {
     const link = `/dashboard/entities/organizations/${organizationId}/knowledge`;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <Route path="/dashboard/entities/organizations/:organizationId/knowledge">
           {viewAs === 'knowledge' && (
             <StixCoreObjectKnowledgeBar
@@ -126,6 +126,7 @@ class RootOrganization extends Component {
                 'individuals',
                 'locations',
                 'used_tools',
+                'threats',
                 'threat_actors',
                 'intrusion_sets',
                 'campaigns',
@@ -133,8 +134,8 @@ class RootOrganization extends Component {
                 'malwares',
                 'attack_patterns',
                 'tools',
+                'vulnerabilities',
                 'observables',
-                'sightings',
               ]}
             />
           )}
@@ -156,9 +157,6 @@ class RootOrganization extends Component {
                           organization={props.organization}
                           viewAs={viewAs}
                           onViewAs={this.handleChangeViewAs.bind(this)}
-                          enableReferences={props.settings.platform_enable_reference?.includes(
-                            'Organization',
-                          )}
                         />
                       )}
                     />
@@ -196,20 +194,42 @@ class RootOrganization extends Component {
                     />
                     <Route
                       exact
-                      path="/dashboard/entities/organizations/:organizationId/files"
+                      path="/dashboard/entities/organizations/:organizationId/sightings"
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            disableSharing={true}
                             stixDomainObject={props.organization}
                             PopoverComponent={<OrganizationPopover />}
                             enableReferences={props.settings.platform_enable_reference?.includes(
                               'Organization',
                             )}
                           />
+                          <EntityStixSightingRelationships
+                            entityId={props.organization.id}
+                            entityLink={link}
+                            noPadding={true}
+                            isTo={true}
+                            {...routeProps}
+                          />
+                        </React.Fragment>
+                      )}
+                    />
+                    <Route
+                      exact
+                      path="/dashboard/entities/organizations/:organizationId/files"
+                      render={(routeProps) => (
+                        <React.Fragment>
+                          <StixDomainObjectHeader
+                            entityType={'Organization'}
+                            disableSharing={true}
+                            stixDomainObject={props.organization}
+                            PopoverComponent={<OrganizationPopover />}
+                          />
                           <FileManager
                             {...routeProps}
                             id={organizationId}
-                            connectorsImport={[]}
+                            connectorsImport={props.connectorsForImport}
                             connectorsExport={props.connectorsForExport}
                             entity={props.organization}
                           />
@@ -222,11 +242,10 @@ class RootOrganization extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Organization'}
+                            disableSharing={true}
                             stixDomainObject={props.organization}
                             PopoverComponent={<OrganizationPopover />}
-                            enableReferences={props.settings.platform_enable_reference?.includes(
-                              'Organization',
-                            )}
                           />
                           <StixCoreObjectHistory
                             {...routeProps}
@@ -251,7 +270,6 @@ class RootOrganization extends Component {
 RootOrganization.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootOrganization);

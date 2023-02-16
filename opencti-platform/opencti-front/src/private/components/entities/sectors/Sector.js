@@ -10,7 +10,8 @@ import SectorEdition from './SectorEdition';
 import SectorPopover from './SectorPopover';
 import StixCoreObjectOrStixCoreRelationshipLastReports from '../../analysis/reports/StixCoreObjectOrStixCoreRelationshipLastReports';
 import StixDomainObjectHeader from '../../common/stix_domain_objects/StixDomainObjectHeader';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
 import StixCoreObjectOrStixCoreRelationshipNotes from '../../analysis/notes/StixCoreObjectOrStixCoreRelationshipNotes';
 import StixDomainObjectOverview from '../../common/stix_domain_objects/StixDomainObjectOverview';
 import StixCoreObjectExternalReferences from '../../analysis/external_references/StixCoreObjectExternalReferences';
@@ -32,6 +33,8 @@ class SectorComponent extends Component {
     return (
       <div className={classes.container}>
         <StixDomainObjectHeader
+          entityType={'Sector'}
+          disableSharing={true}
           stixDomainObject={sector}
           isOpenctiAlias={true}
           PopoverComponent={<SectorPopover />}
@@ -42,10 +45,10 @@ class SectorComponent extends Component {
           classes={{ container: classes.gridContainer }}
         >
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <StixDomainObjectOverview stixDomainObject={sector} />
+            <SectorDetails sector={sector} />
           </Grid>
           <Grid item={true} xs={6} style={{ paddingTop: 10 }}>
-            <SectorDetails sector={sector} />
+            <StixDomainObjectOverview stixDomainObject={sector} />
           </Grid>
         </Grid>
         <Grid
@@ -81,6 +84,7 @@ class SectorComponent extends Component {
         </Grid>
         <StixCoreObjectOrStixCoreRelationshipNotes
           stixCoreObjectOrStixCoreRelationshipId={sector.id}
+          defaultMarking={(sector.objectMarking?.edges ?? []).map((edge) => edge.node)}
         />
         <Security needs={[KNOWLEDGE_KNUPDATE]}>
           <SectorEdition sectorId={sector.id} />
@@ -124,7 +128,9 @@ const Sector = createFragmentContainer(SectorComponent, {
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
             x_opencti_color
           }
         }

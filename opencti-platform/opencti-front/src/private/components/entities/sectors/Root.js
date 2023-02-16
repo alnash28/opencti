@@ -17,6 +17,7 @@ import StixCoreObjectHistory from '../../common/stix_core_objects/StixCoreObject
 import StixCoreObjectOrStixCoreRelationshipContainers from '../../common/containers/StixCoreObjectOrStixCoreRelationshipContainers';
 import StixCoreObjectKnowledgeBar from '../../common/stix_core_objects/StixCoreObjectKnowledgeBar';
 import ErrorNotFound from '../../../../components/ErrorNotFound';
+import EntityStixSightingRelationships from '../../events/stix_sighting_relationships/EntityStixSightingRelationships';
 
 const subscription = graphql`
   subscription RootSectorSubscription($id: ID!) {
@@ -28,7 +29,7 @@ const subscription = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
     }
   }
 `;
@@ -46,13 +47,13 @@ const sectorQuery = graphql`
       ...FileImportViewer_entity
       ...FileExportViewer_entity
       ...FileExternalReferencesViewer_entity
-      ...FilePendingViewer_entity
+      ...WorkbenchFileViewer_entity
+    }
+    connectorsForImport {
+      ...FileManager_connectorsImport
     }
     connectorsForExport {
       ...FileManager_connectorsExport
-    }
-    settings {
-      platform_enable_reference
     }
   }
 `;
@@ -77,7 +78,6 @@ class RootSector extends Component {
 
   render() {
     const {
-      me,
       match: {
         params: { sectorId },
       },
@@ -85,12 +85,13 @@ class RootSector extends Component {
     const link = `/dashboard/entities/sectors/${sectorId}/knowledge`;
     return (
       <div>
-        <TopBar me={me || null} />
+        <TopBar />
         <Route path="/dashboard/entities/sectors/:sectorId/knowledge">
           <StixCoreObjectKnowledgeBar
             stixCoreObjectLink={link}
             availableSections={[
               'organizations',
+              'threats',
               'threat_actors',
               'intrusion_sets',
               'campaigns',
@@ -99,7 +100,6 @@ class RootSector extends Component {
               'attack_patterns',
               'tools',
               'observables',
-              'sightings',
             ]}
           />
         </Route>
@@ -142,6 +142,8 @@ class RootSector extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Sector'}
+                            disableSharing={true}
                             stixDomainObject={props.sector}
                             PopoverComponent={<SectorPopover />}
                           />
@@ -156,17 +158,39 @@ class RootSector extends Component {
                     />
                     <Route
                       exact
+                      path="/dashboard/entities/sectors/:sectorId/sightings"
+                      render={(routeProps) => (
+                        <React.Fragment>
+                          <StixDomainObjectHeader
+                            disableSharing={true}
+                            stixDomainObject={props.sector}
+                            PopoverComponent={<SectorPopover />}
+                          />
+                          <EntityStixSightingRelationships
+                            entityId={props.sector.id}
+                            entityLink={link}
+                            noPadding={true}
+                            isTo={true}
+                            {...routeProps}
+                          />
+                        </React.Fragment>
+                      )}
+                    />
+                    <Route
+                      exact
                       path="/dashboard/entities/sectors/:sectorId/files"
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Sector'}
+                            disableSharing={true}
                             stixDomainObject={props.sector}
                             PopoverComponent={<SectorPopover />}
                           />
                           <FileManager
                             {...routeProps}
                             id={sectorId}
-                            connectorsImport={[]}
+                            connectorsImport={props.connectorsForImport}
                             connectorsExport={props.connectorsForExport}
                             entity={props.sector}
                           />
@@ -179,6 +203,8 @@ class RootSector extends Component {
                       render={(routeProps) => (
                         <React.Fragment>
                           <StixDomainObjectHeader
+                            entityType={'Sector'}
+                            disableSharing={true}
                             stixDomainObject={props.sector}
                             PopoverComponent={<SectorPopover />}
                           />
@@ -205,7 +231,6 @@ class RootSector extends Component {
 RootSector.propTypes = {
   children: PropTypes.node,
   match: PropTypes.object,
-  me: PropTypes.object,
 };
 
 export default withRouter(RootSector);

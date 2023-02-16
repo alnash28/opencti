@@ -15,7 +15,7 @@ import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
 import ListItemSecondaryAction from '@mui/material/ListItemSecondaryAction';
 import IconButton from '@mui/material/IconButton';
-import { Delete, BrushOutlined } from '@mui/icons-material';
+import { BrushOutlined, Delete } from '@mui/icons-material';
 import DialogActions from '@mui/material/DialogActions';
 import Button from '@mui/material/Button';
 import Slide from '@mui/material/Slide';
@@ -31,7 +31,10 @@ import inject18n from '../../../../components/i18n';
 import { commitMutation, MESSAGING$ } from '../../../../relay/environment';
 import { stixDomainObjectMutation } from './StixDomainObjectHeader';
 import ItemStatus from '../../../../components/ItemStatus';
-import Security, { KNOWLEDGE_KNUPDATE } from '../../../../utils/Security';
+import Security from '../../../../utils/Security';
+import { KNOWLEDGE_KNUPDATE } from '../../../../utils/hooks/useGranted';
+import ItemCopy from '../../../../components/ItemCopy';
+import ItemAssignees from '../../../../components/ItemAssignees';
 
 const Transition = React.forwardRef((props, ref) => (
   <Slide direction="up" ref={ref} {...props} />
@@ -53,6 +56,16 @@ const styles = (theme) => ({
     color: theme.palette.text.primary,
     textTransform: 'uppercase',
     borderRadius: '0',
+  },
+  standard_id: {
+    padding: '5px 5px 5px 10px',
+    fontFamily: 'Consolas, monaco, monospace',
+    fontSize: 11,
+    backgroundColor:
+      theme.palette.mode === 'light'
+        ? 'rgba(0, 0, 0, 0.02)'
+        : 'rgba(255, 255, 255, 0.02)',
+    lineHeight: '18px',
   },
 });
 
@@ -89,7 +102,15 @@ class StixDomainObjectOverview extends Component {
   }
 
   render() {
-    const { t, fldt, classes, stixDomainObject, withoutMarking, withPattern } = this.props;
+    const {
+      t,
+      fldt,
+      classes,
+      stixDomainObject,
+      withoutMarking,
+      withPattern,
+      displayAssignees,
+    } = this.props;
     const otherStixIds = stixDomainObject.x_opencti_stix_ids || [];
     const stixIds = R.filter(
       (n) => n !== stixDomainObject.standard_id,
@@ -102,67 +123,16 @@ class StixDomainObjectOverview extends Component {
         </Typography>
         <Paper classes={{ root: classes.paper }} variant="outlined">
           <Grid container={true} spacing={3}>
-            <Grid item={true} xs={12}>
-              <Typography
-                variant="h3"
-                gutterBottom={true}
-                style={{ float: 'left' }}
-              >
-                {t('Standard STIX ID')}
-              </Typography>
-              <div style={{ float: 'left', margin: '-3px 0 0 8px' }}>
-                <Tooltip
-                  title={t(
-                    'In OpenCTI, a predictable STIX ID is generated based on one or multiple attributes of the entity.',
-                  )}
-                >
-                  <InformationOutline fontSize="small" color="primary" />
-                </Tooltip>
-              </div>
-              <Security needs={[KNOWLEDGE_KNUPDATE]}>
-                <div style={{ float: 'right', margin: '-5px 0 0 8px' }}>
-                  <IconButton
-                    aria-label="Close"
-                    disableRipple={true}
-                    size="small"
-                    disabled={stixIds.length === 0}
-                    onClick={this.handleToggleOpenStixIds.bind(this)}
-                  >
-                    <BrushOutlined
-                      fontSize="small"
-                      color={stixIds.length === 0 ? 'inherit' : 'secondary'}
-                    />
-                  </IconButton>
-                </div>
-              </Security>
-              <div className="clearfix" />
-              <pre style={{ margin: 0 }}>{stixDomainObject.standard_id}</pre>
-            </Grid>
             <Grid item={true} xs={6}>
-              {withPattern && (
+              {stixDomainObject.objectMarking && (
                 <div>
                   <Typography variant="h3" gutterBottom={true}>
-                    {t('Pattern type')}
-                  </Typography>
-                  <ItemPatternType label={stixDomainObject.pattern_type} />
-                </div>
-              )}
-              {!withoutMarking && stixDomainObject.objectMarking && (
-                <div>
-                  <Typography
-                    variant="h3"
-                    gutterBottom={true}
-                    style={{ marginTop: withPattern ? 20 : 0 }}
-                  >
                     {t('Marking')}
                   </Typography>
                   <ItemMarkings
-                    markingDefinitions={R.pathOr(
-                      [],
-                      ['objectMarking', 'edges'],
-                      stixDomainObject,
-                    )}
-                    limit={10}
+                    markingDefinitionsEdges={
+                      stixDomainObject.objectMarking.edges ?? []
+                    }
                   />
                 </div>
               )}
@@ -206,13 +176,39 @@ class StixDomainObjectOverview extends Component {
               {fldt(stixDomainObject.modified)}
             </Grid>
             <Grid item={true} xs={6}>
-              <Typography variant="h3" gutterBottom={true}>
+              {withPattern && (
+                <div>
+                  <Typography variant="h3" gutterBottom={true}>
+                    {t('Pattern type')}
+                  </Typography>
+                  <ItemPatternType label={stixDomainObject.pattern_type} />
+                </div>
+              )}
+              <Typography
+                variant="h3"
+                gutterBottom={true}
+                style={{ marginTop: withPattern ? 20 : 0 }}
+              >
                 {t('Processing status')}
               </Typography>
               <ItemStatus
                 status={stixDomainObject.status}
                 disabled={!stixDomainObject.workflowEnabled}
               />
+              {displayAssignees && (
+                <div>
+                  <Typography
+                    variant="h3"
+                    gutterBottom={true}
+                    style={{ marginTop: 20 }}
+                  >
+                    {t('Assignees')}
+                  </Typography>
+                  <ItemAssignees
+                    assigneesEdges={stixDomainObject.objectAssignee?.edges ?? []}
+                  />
+                </div>
+              )}
               <Typography
                 variant="h3"
                 gutterBottom={true}
@@ -254,6 +250,44 @@ class StixDomainObjectOverview extends Component {
                 {t('Creator')}
               </Typography>
               <ItemCreator creator={stixDomainObject.creator} />
+              <div style={{ marginTop: 20 }}>
+                <Typography
+                  variant="h3"
+                  gutterBottom={true}
+                  style={{ float: 'left' }}
+                >
+                  {t('Standard STIX ID')}
+                </Typography>
+                <div style={{ float: 'left', margin: '-3px 0 0 8px' }}>
+                  <Tooltip
+                    title={t(
+                      'In OpenCTI, a predictable STIX ID is generated based on one or multiple attributes of the entity.',
+                    )}
+                  >
+                    <InformationOutline fontSize="small" color="primary" />
+                  </Tooltip>
+                </div>
+                <Security needs={[KNOWLEDGE_KNUPDATE]}>
+                  <div style={{ float: 'right', margin: '-5px 0 0 8px' }}>
+                    <IconButton
+                      aria-label="Close"
+                      disableRipple={true}
+                      size="small"
+                      disabled={stixIds.length === 0}
+                      onClick={this.handleToggleOpenStixIds.bind(this)}
+                    >
+                      <BrushOutlined
+                        fontSize="small"
+                        color={stixIds.length === 0 ? 'inherit' : 'secondary'}
+                      />
+                    </IconButton>
+                  </div>
+                </Security>
+                <div className="clearfix" />
+                <div className={classes.standard_id}>
+                  <ItemCopy content={stixDomainObject.standard_id} />
+                </div>
+              </div>
             </Grid>
           </Grid>
         </Paper>
@@ -306,6 +340,7 @@ StixDomainObjectOverview.propTypes = {
   t: PropTypes.func,
   fldt: PropTypes.func,
   withoutMarking: PropTypes.bool,
+  displayAssignees: PropTypes.bool,
 };
 
 export default R.compose(

@@ -58,7 +58,10 @@ const reportKnowledgeCorrelationStixCoreObjectQuery = graphql`
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
+            x_opencti_color
           }
         }
       }
@@ -102,6 +105,9 @@ const reportKnowledgeCorrelationStixCoreObjectQuery = graphql`
         name
       }
       ... on City {
+        name
+      }
+      ... on AdministrativeArea {
         name
       }
       ... on Country {
@@ -194,7 +200,10 @@ const reportKnowledgeCorrelationStixCoreRelationshipQuery = graphql`
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
+            x_opencti_color
           }
         }
       }
@@ -937,17 +946,34 @@ class ReportKnowledgeCorrelationComponent extends Component {
             onZoom={this.onZoom.bind(this)}
             onZoomEnd={this.handleZoomEnd.bind(this)}
             nodeRelSize={4}
-            nodeCanvasObject={(node, ctx) => //
-            // eslint-disable-next-line implicit-arrow-linebreak
-              nodePaint(node, node.color, ctx, this.selectedNodes.has(node))}
+            nodeCanvasObject={(
+              node,
+              ctx, //
+            ) =>
+              // eslint-disable-next-line implicit-arrow-linebreak
+              nodePaint(
+                {
+                  selected: theme.palette.secondary.main,
+                  inferred: theme.palette.warning.main,
+                },
+                node,
+                node.color,
+                ctx,
+                this.selectedNodes.has(node),
+              )
+            }
             nodePointerAreaPaint={nodeAreaPaint}
             // linkDirectionalParticles={(link) => (this.selectedLinks.has(link) ? 20 : 0)}
             // linkDirectionalParticleWidth={1}
             // linkDirectionalParticleSpeed={() => 0.004}
             linkCanvasObjectMode={() => 'after'}
-            linkCanvasObject={(link, ctx) => //
-            // eslint-disable-next-line implicit-arrow-linebreak
-              linkPaint(link, ctx, theme.palette.text.primary)}
+            linkCanvasObject={(
+              link,
+              ctx, //
+            ) =>
+              // eslint-disable-next-line implicit-arrow-linebreak
+              linkPaint(link, ctx, theme.palette.text.primary)
+            }
             linkColor={(link) => (this.selectedLinks.has(link)
               ? theme.palette.secondary.main
               : theme.palette.primary.main)
@@ -1043,24 +1069,14 @@ const ReportKnowledgeCorrelation = createFragmentContainer(
           edges {
             node {
               id
+              definition_type
               definition
+              x_opencti_order
+              x_opencti_color
             }
           }
         }
-        objects(
-          types: [
-            "Threat-Actor"
-            "Intrusion-Set"
-            "Campaign"
-            "Incident"
-            "Malware"
-            "Tool"
-            "Vulnerability"
-            "Stix-Cyber-Observable"
-            "Indicator"
-          ]
-          first: 100
-        ) {
+        objects {
           edges {
             node {
               ... on BasicObject {
@@ -1081,11 +1097,14 @@ const ReportKnowledgeCorrelation = createFragmentContainer(
                   edges {
                     node {
                       id
+                      definition_type
                       definition
+                      x_opencti_order
+                      x_opencti_color
                     }
                   }
                 }
-                reports(first: 10) {
+                reports {
                   edges {
                     node {
                       id
@@ -1106,7 +1125,10 @@ const ReportKnowledgeCorrelation = createFragmentContainer(
                         edges {
                           node {
                             id
+                            definition_type
                             definition
+                            x_opencti_order
+                            x_opencti_color
                           }
                         }
                       }
@@ -1159,6 +1181,9 @@ const ReportKnowledgeCorrelation = createFragmentContainer(
               ... on City {
                 name
               }
+              ... on AdministrativeArea {
+                name
+              }
               ... on Country {
                 name
               }
@@ -1188,7 +1213,7 @@ const ReportKnowledgeCorrelation = createFragmentContainer(
               }
               ... on StixCyberObservable {
                 observable_value
-                reports(first: 10) {
+                reports {
                   edges {
                     node {
                       id
@@ -1209,7 +1234,10 @@ const ReportKnowledgeCorrelation = createFragmentContainer(
                         edges {
                           node {
                             id
+                            definition_type
                             definition
+                            x_opencti_order
+                            x_opencti_color
                           }
                         }
                       }

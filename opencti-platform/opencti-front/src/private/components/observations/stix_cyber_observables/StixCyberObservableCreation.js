@@ -1,7 +1,5 @@
-import React, { Component } from 'react';
-import * as PropTypes from 'prop-types';
-import { Formik, Form, Field } from 'formik';
-import withStyles from '@mui/styles/withStyles';
+import React, { useState } from 'react';
+import { Field, Form, Formik } from 'formik';
 import Drawer from '@mui/material/Drawer';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
@@ -9,31 +7,30 @@ import IconButton from '@mui/material/IconButton';
 import Fab from '@mui/material/Fab';
 import { Add, Close } from '@mui/icons-material';
 import {
+  assoc,
   compose,
+  dissoc,
+  filter,
+  fromPairs,
+  includes,
+  map,
+  pipe,
   pluck,
+  prop,
+  propOr,
   sortBy,
   toLower,
-  prop,
-  pipe,
-  map,
-  assoc,
-  filter,
-  includes,
-  dissoc,
   toPairs,
-  fromPairs,
-  propOr,
 } from 'ramda';
 import * as Yup from 'yup';
 import { graphql } from 'react-relay';
-import { ConnectionHandler } from 'relay-runtime';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import Dialog from '@mui/material/Dialog';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
-import inject18n from '../../../../components/i18n';
+import makeStyles from '@mui/styles/makeStyles';
 import {
   commitMutation,
   handleErrorInForm,
@@ -50,82 +47,23 @@ import {
 } from './StixCyberObservablesLines';
 import { parse } from '../../../../utils/Time';
 import MarkDownField from '../../../../components/MarkDownField';
-import ExternalReferencesField from '../../common/form/ExternalReferencesField';
+import { ExternalReferencesField } from '../../common/form/ExternalReferencesField';
 import DateTimePickerField from '../../../../components/DateTimePickerField';
+import {
+  booleanAttributes,
+  dateAttributes,
+  ignoredAttributes,
+  multipleAttributes,
+  numberAttributes,
+} from '../../../../utils/Entity';
+import ArtifactField from '../../common/form/ArtifactField';
+import OpenVocabField from '../../common/form/OpenVocabField';
+import { fieldSpacingContainerStyle } from '../../../../utils/field';
+import { insertNode } from '../../../../utils/store';
+import { useFormatter } from '../../../../components/i18n';
+import useVocabularyCategory from '../../../../utils/hooks/useVocabularyCategory';
 
-export const ignoredAttributes = [
-  'internal_id',
-  'standard_id',
-  'x_opencti_description',
-  'x_opencti_stix_ids',
-  'entity_type',
-  'spec_version',
-  'extensions',
-  'created',
-  'modified',
-  'created_at',
-  'x_opencti_score',
-  'updated_at',
-  'observable_value',
-  'indicators',
-  'importFiles',
-];
-
-export const ignoredAttributesInFeeds = [
-  'x_opencti_stix_ids',
-  'spec_version',
-  'extensions',
-  'importFiles',
-];
-
-export const dateAttributes = [
-  'ctime',
-  'mtime',
-  'atime',
-  'attribute_date',
-  'validity_not_before',
-  'validity_not_after',
-  'private_key_usage_period_not_before',
-  'private_key_usage_period_not_after',
-  'start',
-  'end',
-  'created_time',
-  'modified_time',
-  'account_created',
-  'account_expires',
-  'credential_last_changed',
-  'account_first_login',
-  'account_last_login',
-];
-
-export const numberAttributes = [
-  'number',
-  'src_port',
-  'dst_port',
-  'src_byte_count',
-  'dst_byte_count',
-  'src_packets',
-  'dst_packets',
-  'pid',
-  'size',
-  'number_of_subkeys',
-  'subject_public_key_exponent',
-];
-
-export const booleanAttributes = [
-  'is_self_signed',
-  'is_multipart',
-  'is_hidden',
-  'is_active',
-  'is_disabled',
-  'is_privileged',
-  'is_service_account',
-  'can_escalate_privs',
-];
-
-export const multipleAttributes = ['x_opencti_additional_names', 'protocols'];
-
-const styles = (theme) => ({
+const useStyles = makeStyles((theme) => ({
   drawerPaper: {
     minHeight: '100vh',
     width: '50%',
@@ -143,15 +81,6 @@ const styles = (theme) => ({
     transition: theme.transitions.create('right', {
       easing: theme.transitions.easing.sharp,
       duration: theme.transitions.duration.enteringScreen,
-    }),
-  },
-  createButtonExports: {
-    position: 'fixed',
-    bottom: 30,
-    right: 590,
-    transition: theme.transitions.create('right', {
-      easing: theme.transitions.easing.easeOut,
-      duration: theme.transitions.duration.leavingScreen,
     }),
   },
   createButtonContextual: {
@@ -192,7 +121,7 @@ const styles = (theme) => ({
       backgroundColor: theme.palette.secondary.main,
     },
   },
-});
+}));
 
 const stixCyberObservableMutation = graphql`
   mutation StixCyberObservableCreationMutation(
@@ -229,6 +158,10 @@ const stixCyberObservableMutation = graphql`
     $CryptocurrencyWallet: CryptocurrencyWalletAddInput
     $Text: TextAddInput
     $UserAgent: UserAgentAddInput
+    $BankAccount: BankAccountAddInput
+    $PhoneNumber: PhoneNumberAddInput
+    $PaymentCard: PaymentCardAddInput
+    $MediaContent: MediaContentAddInput
   ) {
     stixCyberObservableAdd(
       type: $type
@@ -264,6 +197,10 @@ const stixCyberObservableMutation = graphql`
       CryptocurrencyWallet: $CryptocurrencyWallet
       Text: $Text
       UserAgent: $UserAgent
+      BankAccount: $BankAccount
+      PhoneNumber: $PhoneNumber
+      PaymentCard: $PaymentCard
+      MediaContent: $MediaContent
     ) {
       id
       entity_type
@@ -282,7 +219,10 @@ const stixCyberObservableMutation = graphql`
         edges {
           node {
             id
+            definition_type
             definition
+            x_opencti_order
+            x_opencti_color
           }
         }
       }
@@ -295,51 +235,40 @@ const stixCyberObservableMutation = graphql`
           }
         }
       }
+      creator {
+        id
+        name
+      }
     }
   }
 `;
 
-const stixCyberObservableValidation = (t) => Yup.object().shape({
-  x_opencti_score: Yup.number().required(t('This field is required')),
+const stixCyberObservableValidation = () => Yup.object().shape({
+  x_opencti_score: Yup.number().nullable(),
   x_opencti_description: Yup.string().nullable(),
   createIndicator: Yup.boolean(),
 });
 
-const sharedUpdater = (
-  store,
-  userId,
+const StixCyberObservableCreation = ({
+  contextual,
+  open,
+  handleClose,
+  type,
+  display,
+  speeddial,
   paginationKey,
   paginationOptions,
-  newEdge,
-) => {
-  const userProxy = store.get(userId);
-  const conn = ConnectionHandler.getConnection(
-    userProxy,
-    paginationKey,
-    paginationOptions,
-  );
-  ConnectionHandler.insertEdgeBefore(conn, newEdge);
-};
+}) => {
+  const classes = useStyles();
+  const { t } = useFormatter();
+  const { isVocabularyField, fieldToCategory } = useVocabularyCategory();
+  const [status, setStatus] = useState({ open: false, type: type ?? null });
 
-class StixCyberObservableCreation extends Component {
-  constructor(props) {
-    super(props);
-    this.state = { open: false, type: null };
-  }
+  const handleOpen = () => setStatus({ open: true, type: status.type });
+  const localHandleClose = () => setStatus({ open: false, type: null });
+  const selectType = (selected) => setStatus({ open: status.open, type: selected });
 
-  handleOpen() {
-    this.setState({ open: true });
-  }
-
-  handleClose() {
-    this.setState({ open: false, type: null });
-  }
-
-  selectType(type) {
-    this.setState({ type });
-  }
-
-  onSubmit(values, { setSubmitting, setErrors, resetForm }) {
+  const onSubmit = (values, { setSubmitting, setErrors, resetForm }) => {
     let adaptedValues = values;
     // Potential dicts
     if (
@@ -399,7 +328,7 @@ class StixCyberObservableCreation extends Component {
       fromPairs,
     )(adaptedValues);
     const finalValues = {
-      type: this.state.type,
+      type: status.type,
       x_opencti_description:
         values.x_opencti_description.length > 0
           ? values.x_opencti_description
@@ -410,23 +339,20 @@ class StixCyberObservableCreation extends Component {
       objectLabel: pluck('value', values.objectLabel),
       externalReferences: pluck('value', values.externalReferences),
       createIndicator: values.createIndicator,
-      [this.state.type.replace(/(?:^|-|_)(\w)/g, (matches, letter) => letter.toUpperCase())]: adaptedValues,
+      [status.type.replace(/(?:^|-|_)(\w)/g, (matches, letter) => letter.toUpperCase())]: {
+        ...adaptedValues,
+        obsContent: values.obsContent?.value,
+      },
     };
     commitMutation({
       mutation: stixCyberObservableMutation,
       variables: finalValues,
-      updater: (store) => {
-        const payload = store.getRootField('stixCyberObservableAdd');
-        const newEdge = payload.setLinkedRecord(payload, 'node'); // Creation of the pagination container.
-        const container = store.getRoot();
-        sharedUpdater(
-          store,
-          container.getDataID(),
-          this.props.paginationKey,
-          this.props.paginationOptions,
-          newEdge,
-        );
-      },
+      updater: (store) => insertNode(
+        store,
+        paginationKey,
+        paginationOptions,
+        'stixCyberObservableAdd',
+      ),
       onError: (error) => {
         handleErrorInForm(error, setErrors);
         setSubmitting(false);
@@ -435,21 +361,20 @@ class StixCyberObservableCreation extends Component {
       onCompleted: () => {
         setSubmitting(false);
         resetForm();
-        this.handleClose();
+        localHandleClose();
       },
     });
-  }
+  };
 
-  onReset() {
-    if (this.props.speeddial) {
-      this.props.handleClose();
+  const onReset = () => {
+    if (speeddial) {
+      handleClose();
     } else {
-      this.handleClose();
+      localHandleClose();
     }
-  }
+  };
 
-  renderList() {
-    const { t } = this.props;
+  const renderList = () => {
     return (
       <QueryRenderer
         query={stixCyberObservablesLinesSubTypesQuery}
@@ -471,7 +396,7 @@ class StixCyberObservableCreation extends Component {
                     divider={true}
                     button={true}
                     dense={true}
-                    onClick={this.selectType.bind(this, subType.label)}
+                    onClick={() => selectType(subType.label)}
                   >
                     <ListItemText primary={subType.tlabel} />
                   </ListItem>
@@ -483,15 +408,13 @@ class StixCyberObservableCreation extends Component {
         }}
       />
     );
-  }
+  };
 
-  renderForm(contextual = false) {
-    const { type } = this.state;
-    const { classes, t } = this.props;
+  const renderForm = () => {
     return (
       <QueryRenderer
         query={stixCyberObservablesLinesAttributesQuery}
-        variables={{ elementType: type }}
+        variables={{ elementType: [status.type] }}
         render={({ props }) => {
           if (props && props.schemaAttributes) {
             const initialValues = {
@@ -511,7 +434,9 @@ class StixCyberObservableCreation extends Component {
               ),
             )(props.schemaAttributes.edges);
             for (const attribute of attributes) {
-              if (includes(attribute.value, dateAttributes)) {
+              if (isVocabularyField(status.type, attribute.value)) {
+                initialValues[attribute.value] = null;
+              } else if (includes(attribute.value, dateAttributes)) {
                 initialValues[attribute.value] = null;
               } else if (includes(attribute.value, booleanAttributes)) {
                 initialValues[attribute.value] = false;
@@ -527,9 +452,9 @@ class StixCyberObservableCreation extends Component {
             return (
               <Formik
                 initialValues={initialValues}
-                validationSchema={stixCyberObservableValidation(t)}
-                onSubmit={this.onSubmit.bind(this)}
-                onReset={this.onReset.bind(this)}
+                validationSchema={stixCyberObservableValidation()}
+                onSubmit={onSubmit}
+                onReset={onReset}
               >
                 {({
                   submitForm,
@@ -540,9 +465,7 @@ class StixCyberObservableCreation extends Component {
                 }) => (
                   <Form
                     style={{
-                      margin: this.props.contextual
-                        ? '10px 0 0 0'
-                        : '20px 0 20px 0',
+                      margin: contextual ? '10px 0 0 0' : '20px 0 20px 0',
                     }}
                   >
                     <div>
@@ -594,6 +517,23 @@ class StixCyberObservableCreation extends Component {
                             </div>
                           );
                         }
+                        if (isVocabularyField(status.type, attribute.value)) {
+                          return (
+                            <OpenVocabField
+                              key={attribute.value}
+                              label={t(attribute.value)}
+                              type={fieldToCategory(
+                                status.type,
+                                attribute.value,
+                              )}
+                              name={attribute.value}
+                              onChange={(name, value) => setFieldValue(name, value)
+                              }
+                              containerStyle={fieldSpacingContainerStyle}
+                              multiple={false}
+                            />
+                          );
+                        }
                         if (includes(attribute.value, dateAttributes)) {
                           return (
                             <Field
@@ -632,7 +572,17 @@ class StixCyberObservableCreation extends Component {
                               key={attribute.value}
                               name={attribute.value}
                               label={attribute.value}
+                              fullWidth={true}
                               containerstyle={{ marginTop: 20 }}
+                            />
+                          );
+                        }
+                        if (attribute.value === 'obsContent') {
+                          return (
+                            <ArtifactField
+                              key={attribute.value}
+                              attributeName={attribute.value}
+                              onChange={setFieldValue}
                             />
                           );
                         }
@@ -705,36 +655,32 @@ class StixCyberObservableCreation extends Component {
         }}
       />
     );
-  }
+  };
 
-  renderClassic() {
-    const { type } = this.state;
-    const { t, classes, openExports } = this.props;
+  const renderClassic = () => {
     return (
       <div>
         <Fab
-          onClick={this.handleOpen.bind(this)}
+          onClick={handleOpen}
           color="secondary"
           aria-label="Add"
-          className={
-            openExports ? classes.createButtonExports : classes.createButton
-          }
+          className={classes.createButton}
         >
           <Add />
         </Fab>
         <Drawer
-          open={this.state.open}
+          open={status.open}
           anchor="right"
           sx={{ zIndex: 1202 }}
           elevation={1}
           classes={{ paper: classes.drawerPaper }}
-          onClose={this.handleClose.bind(this)}
+          onClose={localHandleClose}
         >
           <div className={classes.header}>
             <IconButton
               aria-label="Close"
               className={classes.closeButton}
-              onClick={this.handleClose.bind(this)}
+              onClick={localHandleClose}
               size="large"
               color="primary"
             >
@@ -743,21 +689,19 @@ class StixCyberObservableCreation extends Component {
             <Typography variant="h6">{t('Create an observable')}</Typography>
           </div>
           <div className={classes.container}>
-            {!type ? this.renderList() : this.renderForm()}
+            {!status.type ? renderList() : renderForm()}
           </div>
         </Drawer>
       </div>
     );
-  }
+  };
 
-  renderContextual() {
-    const { type } = this.state;
-    const { t, classes, display, speeddial } = this.props;
+  const renderContextual = () => {
     return (
       <div style={{ display: display ? 'block' : 'none' }}>
         {!speeddial && (
           <Fab
-            onClick={this.handleOpen.bind(this)}
+            onClick={handleOpen}
             color="secondary"
             aria-label="Add"
             className={classes.createButtonContextual}
@@ -766,49 +710,24 @@ class StixCyberObservableCreation extends Component {
           </Fab>
         )}
         <Dialog
-          open={speeddial ? this.props.open : this.state.open}
+          open={speeddial ? open : status.open}
           PaperProps={{ elevation: 1 }}
-          onClose={
-            speeddial
-              ? this.props.handleClose.bind(this)
-              : this.handleClose.bind(this)
-          }
+          onClose={speeddial ? handleClose : localHandleClose}
           fullWidth={true}
         >
           <DialogTitle>{t('Create an observable')}</DialogTitle>
           <DialogContent style={{ paddingTop: 0 }}>
-            {!type ? this.renderList() : this.renderForm(true)}
+            {!status.type ? renderList() : renderForm()}
           </DialogContent>
         </Dialog>
       </div>
     );
-  }
+  };
 
-  render() {
-    const { contextual } = this.props;
-    if (contextual) {
-      return this.renderContextual();
-    }
-    return this.renderClassic();
+  if (contextual) {
+    return renderContextual();
   }
-}
-
-StixCyberObservableCreation.propTypes = {
-  paginationKey: PropTypes.string,
-  paginationOptions: PropTypes.object,
-  classes: PropTypes.object,
-  theme: PropTypes.object,
-  t: PropTypes.func,
-  contextual: PropTypes.bool,
-  speeddial: PropTypes.bool,
-  handleClose: PropTypes.func,
-  open: PropTypes.bool,
-  display: PropTypes.bool,
-  inputValue: PropTypes.string,
-  openExports: PropTypes.bool,
+  return renderClassic();
 };
 
-export default compose(
-  inject18n,
-  withStyles(styles, { withTheme: true }),
-)(StixCyberObservableCreation);
+export default StixCyberObservableCreation;

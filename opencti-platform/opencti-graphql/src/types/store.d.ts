@@ -1,4 +1,4 @@
-import { SortResults } from '@elastic/elasticsearch/api/types';
+import type { SortResults } from '@elastic/elasticsearch/lib/api/types';
 import {
   INPUT_BCC,
   INPUT_BELONGS_TO,
@@ -14,35 +14,50 @@ import {
   INPUT_ENCAPSULATED_BY,
   INPUT_ENCAPSULATES,
   INPUT_FROM,
-  INPUT_IMAGE, INPUT_LINKED,
-  INPUT_OPENED_CONNECTION, INPUT_OPERATING_SYSTEM,
+  INPUT_IMAGE,
+  INPUT_LINKED,
+  INPUT_OPENED_CONNECTION,
+  INPUT_OPERATING_SYSTEM,
   INPUT_PARENT,
   INPUT_PARENT_DIRECTORY,
   INPUT_RAW_EMAIL,
-  INPUT_RESOLVES_TO, INPUT_SAMPLE,
+  INPUT_RESOLVES_TO,
+  INPUT_SAMPLE,
   INPUT_SENDER,
+  INPUT_SERVICE_DLL,
   INPUT_SRC,
   INPUT_SRC_PAYLOAD,
   INPUT_TO,
   INPUT_VALUES
 } from '../schema/stixCyberObservableRelationship';
 import {
+  INPUT_ASSIGNEE,
   INPUT_CREATED_BY,
   INPUT_DOMAIN_FROM,
   INPUT_DOMAIN_TO,
   INPUT_EXTERNAL_REFS,
+  INPUT_GRANTED_REFS,
   INPUT_KILLCHAIN,
   INPUT_LABELS,
   INPUT_MARKINGS,
   INPUT_OBJECTS
 } from '../schema/general';
-import type { StixId, OrganizationReliability } from './stix-common';
+import type { OrganizationReliability, StixId } from './stix-common';
 import {
   RELATION_CREATED_BY,
   RELATION_EXTERNAL_REFERENCE,
+  RELATION_GRANTED_TO,
+  RELATION_OBJECT,
+  RELATION_OBJECT_ASSIGNEE,
   RELATION_OBJECT_MARKING
 } from '../schema/stixMetaRelationship';
 import type { PageInfo } from '../generated/graphql';
+import type {
+  windows_integrity_level_enum,
+  windows_service_start_type_enum,
+  windows_service_status_enum,
+  windows_service_type_enum
+} from './stix-sco';
 
 interface StoreFile {
   id: string;
@@ -51,7 +66,13 @@ interface StoreFile {
   mime_type: string;
 }
 
-interface StoreBase {
+interface BasicStoreIdentifier {
+  internal_id: string;
+  standard_id?: StixId;
+  x_opencti_stix_ids?: Array<StixId>;
+}
+
+interface BasicStoreBase extends BasicStoreIdentifier {
   _index: string;
   standard_id: StixId;
   internal_id: string;
@@ -63,27 +84,27 @@ interface StoreBase {
   x_opencti_aliases?: Array<string>;
   x_opencti_stix_ids?: Array<StixId>;
   x_opencti_workflow_id?: string;
-  [INPUT_LINKED]?: Array<BasicStoreObject>;
 }
 
-interface StoreMarkingDefinition extends StoreBase {
+interface StoreMarkingDefinition extends BasicStoreEntity {
   definition: string;
   definition_type: string;
   x_opencti_order: number;
   x_opencti_color: string;
 }
 
-interface StoreLabel extends StoreBase {
+interface StoreLabel extends BasicStoreBase {
   value: string;
+  color: string;
 }
 
-interface StoreKillChainPhases extends StoreBase {
+interface StoreKillChainPhases extends BasicStoreBase {
   kill_chain_name: string;
   phase_name: string;
   x_opencti_order: number;
 }
 
-interface StoreExternalReferences extends StoreBase {
+interface StoreExternalReferences extends BasicStoreBase {
   source_name: string;
   description: string;
   url: string;
@@ -91,7 +112,7 @@ interface StoreExternalReferences extends StoreBase {
   external_id: string;
 }
 
-interface StoreWindowsRegistryValueType extends StoreBase {
+interface StoreWindowsRegistryValueType extends BasicStoreBase {
   name: string;
   data: string;
   data_type: string;
@@ -115,35 +136,38 @@ interface StoreRule {
   explanation: Array<string>;
 }
 
-interface BasicStoreCommon extends StoreBase {
+interface BasicStoreCommon extends BasicStoreBase {
   // Array
   [k: `i_rule_${string}`]: Array<StoreRawRule>;
-  // [k: `rel_${string}`]: Array<string>;
   // object
   hashes?: { [k: string]: string };
   sort?: SortResults;
   // inputs
-  // [INPUT_MARKINGS]?: Array<StoreMarkingDefinition>;
+  [RELATION_GRANTED_TO]?: Array<string>;
   [RELATION_OBJECT_MARKING]?: Array<string>;
-  // [INPUT_EXTERNAL_REFS]?: Array<StoreExternalReferences>;
+  [RELATION_OBJECT_ASSIGNEE]?: Array<string>;
   [RELATION_EXTERNAL_REFERENCE]?: Array<string>;
 }
 
 interface StoreCommon {
   // inputs
+  [INPUT_LINKED]?: Array<BasicStoreObject>;
   [INPUT_MARKINGS]?: Array<StoreMarkingDefinition>;
+  [INPUT_ASSIGNEE]?: Array<BasicStoreObject>;
   [INPUT_EXTERNAL_REFS]?: Array<StoreExternalReferences>;
+  [INPUT_GRANTED_REFS]?: Array<BasicStoreObject>;
 }
 
 interface StoreProxyRelation extends BasicStoreCommon {
   _index: string;
 }
+
 interface StoreRawRelation extends StoreProxyRelation {
   lang: string;
   relationship_type: string;
   description: string;
   summary: string;
-  // inputs
+  // rels
   [RELATION_OBJECT_MARKING]: Array<string>;
   // date
   first_seen: Date;
@@ -161,6 +185,7 @@ interface StoreRawRelation extends StoreProxyRelation {
   // Array
   connections: Array<StoreConnection>;
 }
+
 interface BasicStoreRelation extends StoreRawRelation {
   fromId: string;
   fromRole: string;
@@ -169,32 +194,29 @@ interface BasicStoreRelation extends StoreRawRelation {
   toRole: string;
   toType: string;
 }
+
 interface StoreRelation extends BasicStoreRelation, StoreCommon {
   [INPUT_CREATED_BY]: BasicStoreEntity;
   [INPUT_DOMAIN_FROM]: BasicStoreObject;
   [INPUT_DOMAIN_TO]: BasicStoreObject;
-  [INPUT_DOMAIN_FROM]: Array<BasicStoreEntity>;
-  [INPUT_DOMAIN_TO]: Array<BasicStoreEntity>;
   [INPUT_LABELS]: Array<StoreLabel>;
   [INPUT_KILLCHAIN]: Array<StoreKillChainPhases>;
 }
 
-interface StoreProxyEdge<T extends StoreProxyEntity> {
+interface BasicStoreEntityEdge<T extends BasicStoreEntity> {
   cursor: string;
   node: T;
 }
 
-interface StoreProxyConnection<T extends StoreProxyEntity> {
-  edges?: Array<StoreProxyEdge<T>>;
+interface StoreEntityConnection<T extends BasicStoreEntity> {
+  edges: Array<BasicStoreEntityEdge<T>>;
   pageInfo: PageInfo;
 }
 
-interface StoreProxyEntity extends BasicStoreCommon {
-  _index: string;
-}
-interface BasicStoreEntity extends StoreProxyEntity {
+interface BasicStoreEntity extends BasicStoreCommon {
   id: string;
   name: string;
+  spec_version: string;
   content_type: string;
   content_disposition: string;
   body: string;
@@ -213,7 +235,6 @@ interface BasicStoreEntity extends StoreProxyEntity {
   primary_motivation: string;
   region: string;
   country: string;
-  administrative_area: string;
   city: string;
   street_address: string;
   postal_code: string;
@@ -223,6 +244,7 @@ interface BasicStoreEntity extends StoreProxyEntity {
   definition_type: string;
   objective: string;
   tool_version: string;
+  context: string;
   opinion: 'strongly-disagree' | 'disagree' | 'neutral' | 'agree' | 'strongly-agree';
   x_mitre_id: string;
   x_mitre_detection: string;
@@ -233,6 +255,13 @@ interface BasicStoreEntity extends StoreProxyEntity {
   source_name: string;
   external_id: string;
   lastEventId: string;
+  platform_organization: string;
+  source: string;
+  severity: string;
+  incident_type: string;
+  case_type: string;
+
+  x_opencti_location_type: string;
   x_opencti_reliability: OrganizationReliability;
   x_opencti_organization_type: string;
   x_opencti_attack_vector: string;
@@ -244,11 +273,15 @@ interface BasicStoreEntity extends StoreProxyEntity {
   x_opencti_lastname: string;
   x_opencti_firstname: string;
   x_opencti_inferences: Array<StoreRule> | undefined;
+  // internal
+  i_relation: BasicStoreRelation; // internal related relation for refs
   // rels
   [RELATION_CREATED_BY]: string;
+  [RELATION_OBJECT]: Array<string>;
   // Array
   x_mitre_permissions_required: Array<string>;
   x_mitre_platforms: Array<string>;
+  collection_layers: Array<string>;
   received_lines: Array<string>;
   parent_types: Array<string>;
   report_types: Array<string>;
@@ -281,16 +314,21 @@ interface BasicStoreEntity extends StoreProxyEntity {
   revoked: boolean;
   is_family: boolean;
   x_opencti_detection: boolean;
+  is_inferred: boolean;
   // number
   number_observed: number;
   confidence: number;
-  latitude: number;
-  longitude: number;
+  latitude: string;
+  longitude: string;
   precision: number;
   x_opencti_order: number;
   x_opencti_base_score: number;
   x_opencti_score: number;
+  usages: number;
+  note_types: Array<string>;
+  likelihood: number;
 }
+
 interface StoreEntity extends BasicStoreEntity, StoreCommon {
   [INPUT_CREATED_BY]: BasicStoreEntity;
   [INPUT_OPERATING_SYSTEM]: Array<StoreCyberObservable>;
@@ -301,7 +339,7 @@ interface StoreEntity extends BasicStoreEntity, StoreCommon {
   [INPUT_KILLCHAIN]: Array<StoreKillChainPhases>;
 }
 
-interface StoreEntityFeed extends StoreProxyEntity {
+interface StoreEntityFeed extends StoreEntity {
   id: string;
   name: string;
   filters: string;
@@ -328,6 +366,7 @@ interface BasicStoreCyberObservable extends BasicStoreCommon {
   body: string;
   value: string;
   display_name: string;
+  group_name: string;
   mime_type: string;
   payload_bin: string;
   url: string;
@@ -372,6 +411,18 @@ interface BasicStoreCyberObservable extends BasicStoreCommon {
   name: string;
   data: string;
   data_type: string;
+  iban: string;
+  bic: string;
+  holder_name: string;
+  card_number: string;
+  account_number: string;
+  title: string;
+  content: string;
+  media_category: string;
+  service_name: string;
+  priority: string;
+  owner_sid: string;
+  window_title: string;
   // date
   attribute_date: Date;
   ctime: Date;
@@ -390,6 +441,8 @@ interface BasicStoreCyberObservable extends BasicStoreCommon {
   validity_not_after: Date;
   private_key_usage_period_not_before: Date;
   private_key_usage_period_not_after: Date;
+  expiration_date: Date;
+  publication_date: Date,
   // boolean
   defanged: boolean;
   is_multipart: boolean;
@@ -400,11 +453,14 @@ interface BasicStoreCyberObservable extends BasicStoreCommon {
   can_escalate_privs: boolean;
   is_disabled: boolean;
   is_self_signed: boolean;
+  aslr_enabled: boolean;
+  dep_enabled: boolean;
   // Array
   x_opencti_additional_names: Array<string>;
   received_lines: Array<string>;
   protocols: Array<string>;
   languages: Array<string>;
+  descriptions: Array<string>;
   // number
   x_opencti_score: number;
   number: number;
@@ -418,10 +474,18 @@ interface BasicStoreCyberObservable extends BasicStoreCommon {
   pid: number;
   number_of_subkeys: number;
   subject_public_key_exponent: number;
+  cvv: number;
   // object
   ipfix: object;
   environment_variables: object;
+  startup_info: object;
+  // enum
+  start_type: windows_service_start_type_enum;
+  service_type: windows_service_type_enum;
+  service_status: windows_service_status_enum;
+  integrity_level: windows_integrity_level_enum;
 }
+
 interface StoreCyberObservable extends BasicStoreCyberObservable, StoreCommon {
   [INPUT_CREATED_BY]: BasicStoreEntity;
   [INPUT_CONTAINS]: Array<BasicStoreObject>;
@@ -439,6 +503,7 @@ interface StoreCyberObservable extends BasicStoreCyberObservable, StoreCommon {
   [INPUT_CHILD]: Array<BasicStoreObject>;
   [INPUT_ENCAPSULATES]: Array<BasicStoreObject>;
   [INPUT_OPENED_CONNECTION]: Array<BasicStoreObject>;
+  [INPUT_SERVICE_DLL]: Array<BasicStoreObject>;
   [INPUT_CC]: Array<BasicStoreObject>;
   [INPUT_BCC]: Array<BasicStoreObject>;
   [INPUT_TO]: Array<BasicStoreObject>;
@@ -482,11 +547,25 @@ interface BasicWorkflowTemplateEntity extends BasicStoreEntity {
   color: string;
 }
 
+interface BasicStreamEntity extends BasicStoreEntity {
+  filters: string;
+}
+
+interface BasicTriggerEntity extends BasicStoreEntity {
+  filters: string;
+}
+
 interface BasicWorkflowStatusEntity extends BasicStoreEntity {
   template_id: string;
   type: string;
   order: number;
   disabled: boolean;
+}
+
+export interface BasicStoreSettings extends BasicStoreEntity {
+  platform_email: string;
+  platform_organization: string;
+  platform_theme_dark_background: string;
 }
 
 type BasicStoreObject = BasicStoreEntity | BasicStoreCyberObservable | BasicStoreRelation;

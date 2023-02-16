@@ -4,7 +4,6 @@ import * as R from 'ramda';
 import * as jsonpatch from 'fast-json-patch';
 import jsonCanonicalize from 'canonicalize';
 import { DatabaseError, UnsupportedError } from '../config/errors';
-import { convertEntityTypeToStixType } from './schemaUtils';
 import * as I from './internalObject';
 import { isInternalObject } from './internalObject';
 import * as D from './stixDomainObject';
@@ -21,7 +20,6 @@ import * as C from './stixCyberObservable';
 import { isStixCyberObservable, isStixCyberObservableHashedObservable } from './stixCyberObservable';
 import {
   BASE_TYPE_RELATION,
-  getStaticIdFromData,
   OASIS_NAMESPACE,
   OPENCTI_NAMESPACE,
   OPENCTI_PLATFORM_UUID
@@ -32,6 +30,10 @@ import { isStixMetaRelationship } from './stixMetaRelationship';
 import { isStixSightingRelationship } from './stixSightingRelationship';
 import { isStixCyberObservableRelationship } from './stixCyberObservableRelationship';
 import { isEmptyField, isNotEmptyField, UPDATE_OPERATION_ADD, UPDATE_OPERATION_REMOVE } from '../database/utils';
+import { now } from '../utils/format';
+import { ENTITY_TYPE_VOCABULARY } from '../modules/vocabulary/vocabulary-types';
+import { isBasicRelationship } from './stixRelationship';
+import { convertTypeToStixType } from '../database/stix-converter';
 
 // region hashes
 const MD5 = 'MD5';
@@ -47,6 +49,7 @@ const transformObjectToUpperKeys = (data) => {
 export const INTERNAL_FROM_FIELD = 'i_relations_from';
 export const INTERNAL_TO_FIELD = 'i_relations_to';
 export const NAME_FIELD = 'name';
+export const VALUE_FIELD = 'value';
 export const FIRST_SEEN = 'first_seen';
 export const LAST_SEEN = 'last_seen';
 export const START_TIME = 'start_time';
@@ -64,7 +67,38 @@ export const X_WORKFLOW_ID = 'x_opencti_workflow_id';
 export const normalizeName = (name) => {
   return (name || '').toLowerCase().trim();
 };
-const stixCyberObservableContribution = {
+
+const MARKING_TLP_CLEAR_ID = '613f2e26-407d-48c7-9eca-b8e91df99dc9';
+export const MARKING_TLP_CLEAR = `marking-definition--${MARKING_TLP_CLEAR_ID}`;
+const MARKING_TLP_GREEN_ID = '34098fce-860f-48ae-8e50-ebd3cc5e41da';
+export const MARKING_TLP_GREEN = `marking-definition--${MARKING_TLP_GREEN_ID}`;
+const MARKING_TLP_AMBER_ID = 'f88d31f6-486f-44da-b317-01333bde0b82';
+export const MARKING_TLP_AMBER = `marking-definition--${MARKING_TLP_AMBER_ID}`;
+const MARKING_TLP_AMBER_STRICT_ID = '826578e1-40ad-459f-bc73-ede076f81f37';
+export const MARKING_TLP_AMBER_STRICT = `marking-definition--${MARKING_TLP_AMBER_STRICT_ID}`;
+const MARKING_TLP_RED_ID = '5e57c739-391a-4eb3-b6be-7d15ca92d5ed';
+export const MARKING_TLP_RED = `marking-definition--${MARKING_TLP_RED_ID}`;
+export const STATIC_MARKING_IDS = [
+  MARKING_TLP_CLEAR,
+  MARKING_TLP_GREEN,
+  MARKING_TLP_AMBER,
+  MARKING_TLP_AMBER_STRICT,
+  MARKING_TLP_RED
+];
+export const STATIC_STANDARD_IDS = [
+  { id: MARKING_TLP_CLEAR_ID, data: { definition_type: 'TLP', definition: 'TLP:WHITE' } },
+  { id: MARKING_TLP_CLEAR_ID, data: { definition_type: 'TLP', definition: 'TLP:CLEAR' } },
+  { id: MARKING_TLP_GREEN_ID, data: { definition_type: 'TLP', definition: 'TLP:GREEN' } },
+  { id: MARKING_TLP_AMBER_ID, data: { definition_type: 'TLP', definition: 'TLP:AMBER' } },
+  { id: MARKING_TLP_AMBER_STRICT_ID, data: { definition_type: 'TLP', definition: 'TLP:AMBER+STRICT' } },
+  { id: MARKING_TLP_RED_ID, data: { definition_type: 'TLP', definition: 'TLP:RED' } }
+];
+const getStaticIdFromData = (data) => {
+  const findStatic = R.find((s) => R.equals(s.data, data), STATIC_STANDARD_IDS);
+  return findStatic?.id;
+};
+
+const stixBaseCyberObservableContribution = {
   definition: {
     // Observables
     [C.ENTITY_AUTONOMOUS_SYSTEM]: [{ src: 'number' }], // number
@@ -73,7 +107,7 @@ const stixCyberObservableContribution = {
     [C.ENTITY_EMAIL_ADDR]: [{ src: 'value' }], // value
     [C.ENTITY_EMAIL_MESSAGE]: [{ src: 'from', dest: 'from_ref' }, { src: 'subject' }, { src: 'body' }], // from_ref, subject, body
     [C.ENTITY_HASHED_OBSERVABLE_ARTIFACT]: [[{ src: 'hashes' }], [{ src: 'url' }]], // hashes, (!) payload_bin > Cause of volume
-    [C.ENTITY_HASHED_OBSERVABLE_STIX_FILE]: [[{ src: 'hashes' }], [{ src: 'name' }]], // hashes, name, (!) extensions, parent_directory_ref
+    [C.ENTITY_HASHED_OBSERVABLE_STIX_FILE]: [[{ src: 'hashes' }], [{ src: NAME_FIELD }]], // hashes, name, (!) extensions, parent_directory_ref
     [C.ENTITY_HASHED_OBSERVABLE_X509_CERTIFICATE]: [[{ src: 'hashes' }], [{ src: 'serial_number' }], [{ src: 'subject' }]], // hashes, serial_number
     [C.ENTITY_IPV4_ADDR]: [{ src: 'value' }], // value
     [C.ENTITY_IPV6_ADDR]: [{ src: 'value' }], // value
@@ -99,6 +133,10 @@ const stixCyberObservableContribution = {
     [C.ENTITY_HOSTNAME]: [{ src: 'value' }],
     [C.ENTITY_USER_AGENT]: [{ src: 'value' }],
     [C.ENTITY_TEXT]: [{ src: 'value' }],
+    [C.ENTITY_BANK_ACCOUNT]: [{ src: 'iban' }],
+    [C.ENTITY_PHONE_NUMBER]: [{ src: 'value' }],
+    [C.ENTITY_PAYMENT_CARD]: [{ src: 'card_number' }],
+    [C.ENTITY_MEDIA_CONTENT]: [{ src: 'url' }],
     // Types embedded
     [C.ENTITY_EMAIL_MIME_PART_TYPE]: [], // ALL
     [C.ENTITY_WINDOWS_REGISTRY_VALUE_TYPE]: [], // ALL
@@ -128,7 +166,7 @@ const stixCyberObservableContribution = {
     },
   },
 };
-const stixEntityContribution = {
+const stixBaseEntityContribution = {
   definition: {
     // Internal
     [I.ENTITY_TYPE_SETTINGS]: () => OPENCTI_PLATFORM_UUID,
@@ -151,12 +189,11 @@ const stixEntityContribution = {
     [I.ENTITY_TYPE_RETENTION_RULE]: () => uuidv4(),
     [I.ENTITY_TYPE_SYNC]: () => uuidv4(),
     [I.ENTITY_TYPE_STREAM_COLLECTION]: () => uuidv4(),
-    [I.ENTITY_TYPE_USER_SUBSCRIPTION]: () => uuidv4(),
     // Stix Domain
     // Entities
     [D.ENTITY_TYPE_ATTACK_PATTERN]: [[{ src: X_MITRE_ID_FIELD }], [{ src: NAME_FIELD }]],
     [D.ENTITY_TYPE_CAMPAIGN]: [{ src: NAME_FIELD }],
-    [D.ENTITY_TYPE_CONTAINER_NOTE]: () => uuidv4(),
+    [D.ENTITY_TYPE_CONTAINER_NOTE]: [{ src: 'created' }, { src: 'content' }],
     [D.ENTITY_TYPE_CONTAINER_OBSERVED_DATA]: [{ src: 'objects' }],
     [D.ENTITY_TYPE_CONTAINER_OPINION]: () => uuidv4(),
     [D.ENTITY_TYPE_CONTAINER_REPORT]: [{ src: NAME_FIELD }, { src: 'published' }],
@@ -177,6 +214,9 @@ const stixEntityContribution = {
     [D.ENTITY_TYPE_TOOL]: [{ src: NAME_FIELD }],
     [D.ENTITY_TYPE_VULNERABILITY]: [{ src: NAME_FIELD }],
     [D.ENTITY_TYPE_INCIDENT]: [{ src: NAME_FIELD }],
+    [D.ENTITY_TYPE_DATA_COMPONENT]: [[{ src: NAME_FIELD }]],
+    [D.ENTITY_TYPE_DATA_SOURCE]: [[{ src: NAME_FIELD }]],
+    [D.ENTITY_TYPE_DATA_SOURCE]: [[{ src: NAME_FIELD }]],
     // Stix Meta
     [M.ENTITY_TYPE_MARKING_DEFINITION]: [{ src: 'definition', dependencies: ['definition_type'] }, { src: 'definition_type' }],
     [M.ENTITY_TYPE_LABEL]: [{ src: 'value' }],
@@ -185,6 +225,9 @@ const stixEntityContribution = {
   },
   resolvers: {
     name(data) {
+      return normalizeName(data);
+    },
+    value(data) {
       return normalizeName(data);
     },
     definition(data) {
@@ -207,15 +250,29 @@ const stixEntityContribution = {
     },
   },
 };
+
+const identifierContributions = [stixBaseCyberObservableContribution, stixBaseEntityContribution];
+export const isSupportedStixType = (stixType) => [...identifierContributions.map((identifier) => Object.keys(identifier.definition)).flat()
+  .map((type) => type.toLowerCase()), 'identity', 'location', 'file', 'relationship', 'sighting'].includes(stixType);
+export const registerModelIdentifier = (identifier) => {
+  identifierContributions.push(identifier);
+};
+
 const resolveContribution = (type) => {
-  return isStixCyberObservable(type) ? stixCyberObservableContribution : stixEntityContribution;
+  const finder = (c) => Object.keys(c.definition).includes(type);
+  const ident = identifierContributions.find(finder);
+  if (!ident) {
+    throw UnsupportedError(`Type ${type} has not available resolution`);
+  }
+  return ident;
 };
 export const idGen = (type, raw, data, namespace) => {
   // If empty data, generate an error message
   if (isEmptyField(data)) {
     const contrib = resolveContribution(type);
     const properties = contrib.definition[type];
-    throw UnsupportedError(`Cant create key for ${type} from empty data`, { data: raw, properties });
+    const missingKeys = properties.map((p) => p.src).join(' - ');
+    throw UnsupportedError(`Missing required elements for ${type} creation (${missingKeys})`, { data: raw, properties });
   }
   // In some cases like TLP, standard id are fixed by the community
   const findStaticId = getStaticIdFromData(data);
@@ -229,7 +286,7 @@ export const idGen = (type, raw, data, namespace) => {
 export const idGenFromData = (type, data) => {
   const dataCanonicalize = jsonCanonicalize(data);
   const uuid = uuidv5(dataCanonicalize, OPENCTI_NAMESPACE);
-  return `${convertEntityTypeToStixType(type)}--${uuid}`;
+  return `${convertTypeToStixType(type)}--${uuid}`;
 };
 
 export const fieldsContributingToStandardId = (instance, keys) => {
@@ -344,11 +401,9 @@ const isStandardIdChanged = (previous, updated, operation) => {
   const numberOfUpgrade = patch.filter((p) => p.op === operation).length;
   return numberOfOperations === numberOfUpgrade;
 };
-
 export const isStandardIdUpgraded = (previous, updated) => {
   return isStandardIdChanged(previous, updated, UPDATE_OPERATION_ADD);
 };
-
 export const isStandardIdDowngraded = (previous, updated) => {
   return isStandardIdChanged(previous, updated, UPDATE_OPERATION_REMOVE);
 };
@@ -364,15 +419,18 @@ const generateObjectUUID = (type, data) => {
 
 const generateObjectId = (type, data) => {
   const uuid = generateObjectUUID(type, data);
-  return `${convertEntityTypeToStixType(type)}--${uuid}`;
+  return `${convertTypeToStixType(type)}--${uuid}`;
 };
 const generateStixId = (type, data) => {
   const uuid = generateStixUUID(type, data);
-  return `${convertEntityTypeToStixType(type)}--${uuid}`;
+  return `${convertTypeToStixType(type)}--${uuid}`;
 };
 
 export const generateInternalId = () => uuidv4();
-export const generateWorkId = () => `opencti-work--${generateInternalId()}`;
+export const generateWorkId = (connectorId) => {
+  const timestamp = now();
+  return { id: `work_${connectorId}_${timestamp}`, timestamp };
+};
 export const generateStandardId = (type, data) => {
   // Entities
   if (isStixMetaObject(type)) return generateStixId(type, data);
@@ -388,7 +446,8 @@ export const generateStandardId = (type, data) => {
   // Unknown
   throw UnsupportedError(`${type} is not supported by the platform`);
 };
-export const generateAliasesId = (aliases, instance = {}) => {
+export const generateAliasesId = (rawAliases, instance = {}) => {
+  const aliases = R.uniq(rawAliases);
   const additionalFields = {};
   if (isStixDomainObjectIdentity(instance.entity_type)) {
     additionalFields.identity_class = instance.identity_class;
@@ -399,11 +458,14 @@ export const generateAliasesId = (aliases, instance = {}) => {
   if (instance.entity_type === ENTITY_TYPE_ATTACK_PATTERN && instance.x_mitre_id) {
     additionalFields.x_mitre_id = instance.x_mitre_id;
   }
-  return R.map((a) => {
-    const dataUUID = { name: normalizeName(a), ...additionalFields };
-    const uuid = idGen('ALIAS', aliases, dataUUID, OPENCTI_NAMESPACE);
+  if (instance.entity_type === ENTITY_TYPE_VOCABULARY) {
+    additionalFields.category = instance.category;
+  }
+  return R.uniq(aliases.map((alias) => {
+    const dataUUID = { name: normalizeName(alias), ...additionalFields };
+    const uuid = idGen('ALIAS', alias, dataUUID, OPENCTI_NAMESPACE);
     return `aliases--${uuid}`;
-  }, R.uniq(aliases));
+  }));
 };
 
 export const generateAliasesIdsForInstance = (instance) => {
@@ -439,7 +501,7 @@ export const getInstanceIds = (instance, withoutInternal = false) => {
   ids.push(...getHashIds(instance.entity_type, instance.hashes));
   return R.uniq(ids);
 };
-export const getInputIds = (type, input) => {
+export const getInputIds = (type, input, fromRule) => {
   const ids = [input.standard_id || generateStandardId(type, input)];
   if (isNotEmptyField(input.internal_id)) {
     ids.push(input.internal_id);
@@ -452,5 +514,11 @@ export const getInputIds = (type, input) => {
   }
   ids.push(...generateAliasesIdsForInstance(input));
   ids.push(...getHashIds(type, input.hashes));
+  // Inference can only be created once, locking the combination
+  if (fromRule && isBasicRelationship(type)) {
+    ids.push(`${input.from.internal_id}-${type}-${input.to.internal_id}`);
+    ids.push(`${input.to.internal_id}-${type}-${input.from.internal_id}`);
+  }
+  // Return list of unique ids to lock
   return R.uniq(ids);
 };

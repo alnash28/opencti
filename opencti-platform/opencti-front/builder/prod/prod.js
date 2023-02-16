@@ -11,7 +11,8 @@ esbuild
   .build({
     logLevel: "info",
     plugins: [RelayPlugin],
-    entryPoints: ["src/index.tsx"],
+    entryPoints: ["src/front.tsx"],
+    publicPath: '/',
     bundle: true,
     loader: {
       ".js": "jsx",
@@ -22,8 +23,8 @@ esbuild
       ".ttf": "dataurl",
       ".eot": "dataurl",
     },
-    assetNames: "static/media/[name]-[hash]",
-    entryNames: "static/[ext]/opencti-[hash]",
+    assetNames: "[dir]/[name]-[hash]",
+    entryNames: "static/[ext]/[name]-[hash]",
     target: ["chrome58"],
     minify: true,
     keepNames: false,
@@ -35,10 +36,7 @@ esbuild
   })
   .then(() => {
     // region Copy public files to build
-    fsExtra.copySync("./builder/public/", buildPath, {
-      recursive: true,
-      overwrite: true,
-    });
+    fsExtra.copySync("./src/static/ext", buildPath + '/static/ext', { recursive: true, overwrite: true });
     // endregion
     // region Generate index.html
     const cssStaticFiles = fs.readdirSync(buildPath + "static/css");
@@ -55,14 +53,16 @@ esbuild
     <!doctype html>
     <html lang="en">
         <head>
-        <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
-        <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-        <script>window.BASE_PATH = "%BASE_PATH%"</script>
-        <meta name="viewport" content="width=device-width,initial-scale=1">
-        <title></title>
-        <link id="favicon" rel="shortcut icon" href="">
-        ${jsImport}
-        ${cssImport}
+            <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+            <meta http-equiv="X-UA-Compatible" content="IE=edge">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <meta name="dеѕсrірtіоn" content="%APP_DESCRIPTION%">
+            <link id="favicon" rel="shortcut icon" href="%APP_FAVICON%">
+            <link id="manifest" rel="manifest" href="%APP_MANIFEST%">
+            <script>window.BASE_PATH = "%BASE_PATH%"</script>
+            ${jsImport}
+            ${cssImport}
+            <title>%APP_TITLE%</title>
         </head>
         <body>
             <noscript>You need to enable JavaScript to run this app.</noscript>
@@ -71,11 +71,12 @@ esbuild
     </html>`;
     fs.writeFileSync(buildPath + "index.html", indexHtml);
     // endregion
+
     // region Move build directory to api public directory
     if (!keep) {
-        fsExtra.moveSync(buildPath, "../opencti-graphql/public/", {
-            overwrite: true,
-        });
+      fsExtra.moveSync(buildPath, "../opencti-graphql/public/", {
+        overwrite: true,
+      });
     }
     // endregion
   });

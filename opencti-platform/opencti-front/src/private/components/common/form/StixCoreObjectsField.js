@@ -29,7 +29,10 @@ export const stixCoreObjectsFieldSearchQuery = graphql`
             edges {
               node {
                 id
+                definition_type
                 definition
+                x_opencti_order
+                x_opencti_color
               }
             }
           }
@@ -58,6 +61,11 @@ export const stixCoreObjectsFieldSearchQuery = graphql`
             name
             description
             published
+          }
+          ... on Grouping {
+            name
+            description
+            context
           }
           ... on CourseOfAction {
             name
@@ -102,6 +110,10 @@ export const stixCoreObjectsFieldSearchQuery = graphql`
             name
             description
           }
+          ... on AdministrativeArea {
+            name
+            description
+          }
           ... on Country {
             name
             description
@@ -135,6 +147,27 @@ export const stixCoreObjectsFieldSearchQuery = graphql`
             description
             first_seen
             last_seen
+          }
+          ... on Case {
+            name
+          }
+          ... on Channel {
+            name
+          }
+          ... on Narrative {
+            name
+          }
+          ... on Language {
+            name
+          }
+          ... on DataComponent {
+            name
+          }
+          ... on DataSource {
+            name
+          }
+          ... on Case {
+            name
           }
           ... on StixCyberObservable {
             observable_value
