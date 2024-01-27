@@ -67,7 +67,7 @@
     "three-spritetext": "1.6.5",
     "typeface-ibm-plex-sans": "1.1.13",
     "typeface-roboto": "1.1.13",
-    "uuid": "9.0.0",
+    "uuid": "9.0.1",
     "yup": "0.32.11"
   },
   "devDependencies": {
