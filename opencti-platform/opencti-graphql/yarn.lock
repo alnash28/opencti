@@ -3935,10 +3935,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/ejs@npm:3.1.1":
-  version: 3.1.1
-  resolution: "@types/ejs@npm:3.1.1"
-  checksum: 12fa444920aaa70af2fae4424fa62b49c23b31a37129c428b7c9f9068e58c0696b4e5601b0449f87bae8794e039c679a43651c356c34f17d1bb460456dd41441
+"@types/ejs@npm:3.1.5":
+  version: 3.1.5
+  resolution: "@types/ejs@npm:3.1.5"
+  checksum: e142266283051f27a7f79329871b311687dede19ae20268d882e4de218c65e1311d28a300b85579ca67157a8d601b7234daa50c2f99b252b121d27b4e5b21468
   languageName: node
   linkType: hard
 
@@ -6300,14 +6300,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ejs@npm:3.1.8":
-  version: 3.1.8
-  resolution: "ejs@npm:3.1.8"
+"ejs@npm:3.1.10":
+  version: 3.1.10
+  resolution: "ejs@npm:3.1.10"
   dependencies:
     jake: ^10.8.5
   bin:
     ejs: bin/cli.js
-  checksum: 1d40d198ad52e315ccf37e577bdec06e24eefdc4e3c27aafa47751a03a0c7f0ec4310254c9277a5f14763c3cd4bbacce27497332b2d87c74232b9b1defef8efc
+  checksum: ce90637e9c7538663ae023b8a7a380b2ef7cc4096de70be85abf5a3b9641912dde65353211d05e24d56b1f242d71185c6d00e02cb8860701d571786d92c71f05
   languageName: node
   linkType: hard
 
@@ -9948,7 +9948,7 @@ __metadata:
     "@types/bcryptjs": 2.4.2
     "@types/bluebird": 3.5.38
     "@types/dot-object": 2.1.2
-    "@types/ejs": 3.1.1
+    "@types/ejs": 3.1.5
     "@types/express": 4.17.17
     "@types/nconf": 0.10.3
     "@types/ramda": 0.28.22
@@ -9975,7 +9975,7 @@ __metadata:
     cross-env: 7.0.3
     dataloader: 2.2.1
     dot-object: 2.1.4
-    ejs: 3.1.8
+    ejs: 3.1.10
     esbuild: 0.16.17
     esbuild-plugin-import-glob: 0.1.1
     eslint: 8.33.0
