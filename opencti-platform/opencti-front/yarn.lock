@@ -3532,12 +3532,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/ramda@npm:0.28.22":
-  version: 0.28.22
-  resolution: "@types/ramda@npm:0.28.22"
+"@types/ramda@npm:0.30.2":
+  version: 0.30.2
+  resolution: "@types/ramda@npm:0.30.2"
   dependencies:
-    ts-toolbelt: ^6.15.1
-  checksum: 6ee8aa774ca6a981fe7586a1296965e043e2479f56eb4b4c897a54a1a3f094e2a6a180b8c9eddf9bd3a273d6f9939ee6d5f526327e9055392a8e8292cd7c9eca
+    types-ramda: ^0.30.1
+  checksum: 528e62da967adb38b7b6be3314ee11009f4e7312e4fbb9670f4556bb2f640754f08ae68ede87822ae255aba747e67296f40b37d53bfb427c58ab82f5b7a4989e
   languageName: node
   linkType: hard
 
@@ -12492,7 +12492,7 @@ __metadata:
     "@types/jest": 29.4.0
     "@types/node": 18.11.19
     "@types/qrcode": 1.5.0
-    "@types/ramda": 0.28.22
+    "@types/ramda": 0.30.2
     "@types/react": 18.0.27
     "@types/react-dom": 18.0.10
     "@types/react-relay": 14.1.3
@@ -12540,7 +12540,7 @@ __metadata:
     prettier: 2.8.3
     prop-types: 15.8.1
     qrcode: 1.5.1
-    ramda: 0.28.0
+    ramda: 0.30.1
     react: 18.2.0
     react-apexcharts: 1.4.0
     react-color: 2.19.3
@@ -13619,10 +13619,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ramda@npm:0.28.0":
-  version: 0.28.0
-  resolution: "ramda@npm:0.28.0"
-  checksum: 44ea6e5010bba70151b6a92d8114a91915e8b5a16105cce65fae58c9d7386b812c429645e35f21141d7087568550ce383bc10ee1a65cdec951f4b69ea457e6a4
+"ramda@npm:0.30.1":
+  version: 0.30.1
+  resolution: "ramda@npm:0.30.1"
+  checksum: ce6f4b6b967a84a4e65c01ab1b1cdd73d46b8efe71aeccf5d1443c56c4e31a0ea82ece7df6510453dd3d83b92cabf8a6b4d50d189a1b35c08a6f44b281bebf79
   languageName: node
   linkType: hard
 
@@ -16292,10 +16292,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ts-toolbelt@npm:^6.15.1":
-  version: 6.15.5
-  resolution: "ts-toolbelt@npm:6.15.5"
-  checksum: 24ad00cfd9ce735c76c873a9b1347eac475b94e39ebbdf100c9019dce88dd5f4babed52884cf82bb456a38c28edd0099ab6f704b84b2e5e034852b618472c1f3
+"ts-toolbelt@npm:^9.6.0":
+  version: 9.6.0
+  resolution: "ts-toolbelt@npm:9.6.0"
+  checksum: 9f35fd95d895a5d32ea9fd2e532a695b0bae6cbff6832b77292efa188a0ed1ed6e54f63f74a8920390f3d909a7a3adb20a144686372a8e78b420246a9bd3d58a
   languageName: node
   linkType: hard
 
@@ -16465,6 +16465,15 @@ __metadata:
   version: 1.1.13
   resolution: "typeface-roboto@npm:1.1.13"
   checksum: 89e43bc445c4619c7d70f09c398423790a31905f103e82f730e6702d7e3677587bc83ea5fdcb5f420b3d80509966e4167e1927dcd8ff65ad721c73bfb56bcf1c
+  languageName: node
+  linkType: hard
+
+"types-ramda@npm:^0.30.1":
+  version: 0.30.1
+  resolution: "types-ramda@npm:0.30.1"
+  dependencies:
+    ts-toolbelt: ^9.6.0
+  checksum: 7af1b5b6dbb5878e5104013f7eca7feff999b538d98d59c91ce82e69908b31223b44a163271b0c13c9828c27f6cff39f78cff0f83d82b73ac47f74ffb3fe7ded
   languageName: node
   linkType: hard
 
