@@ -4401,10 +4401,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@xmldom/xmldom@npm:0.8.6":
-  version: 0.8.6
-  resolution: "@xmldom/xmldom@npm:0.8.6"
-  checksum: f17ac6d99a971a6aeb831fcfc5cfa86f367664e45815046548814b2deb17ccc421fef4e0d5ba29e66179d112b552f6caa5680064f8e7bd8a389b788a60404c8e
+"@xmldom/xmldom@npm:0.9.6":
+  version: 0.9.6
+  resolution: "@xmldom/xmldom@npm:0.9.6"
+  checksum: edff37f99df70f30e8a9a0782c1349394e54a42c7b710ac7d3ea429f3f3312dcc2d82ab96bbbc521a8252bf207be2c97133447d40548ab066c79c824ccdb7d9f
   languageName: node
   linkType: hard
 
